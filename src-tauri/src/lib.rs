@@ -70,6 +70,10 @@ pub fn run() {
             commands::rename_tag,
             commands::delete_tag,
             commands::set_note_tags,
+            commands::export_notes_markdown,
+            commands::export_backup_json,
+            commands::backup_database,
+            commands::restore_backup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

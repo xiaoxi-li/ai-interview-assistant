@@ -2,6 +2,7 @@
 //!
 //! 约定：所有命令返回 `Result<T, String>`，错误直接以字符串形式透传给前端。
 
+use crate::knowledge::export::{ExportSummary, RestoreSummary};
 use crate::knowledge::store::{GroupsRepo, NotesRepo, TagsRepo};
 use crate::knowledge::{GroupDto, ImportOutcome, NoteDto, TagDto};
 use crate::retrieval::SearchHit;
@@ -141,6 +142,66 @@ pub fn move_note(
     NotesRepo::new(&conn)
         .move_to_group(&id, group_id.as_deref())
         .map_err(|e| e.to_string())
+}
+
+/// 导出全部笔记为 Markdown（按群组层级建目录）
+#[tauri::command]
+pub fn export_notes_markdown(
+    state: State<'_, AppState>,
+    dest: String,
+) -> Result<ExportSummary, String> {
+    let conn = state.lock()?;
+    crate::knowledge::export::export_notes_to_dir(&conn, std::path::Path::new(&dest))
+        .map_err(|e| e.to_string())
+}
+
+/// 导出 JSON 逻辑备份
+#[tauri::command]
+pub fn export_backup_json(
+    state: State<'_, AppState>,
+    dest: String,
+) -> Result<ExportSummary, String> {
+    let conn = state.lock()?;
+    crate::knowledge::export::export_backup_json(&conn, std::path::Path::new(&dest))
+        .map_err(|e| e.to_string())
+}
+
+/// 数据库文件级备份（一致副本）
+#[tauri::command]
+pub fn backup_database(
+    state: State<'_, AppState>,
+    dest: String,
+) -> Result<ExportSummary, String> {
+    let conn = state.lock()?;
+    crate::knowledge::export::backup_database_file(&conn, std::path::Path::new(&dest))
+        .map_err(|e| e.to_string())
+}
+
+/// 从 JSON 备份恢复，并重建检索索引
+#[tauri::command]
+pub fn restore_backup(
+    state: State<'_, AppState>,
+    source: String,
+) -> Result<RestoreSummary, String> {
+    let conn = state.lock()?;
+    let summary = crate::knowledge::export::restore_backup_json(
+        &conn,
+        std::path::Path::new(&source),
+    )
+    .map_err(|e| e.to_string())?;
+
+    // 恢复后重建全文索引并补齐向量索引
+    if let Ok(notes) = NotesRepo::new(&conn).list(true) {
+        for note in &notes {
+            if let Err(err) =
+                crate::retrieval::sync_note(&conn, &note.id, &note.title, &note.content, &note.tags)
+            {
+                eprintln!("索引重建失败（note={}）：{err}", note.id);
+            }
+            index_note_quietly(&conn, &state, note);
+        }
+    }
+    Ok(summary)
 }
 
 /// 列出全部标签

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
+  CircleCheck,
+  Database,
+  FileDown,
+  FileJson,
   FilePlus2,
   FileText,
   FolderPlus,
@@ -9,13 +13,15 @@ import {
   Plus,
   Search,
   Trash2,
+  Upload,
+  X,
 } from "lucide-react";
 import GroupTree from "../components/knowledge/GroupTree";
 import NoteList from "../components/knowledge/NoteList";
 import MarkdownEditor from "../components/knowledge/MarkdownEditor";
 import { useFileDrop } from "../hooks/useFileDrop";
 import { useNoteDraft } from "../hooks/useNoteDraft";
-import { pickDirectory, pickMarkdownFiles } from "../lib/dialog";
+import { pickDirectory, pickJsonFile, pickMarkdownFiles, pickSavePath } from "../lib/dialog";
 import { countNotesByGroup, filterNotesByGroup } from "../lib/groupTree";
 import { useKnowledgeStore } from "../stores/knowledgeStore";
 import { cn } from "../lib/utils";
@@ -65,6 +71,12 @@ export default function KnowledgePage() {
   const selectedTag = useKnowledgeStore((s) => s.selectedTag);
   const setSelectedTag = useKnowledgeStore((s) => s.setSelectedTag);
   const setNoteTags = useKnowledgeStore((s) => s.setNoteTags);
+  const notice = useKnowledgeStore((s) => s.notice);
+  const clearNotice = useKnowledgeStore((s) => s.clearNotice);
+  const exportMarkdown = useKnowledgeStore((s) => s.exportMarkdown);
+  const exportJson = useKnowledgeStore((s) => s.exportJson);
+  const backupDatabase = useKnowledgeStore((s) => s.backupDatabase);
+  const restoreBackup = useKnowledgeStore((s) => s.restoreBackup);
 
   const [viewMode, setViewMode] = useState<ViewMode>("split");
 
@@ -129,6 +141,28 @@ export default function KnowledgePage() {
 
   const handleImportFolder = () => {
     pickDirectory().then((dir) => (dir ? importPaths([dir]) : 0));
+  };
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const handleExportMarkdown = () => {
+    pickDirectory().then((dir) => {
+      if (dir) exportMarkdown(dir);
+    });
+  };
+  const handleExportJson = () => {
+    pickSavePath(`ai-interview-backup-${stamp}.json`, "json").then((path) => {
+      if (path) exportJson(path);
+    });
+  };
+  const handleBackupDatabase = () => {
+    pickSavePath(`ai-interview-${stamp}.sqlite`, "sqlite").then((path) => {
+      if (path) backupDatabase(path);
+    });
+  };
+  const handleRestore = () => {
+    pickJsonFile().then((path) => {
+      if (path) restoreBackup(path);
+    });
   };
 
   return (
@@ -221,12 +255,58 @@ export default function KnowledgePage() {
             <FolderPlus className="h-3.5 w-3.5" />
             导入文件夹
           </button>
+
+          {/* 导出 / 备份 / 恢复 */}
+          <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-background-3/60 p-0.5">
+            <button
+              title="导出全部笔记为 Markdown"
+              onClick={handleExportMarkdown}
+              className="cursor-pointer rounded-md px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/10 hover:text-text"
+            >
+              <FileDown className="h-3.5 w-3.5" />
+            </button>
+            <button
+              title="导出 JSON 备份"
+              onClick={handleExportJson}
+              className="cursor-pointer rounded-md px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/10 hover:text-text"
+            >
+              <FileJson className="h-3.5 w-3.5" />
+            </button>
+            <button
+              title="备份数据库文件"
+              onClick={handleBackupDatabase}
+              className="cursor-pointer rounded-md px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/10 hover:text-text"
+            >
+              <Database className="h-3.5 w-3.5" />
+            </button>
+            <button
+              title="从 JSON 备份恢复"
+              onClick={handleRestore}
+              className="cursor-pointer rounded-md px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/10 hover:text-text"
+            >
+              <Upload className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
       {error && (
         <div className="border-b border-danger/20 bg-danger/10 px-4 py-1.5 text-[11px] text-danger">
           {error}
+        </div>
+      )}
+
+      {notice && (
+        <div className="flex items-center gap-2 border-b border-success/20 bg-success/10 px-4 py-1.5 text-[11px] text-success">
+          <CircleCheck className="h-3 w-3 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{notice}</span>
+          <button
+            title="关闭提示"
+            onClick={clearNotice}
+            className="cursor-pointer text-success/70 hover:text-success"
+          >
+            <X className="h-3 w-3" />
+          </button>
         </div>
       )}
 

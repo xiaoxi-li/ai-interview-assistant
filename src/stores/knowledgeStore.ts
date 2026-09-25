@@ -57,6 +57,17 @@ interface KnowledgeState {
   moveNote: (id: string, groupId: string | null) => Promise<void>;
   /** 覆盖设置笔记标签 */
   setNoteTags: (noteId: string, tags: string[]) => Promise<void>;
+  /** 导出全部笔记为 Markdown 到目录 */
+  exportMarkdown: (dest: string) => Promise<void>;
+  /** 导出 JSON 逻辑备份 */
+  exportJson: (dest: string) => Promise<void>;
+  /** 数据库文件级备份 */
+  backupDatabase: (dest: string) => Promise<void>;
+  /** 从 JSON 备份恢复 */
+  restoreBackup: (source: string) => Promise<void>;
+  /** 操作提示（成功/失败信息） */
+  notice: string | null;
+  clearNotice: () => void;
   createGroup: (name: string, parentId: string | null) => Promise<void>;
   renameGroup: (id: string, name: string) => Promise<void>;
   deleteGroup: (id: string) => Promise<void>;
@@ -96,6 +107,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => {
     keyword: "",
     hits: [],
     searchMode: "keyword",
+    notice: null,
 
     search: (keyword) => {
       const query = keyword.trim();
@@ -257,6 +269,59 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => {
     },
     moveGroup: (id, parentId) => runAction("move_group", { id, parentId }),
     reorderGroups: (orderedIds) => runAction("reorder_groups", { orderedIds }),
+
+    exportMarkdown: (dest) => {
+      set({ error: null });
+      return ipc<{ files: number; dest: string }>("export_notes_markdown", { dest })
+        .then((summary) =>
+          set({ notice: `已导出 ${summary.files} 篇笔记到 ${summary.dest}` })
+        )
+        .catch((err) => {
+          console.error("导出 Markdown 失败:", err);
+          set({ error: String(err) });
+        });
+    },
+
+    exportJson: (dest) => {
+      set({ error: null });
+      return ipc<{ files: number; dest: string }>("export_backup_json", { dest })
+        .then((summary) =>
+          set({ notice: `已导出 JSON 备份（${summary.files} 篇）到 ${summary.dest}` })
+        )
+        .catch((err) => {
+          console.error("导出 JSON 失败:", err);
+          set({ error: String(err) });
+        });
+    },
+
+    backupDatabase: (dest) => {
+      set({ error: null });
+      return ipc<{ files: number; dest: string }>("backup_database", { dest })
+        .then((summary) => set({ notice: `数据库备份完成：${summary.dest}` }))
+        .catch((err) => {
+          console.error("数据库备份失败:", err);
+          set({ error: String(err) });
+        });
+    },
+
+    restoreBackup: (source) => {
+      set({ error: null });
+      return ipc<{ groups: number; tags: number; notes: number }>("restore_backup", {
+        source,
+      })
+        .then((summary) => {
+          set({
+            notice: `恢复完成：新增 ${summary.notes} 篇笔记、${summary.groups} 个群组`,
+          });
+          return get().load();
+        })
+        .catch((err) => {
+          console.error("恢复备份失败:", err);
+          set({ error: String(err) });
+        });
+    },
+
+    clearNotice: () => set({ notice: null }),
 
     setView: (view) => set({ view }),
     setSelectedGroup: (selectedGroupId) => set({ selectedGroupId }),

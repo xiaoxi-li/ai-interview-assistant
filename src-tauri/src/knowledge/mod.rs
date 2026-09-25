@@ -1,5 +1,6 @@
 //! 知识库领域：Markdown 导入、笔记与群组数据结构。
 
+pub mod export;
 pub mod markdown;
 pub mod store;
 
