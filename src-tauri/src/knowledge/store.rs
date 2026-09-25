@@ -230,28 +230,125 @@ pub struct GroupsRepo<'a> {
     conn: &'a Connection,
 }
 
+const GROUP_COLUMNS: &str = "id, name, parent_id, sort_order";
+
+fn map_group(row: &rusqlite::Row<'_>) -> Result<GroupDto> {
+    Ok(GroupDto {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        parent_id: row.get(2)?,
+        order: row.get(3)?,
+    })
+}
+
 impl<'a> GroupsRepo<'a> {
     pub fn new(conn: &'a Connection) -> Self {
         Self { conn }
     }
 
+    /// 列出全部群组（按层级内的排序值）
     pub fn list(&self) -> Result<Vec<GroupDto>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id, name, parent_id, sort_order FROM groups ORDER BY sort_order, name")?;
-        let rows = stmt.query_map([], |row| {
-            Ok(GroupDto {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                parent_id: row.get(2)?,
-                order: row.get(3)?,
-            })
-        })?;
+        let sql = format!("SELECT {GROUP_COLUMNS} FROM groups ORDER BY sort_order, name");
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map([], map_group)?;
         let mut groups = Vec::new();
         for row in rows {
             groups.push(row?);
         }
         Ok(groups)
+    }
+
+    pub fn get(&self, id: &str) -> Result<Option<GroupDto>> {
+        let sql = format!("SELECT {GROUP_COLUMNS} FROM groups WHERE id = ?1");
+        self.conn
+            .query_row(&sql, params![id], map_group)
+            .optional()
+    }
+
+    /// 新建群组，排序值自动追加到同级末尾
+    pub fn create(&self, name: &str, parent_id: Option<&str>) -> Result<GroupDto> {
+        let id = new_id("g");
+        let now = now_ms();
+        let order: i64 = self.conn.query_row(
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM groups WHERE parent_id IS ?1",
+            params![parent_id],
+            |row| row.get(0),
+        )?;
+        self.conn.execute(
+            "INSERT INTO groups (id, name, parent_id, sort_order, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+            params![id, name, parent_id, order, now],
+        )?;
+        Ok(GroupDto {
+            id,
+            name: name.to_string(),
+            parent_id: parent_id.map(str::to_string),
+            order,
+        })
+    }
+
+    /// 重命名群组
+    pub fn rename(&self, id: &str, name: &str) -> Result<bool> {
+        let affected = self.conn.execute(
+            "UPDATE groups SET name = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, name, now_ms()],
+        )?;
+        Ok(affected > 0)
+    }
+
+    /// 删除群组；子群组级联删除，组内笔记的 group_id 置空
+    pub fn delete(&self, id: &str) -> Result<bool> {
+        let affected = self
+            .conn
+            .execute("DELETE FROM groups WHERE id = ?1", params![id])?;
+        Ok(affected > 0)
+    }
+
+    /// 收集指定群组的全部后代 ID（含自身），用于环路校验
+    pub fn subtree_ids(&self, id: &str) -> Result<Vec<String>> {
+        let mut collected = vec![id.to_string()];
+        let mut frontier = vec![id.to_string()];
+        while let Some(current) = frontier.pop() {
+            let mut stmt = self
+                .conn
+                .prepare("SELECT id FROM groups WHERE parent_id = ?1")?;
+            let rows = stmt.query_map(params![current], |row| row.get::<_, String>(0))?;
+            for row in rows {
+                let child = row?;
+                collected.push(child.clone());
+                frontier.push(child);
+            }
+        }
+        Ok(collected)
+    }
+
+    /// 移动群组到新父级；拒绝移入自身或其后代（避免环路）
+    // 注：方法名不能使用 `move`（Rust 关键字）
+    pub fn relocate(&self, id: &str, parent_id: Option<&str>) -> Result<bool> {
+        if let Some(target) = parent_id {
+            if target == id || self.subtree_ids(id)?.iter().any(|x| x == target) {
+                return Ok(false);
+            }
+        }
+        let affected = self.conn.execute(
+            "UPDATE groups SET parent_id = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, parent_id, now_ms()],
+        )?;
+        Ok(affected > 0)
+    }
+
+    /// 按给定顺序重排同级群组（数组下标即新的 sort_order）
+    pub fn reorder(&self, ordered_ids: &[String]) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        let now = now_ms();
+        for (index, id) in ordered_ids.iter().enumerate() {
+            tx.execute(
+                "UPDATE groups SET sort_order = ?2, updated_at = ?3 WHERE id = ?1",
+                params![id, index as i64, now],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
     }
 }
 
@@ -432,6 +529,103 @@ mod tests {
                 repo.get(&note.id).expect("get").expect("exists").group_id,
                 None
             );
+        });
+    }
+
+    #[test]
+    fn group_create_assigns_incrementing_order() {
+        with_db(|conn| {
+            let repo = GroupsRepo::new(conn);
+            let a = repo.create("前端", None).expect("create a");
+            let b = repo.create("后端", None).expect("create b");
+            let child = repo.create("React", Some(&a.id)).expect("create child");
+
+            assert_eq!(a.order, 0);
+            assert_eq!(b.order, 1);
+            assert_eq!(child.order, 0, "子级排序独立计算");
+            assert_eq!(child.parent_id.as_deref(), Some(a.id.as_str()));
+        });
+    }
+
+    #[test]
+    fn group_rename_then_delete_cascades_children_and_ungroups_notes() {
+        with_db(|conn| {
+            let groups = GroupsRepo::new(conn);
+            let notes = NotesRepo::new(conn);
+            let parent = groups.create("父级", None).expect("create parent");
+            let child = groups.create("子级", Some(&parent.id)).expect("create child");
+            let note = notes
+                .create("笔记", "内容", Some(&child.id))
+                .expect("create note");
+
+            assert!(groups.rename(&parent.id, "新父级").expect("rename"));
+            assert_eq!(
+                groups.get(&parent.id).expect("get").expect("exists").name,
+                "新父级"
+            );
+
+            assert!(groups.delete(&parent.id).expect("delete"));
+            assert!(groups.get(&child.id).expect("get child").is_none(), "子群组应级联删除");
+            assert_eq!(
+                notes.get(&note.id).expect("get note").expect("exists").group_id,
+                None,
+                "删除群组后笔记应变为未分组"
+            );
+        });
+    }
+
+    #[test]
+    fn group_move_rejects_cycles() {
+        with_db(|conn| {
+            let repo = GroupsRepo::new(conn);
+            let a = repo.create("A", None).expect("a");
+            let b = repo.create("B", Some(&a.id)).expect("b");
+            let c = repo.create("C", Some(&b.id)).expect("c");
+
+            assert!(!repo.relocate(&a.id, Some(&a.id)).expect("self"), "不能移入自身");
+            assert!(
+                !repo.relocate(&a.id, Some(&c.id)).expect("descendant"),
+                "不能移入自己的后代"
+            );
+            assert!(repo.relocate(&c.id, None).expect("to root"));
+            assert_eq!(repo.get(&c.id).expect("get").expect("exists").parent_id, None);
+        });
+    }
+
+    #[test]
+    fn subtree_ids_contains_self_and_descendants() {
+        with_db(|conn| {
+            let repo = GroupsRepo::new(conn);
+            let a = repo.create("A", None).expect("a");
+            let b = repo.create("B", Some(&a.id)).expect("b");
+            let c = repo.create("C", Some(&b.id)).expect("c");
+
+            let mut ids = repo.subtree_ids(&a.id).expect("subtree");
+            ids.sort();
+            let mut expected = vec![a.id.clone(), b.id.clone(), c.id.clone()];
+            expected.sort();
+            assert_eq!(ids, expected);
+        });
+    }
+
+    #[test]
+    fn group_reorder_applies_given_order() {
+        with_db(|conn| {
+            let repo = GroupsRepo::new(conn);
+            let a = repo.create("A", None).expect("a");
+            let b = repo.create("B", None).expect("b");
+            let c = repo.create("C", None).expect("c");
+
+            repo.reorder(&[c.id.clone(), a.id.clone(), b.id.clone()])
+                .expect("reorder");
+
+            let ordered: Vec<String> = repo
+                .list()
+                .expect("list")
+                .into_iter()
+                .map(|g| g.id)
+                .collect();
+            assert_eq!(ordered, vec![c.id, a.id, b.id]);
         });
     }
 }

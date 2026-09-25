@@ -1,5 +1,6 @@
 import { FileText, RotateCcw, Trash2, Undo2 } from "lucide-react";
 import { cn, excerpt, formatRelative } from "../../lib/utils";
+import { NOTE_DRAG_TYPE } from "../../lib/dnd";
 import type { Note } from "../../types";
 
 const ICON_BTN =
@@ -57,6 +58,11 @@ export default function NoteList({
             <div
               role="button"
               tabIndex={0}
+              draggable={mode === "all"}
+              onDragStart={(e) => {
+                // 拖到群组树上即可批量归类
+                e.dataTransfer.setData(NOTE_DRAG_TYPE, note.id);
+              }}
               onClick={() => mode === "all" && onSelect(note.id)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && mode === "all") onSelect(note.id);

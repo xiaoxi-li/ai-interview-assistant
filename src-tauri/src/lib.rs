@@ -48,6 +48,11 @@ pub fn run() {
             commands::purge_note,
             commands::empty_trash,
             commands::move_note,
+            commands::create_group,
+            commands::rename_group,
+            commands::delete_group,
+            commands::move_group,
+            commands::reorder_groups,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

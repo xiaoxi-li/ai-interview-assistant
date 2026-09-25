@@ -97,16 +97,76 @@ pub fn list_groups(state: State<'_, AppState>) -> Result<Vec<GroupDto>, String> 
     GroupsRepo::new(&conn).list().map_err(|e| e.to_string())
 }
 
+/// 新建群组（parent_id 为 null 表示根级）
+#[tauri::command]
+pub fn create_group(
+    state: State<'_, AppState>,
+    name: String,
+    parent_id: Option<String>,
+) -> Result<GroupDto, String> {
+    let conn = state.lock()?;
+    GroupsRepo::new(&conn)
+        .create(&name, parent_id.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+/// 重命名群组
+#[tauri::command]
+pub fn rename_group(
+    state: State<'_, AppState>,
+    id: String,
+    name: String,
+) -> Result<bool, String> {
+    let conn = state.lock()?;
+    GroupsRepo::new(&conn)
+        .rename(&id, &name)
+        .map_err(|e| e.to_string())
+}
+
+/// 删除群组（子群组级联删除，组内笔记转为未分组）
+#[tauri::command]
+pub fn delete_group(state: State<'_, AppState>, id: String) -> Result<bool, String> {
+    let conn = state.lock()?;
+    GroupsRepo::new(&conn).delete(&id).map_err(|e| e.to_string())
+}
+
+/// 移动群组到新父级（拒绝环路）
+#[tauri::command]
+pub fn move_group(
+    state: State<'_, AppState>,
+    id: String,
+    parent_id: Option<String>,
+) -> Result<bool, String> {
+    let conn = state.lock()?;
+    GroupsRepo::new(&conn)
+        .relocate(&id, parent_id.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+/// 按给定顺序重排同级群组
+#[tauri::command]
+pub fn reorder_groups(
+    state: State<'_, AppState>,
+    ordered_ids: Vec<String>,
+) -> Result<(), String> {
+    let conn = state.lock()?;
+    GroupsRepo::new(&conn)
+        .reorder(&ordered_ids)
+        .map_err(|e| e.to_string())
+}
+
 /// 导入 Markdown 文件或目录（支持单文件、文件夹批量、拖拽路径）
 #[tauri::command]
 pub fn import_markdown(
     state: State<'_, AppState>,
     paths: Vec<String>,
+    group_id: Option<String>,
 ) -> Result<ImportOutcome, String> {
     if paths.is_empty() {
         return Ok(ImportOutcome { imported: 0, skipped: Vec::new(), notes: Vec::new() });
     }
     let inputs: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
     let conn = state.lock()?;
-    crate::knowledge::import_paths(&conn, &inputs, None).map_err(|e| e.to_string())
+    crate::knowledge::import_paths(&conn, &inputs, group_id.as_deref())
+        .map_err(|e| e.to_string())
 }

@@ -1,20 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
   FilePlus2,
-  FolderPlus,
-  FolderTree,
   FileText,
+  FolderPlus,
   Loader2,
   Plus,
   Search,
   Trash2,
 } from "lucide-react";
+import GroupTree from "../components/knowledge/GroupTree";
 import NoteList from "../components/knowledge/NoteList";
 import MarkdownEditor from "../components/knowledge/MarkdownEditor";
 import { useFileDrop } from "../hooks/useFileDrop";
 import { useNoteDraft } from "../hooks/useNoteDraft";
 import { pickDirectory, pickMarkdownFiles } from "../lib/dialog";
+import { countNotesByGroup, filterNotesByGroup } from "../lib/groupTree";
 import { useKnowledgeStore } from "../stores/knowledgeStore";
 import { cn } from "../lib/utils";
 import type { ViewMode } from "../types";
@@ -29,6 +30,7 @@ export default function KnowledgePage() {
   const trashNotes = useKnowledgeStore((s) => s.trashNotes);
   const groups = useKnowledgeStore((s) => s.groups);
   const view = useKnowledgeStore((s) => s.view);
+  const selectedGroupId = useKnowledgeStore((s) => s.selectedGroupId);
   const loading = useKnowledgeStore((s) => s.loading);
   const importing = useKnowledgeStore((s) => s.importing);
   const saving = useKnowledgeStore((s) => s.saving);
@@ -36,6 +38,7 @@ export default function KnowledgePage() {
   const selectedId = useKnowledgeStore((s) => s.selectedId);
   const keyword = useKnowledgeStore((s) => s.keyword);
   const error = useKnowledgeStore((s) => s.error);
+
   const load = useKnowledgeStore((s) => s.load);
   const importPaths = useKnowledgeStore((s) => s.importPaths);
   const createNote = useKnowledgeStore((s) => s.createNote);
@@ -43,7 +46,14 @@ export default function KnowledgePage() {
   const restoreNote = useKnowledgeStore((s) => s.restoreNote);
   const purgeNote = useKnowledgeStore((s) => s.purgeNote);
   const emptyTrash = useKnowledgeStore((s) => s.emptyTrash);
+  const moveNote = useKnowledgeStore((s) => s.moveNote);
+  const createGroup = useKnowledgeStore((s) => s.createGroup);
+  const renameGroup = useKnowledgeStore((s) => s.renameGroup);
+  const deleteGroup = useKnowledgeStore((s) => s.deleteGroup);
+  const moveGroup = useKnowledgeStore((s) => s.moveGroup);
+  const reorderGroups = useKnowledgeStore((s) => s.reorderGroups);
   const setView = useKnowledgeStore((s) => s.setView);
+  const setSelectedGroup = useKnowledgeStore((s) => s.setSelectedGroup);
   const select = useKnowledgeStore((s) => s.select);
   const setKeyword = useKnowledgeStore((s) => s.setKeyword);
 
@@ -57,10 +67,20 @@ export default function KnowledgePage() {
     load();
   }, [load]);
 
+  const isTrash = view === "trash";
+  const groupScopedNotes = useMemo(
+    () => filterNotesByGroup(notes, groups, selectedGroupId),
+    [notes, groups, selectedGroupId]
+  );
+  const noteCounts = useMemo(() => countNotesByGroup(notes), [notes]);
+  const ungroupedCount = useMemo(
+    () => notes.filter((n) => n.groupId === null).length,
+    [notes]
+  );
+
   const selected = notes.find((n) => n.id === selectedId) ?? null;
   const draft = useNoteDraft(selected);
-  const isTrash = view === "trash";
-  const visibleNotes = isTrash ? trashNotes : notes;
+  const visibleNotes = isTrash ? trashNotes : groupScopedNotes;
 
   const handleImportFiles = () => {
     pickMarkdownFiles().then((paths) => importPaths(paths));
@@ -90,7 +110,7 @@ export default function KnowledgePage() {
               className="w-full border-0 bg-transparent p-0 text-[13px] text-text outline-none placeholder:text-text-subtle"
             />
           </div>
-          <button onClick={createNote} className={PRIMARY_BTN}>
+          <button onClick={() => createNote()} className={PRIMARY_BTN}>
             <Plus className="h-3.5 w-3.5" />
             新建笔记
           </button>
@@ -124,7 +144,7 @@ export default function KnowledgePage() {
       )}
 
       <div className="flex min-h-0 flex-1">
-        {/* 侧栏：视图切换 + 列表 */}
+        {/* 侧栏 */}
         <aside className="flex w-64 shrink-0 flex-col border-r border-white/5">
           <div className="flex items-center gap-1 px-2 pt-2">
             <button
@@ -136,7 +156,7 @@ export default function KnowledgePage() {
                   : "text-text-subtle hover:text-text-muted"
               )}
             >
-              <FolderTree className="h-3.5 w-3.5" />
+              <BookOpen className="h-3.5 w-3.5" />
               全部 {notes.length}
             </button>
             <button
@@ -162,11 +182,28 @@ export default function KnowledgePage() {
             </button>
           )}
 
-          <div className="mt-2 flex items-center gap-2 px-3 pb-1 text-[10px] text-text-subtle">
-            {isTrash ? "回收站中的笔记不可编辑" : `${groups.length} 个群组`}
-          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-2">
+            {!isTrash && (
+              <GroupTree
+                groups={groups}
+                selectedGroupId={selectedGroupId}
+                noteCounts={noteCounts}
+                totalCount={notes.length}
+                ungroupedCount={ungroupedCount}
+                onSelect={setSelectedGroup}
+                onCreate={createGroup}
+                onRename={renameGroup}
+                onDelete={deleteGroup}
+                onMove={moveGroup}
+                onReorder={reorderGroups}
+                onDropNote={moveNote}
+              />
+            )}
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+            <div className="mt-3 flex items-center gap-2 px-1 pb-1 text-[10px] uppercase tracking-wide text-text-subtle">
+              {isTrash ? "回收站" : "笔记"}
+            </div>
+
             {loading ? (
               <p className="px-2 py-6 text-center text-[12px] text-text-subtle">
                 正在加载…
@@ -198,9 +235,7 @@ export default function KnowledgePage() {
                 <p className="text-[12px] leading-relaxed text-text-muted">
                   已删除的笔记不会出现在列表中。可在此恢复，或彻底删除后不可找回。
                 </p>
-                <p className="text-[11px] text-text-subtle">
-                  共 {trashNotes.length} 篇
-                </p>
+                <p className="text-[11px] text-text-subtle">共 {trashNotes.length} 篇</p>
               </div>
             </div>
           ) : selected ? (
@@ -230,7 +265,7 @@ export default function KnowledgePage() {
         </section>
       </div>
 
-      {/* 拖拽提示 */}
+      {/* 拖拽导入提示 */}
       {isDragging && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-primary/50 bg-background-2/60 px-14 py-10">
