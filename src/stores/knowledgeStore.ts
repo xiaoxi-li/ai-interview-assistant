@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { ipc } from "../lib/ipc";
-import type { Group, Note } from "../types";
+import type { Group, Note, SearchHit } from "../types";
 
 interface ImportOutcome {
   imported: number;
@@ -25,8 +25,12 @@ interface KnowledgeState {
   error: string | null;
   selectedId: string | null;
   keyword: string;
+  /** 全文检索命中结果（关键词为空时清空） */
+  hits: SearchHit[];
   /** 加载笔记、回收站与群组 */
   load: () => Promise<void>;
+  /** 执行全文检索 */
+  search: (keyword: string) => Promise<void>;
   /** 导入 Markdown 路径，返回成功导入数量 */
   importPaths: (paths: string[]) => Promise<number>;
   /** 保存笔记标题与正文 */
@@ -72,6 +76,21 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => {
     error: null,
     selectedId: null,
     keyword: "",
+    hits: [],
+
+    search: (keyword) => {
+      const query = keyword.trim();
+      if (!query) {
+        set({ hits: [] });
+        return Promise.resolve();
+      }
+      return ipc<SearchHit[]>("search_notes", { query, limit: 50 })
+        .then((hits) => set({ hits }))
+        .catch((err) => {
+          console.error("检索失败:", err);
+          set({ hits: [], error: String(err) });
+        });
+    },
 
     load: () => {
       set({ loading: true, error: null });

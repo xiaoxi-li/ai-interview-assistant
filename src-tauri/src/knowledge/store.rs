@@ -59,7 +59,7 @@ impl<'a> NotesRepo<'a> {
              VALUES (?1, ?2, ?3, ?4, 0, ?5, ?5)",
             params![id, title, content, group_id, now],
         )?;
-        Ok(NoteDto {
+        let note = NoteDto {
             id,
             title: title.to_string(),
             content: content.to_string(),
@@ -68,7 +68,10 @@ impl<'a> NotesRepo<'a> {
             is_deleted: false,
             created_at: now,
             updated_at: now,
-        })
+        };
+        // 同步全文索引（jieba 预分词后写入 FTS5）
+        crate::retrieval::sync_note(self.conn, &note.id, &note.title, &note.content, &note.tags)?;
+        Ok(note)
     }
 
     /// 更新笔记标题与正文；笔记不存在时返回 None
@@ -81,7 +84,17 @@ impl<'a> NotesRepo<'a> {
         if affected == 0 {
             return Ok(None);
         }
-        self.get(id)
+        let note = self.get(id)?;
+        if let Some(current) = note.as_ref() {
+            crate::retrieval::sync_note(
+                self.conn,
+                &current.id,
+                &current.title,
+                &current.content,
+                &current.tags,
+            )?;
+        }
+        Ok(note)
     }
 
     /// 按 ID 查询（含回收站中的笔记）
@@ -144,6 +157,9 @@ impl<'a> NotesRepo<'a> {
              WHERE id = ?1 AND is_deleted = 0",
             params![id, now_ms()],
         )?;
+        if affected > 0 {
+            crate::retrieval::remove_note(self.conn, id)?;
+        }
         Ok(affected > 0)
     }
 
@@ -154,6 +170,18 @@ impl<'a> NotesRepo<'a> {
              WHERE id = ?1 AND is_deleted = 1",
             params![id, now_ms()],
         )?;
+        if affected > 0 {
+            // 恢复后重新建立全文索引
+            if let Some(note) = self.get(id)? {
+                crate::retrieval::sync_note(
+                    self.conn,
+                    &note.id,
+                    &note.title,
+                    &note.content,
+                    &note.tags,
+                )?;
+            }
+        }
         Ok(affected > 0)
     }
 
@@ -162,6 +190,9 @@ impl<'a> NotesRepo<'a> {
         let affected = self
             .conn
             .execute("DELETE FROM notes WHERE id = ?1", params![id])?;
+        if affected > 0 {
+            crate::retrieval::prune_orphans(self.conn)?;
+        }
         Ok(affected > 0)
     }
 
@@ -170,6 +201,9 @@ impl<'a> NotesRepo<'a> {
         let affected = self
             .conn
             .execute("DELETE FROM notes WHERE is_deleted = 1", [])?;
+        if affected > 0 {
+            crate::retrieval::prune_orphans(self.conn)?;
+        }
         Ok(affected)
     }
 

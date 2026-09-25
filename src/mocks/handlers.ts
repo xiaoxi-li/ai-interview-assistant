@@ -18,6 +18,23 @@ export async function mockInvoke<T>(
     case "list_notes":
       return MOCK_NOTES as T;
 
+    case "search_notes": {
+      const query = String(args?.query ?? "").trim().toLowerCase();
+      if (!query) return [] as T;
+      // 简化的前端 mock 检索：按标题/正文/标签包含匹配
+      return MOCK_NOTES.filter(
+        (n) =>
+          n.title.toLowerCase().includes(query) ||
+          n.content.toLowerCase().includes(query) ||
+          n.tags.some((t) => t.toLowerCase().includes(query))
+      ).map((n) => ({
+        noteId: n.id,
+        title: n.title,
+        snippet: n.content.replace(/\s+/g, " ").slice(0, 80),
+        score: 1,
+      })) as T;
+    }
+
     default:
       console.warn(`[mock] 未实现的命令：${command}`, args ?? {});
       throw new Error(`mock 未实现命令：${command}`);

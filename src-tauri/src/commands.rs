@@ -4,6 +4,7 @@
 
 use crate::knowledge::store::{GroupsRepo, NotesRepo};
 use crate::knowledge::{GroupDto, ImportOutcome, NoteDto};
+use crate::retrieval::SearchHit;
 use crate::state::AppState;
 use std::path::PathBuf;
 use tauri::State;
@@ -28,6 +29,18 @@ pub fn update_note(
         .update(&id, &title, &content)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("笔记不存在：{id}"))
+}
+
+/// 全文检索笔记（FTS5 + jieba 中文分词）
+#[tauri::command]
+pub fn search_notes(
+    state: State<'_, AppState>,
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<SearchHit>, String> {
+    let conn = state.lock()?;
+    crate::retrieval::search_notes(&conn, &query, limit.unwrap_or(20))
+        .map_err(|e| e.to_string())
 }
 
 /// 新建空白笔记

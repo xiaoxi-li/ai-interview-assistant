@@ -102,4 +102,20 @@ describe("NoteList", () => {
     setup({ keyword: "内容正文" });
     expect(screen.getByText("面试笔记")).toBeTruthy();
   });
+
+  it("提供检索命中时展示后端返回的摘要并忽略本地过滤", () => {
+    setup({
+      keyword: "完全不同的关键词",
+      hits: [
+        {
+          noteId: "n1",
+          title: "面试笔记",
+          snippet: "……命中位置的上下文摘要……",
+          score: 1.5,
+        },
+      ],
+    });
+    expect(screen.getByText("面试笔记")).toBeTruthy();
+    expect(screen.getByText("……命中位置的上下文摘要……")).toBeTruthy();
+  });
 });

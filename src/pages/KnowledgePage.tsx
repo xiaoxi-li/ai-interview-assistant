@@ -18,7 +18,7 @@ import { pickDirectory, pickMarkdownFiles } from "../lib/dialog";
 import { countNotesByGroup, filterNotesByGroup } from "../lib/groupTree";
 import { useKnowledgeStore } from "../stores/knowledgeStore";
 import { cn } from "../lib/utils";
-import type { ViewMode } from "../types";
+import type { Note, ViewMode } from "../types";
 
 const ACTION_BTN =
   "flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:border-primary/40 hover:text-text disabled:cursor-not-allowed disabled:opacity-50";
@@ -56,6 +56,8 @@ export default function KnowledgePage() {
   const setSelectedGroup = useKnowledgeStore((s) => s.setSelectedGroup);
   const select = useKnowledgeStore((s) => s.select);
   const setKeyword = useKnowledgeStore((s) => s.setKeyword);
+  const hits = useKnowledgeStore((s) => s.hits);
+  const search = useKnowledgeStore((s) => s.search);
 
   const [viewMode, setViewMode] = useState<ViewMode>("split");
 
@@ -66,6 +68,19 @@ export default function KnowledgePage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 关键词变化后防抖触发全文检索
+  useEffect(() => {
+    const query = keyword.trim();
+    if (!query) {
+      search("");
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      search(query);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [keyword, search]);
 
   const isTrash = view === "trash";
   const groupScopedNotes = useMemo(
@@ -80,7 +95,17 @@ export default function KnowledgePage() {
 
   const selected = notes.find((n) => n.id === selectedId) ?? null;
   const draft = useNoteDraft(selected);
-  const visibleNotes = isTrash ? trashNotes : groupScopedNotes;
+
+  const searchActive = keyword.trim().length > 0;
+  const searchScopedNotes = useMemo(() => {
+    if (!searchActive) return groupScopedNotes;
+    const byId = new Map(groupScopedNotes.map((n) => [n.id, n]));
+    return hits
+      .map((hit) => byId.get(hit.noteId))
+      .filter((n): n is Note => Boolean(n));
+  }, [searchActive, groupScopedNotes, hits]);
+
+  const visibleNotes = isTrash ? trashNotes : searchScopedNotes;
 
   const handleImportFiles = () => {
     pickMarkdownFiles().then((paths) => importPaths(paths));
@@ -214,6 +239,7 @@ export default function KnowledgePage() {
                 selectedId={selectedId}
                 keyword={keyword}
                 mode={view}
+                hits={!isTrash && searchActive ? hits : undefined}
                 onSelect={select}
                 onTrash={trashNote}
                 onRestore={restoreNote}

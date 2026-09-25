@@ -1,7 +1,7 @@
 import { FileText, RotateCcw, Trash2, Undo2 } from "lucide-react";
 import { cn, excerpt, formatRelative } from "../../lib/utils";
 import { NOTE_DRAG_TYPE } from "../../lib/dnd";
-import type { Note } from "../../types";
+import type { Note, SearchHit } from "../../types";
 
 const ICON_BTN =
   "flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors";
@@ -11,6 +11,8 @@ interface NoteListProps {
   selectedId: string | null;
   keyword: string;
   mode: "all" | "trash";
+  /** 服务端全文检索命中；提供时按命中顺序展示并显示摘要 */
+  hits?: SearchHit[];
   onSelect: (id: string) => void;
   onTrash: (id: string) => void;
   onRestore: (id: string) => void;
@@ -22,20 +24,30 @@ export default function NoteList({
   selectedId,
   keyword,
   mode,
+  hits,
   onSelect,
   onTrash,
   onRestore,
   onPurge,
 }: NoteListProps) {
+  const searching = Boolean(hits);
   const kw = keyword.trim().toLowerCase();
-  const filtered = kw
-    ? notes.filter(
-        (n) =>
-          n.title.toLowerCase().includes(kw) ||
-          n.content.toLowerCase().includes(kw) ||
-          n.tags.some((t) => t.toLowerCase().includes(kw))
-      )
-    : notes;
+  // 服务端检索已排序过滤，此处不再重复过滤
+  const filtered = searching
+    ? notes
+    : kw
+      ? notes.filter(
+          (n) =>
+            n.title.toLowerCase().includes(kw) ||
+            n.content.toLowerCase().includes(kw) ||
+            n.tags.some((t) => t.toLowerCase().includes(kw))
+        )
+      : notes;
+
+  const snippetOf = (note: Note): string => {
+    const hit = hits?.find((h) => h.noteId === note.id);
+    return hit?.snippet || excerpt(note.content, 70);
+  };
 
   if (filtered.length === 0) {
     return (
@@ -127,7 +139,7 @@ export default function NoteList({
               </div>
 
               <p className="mt-1 line-clamp-2 pl-[22px] text-[11px] leading-relaxed text-text-subtle">
-                {excerpt(note.content, 70) || "（空白笔记）"}
+                {snippetOf(note) || "（空白笔记）"}
               </p>
               <div className="mt-1 pl-[22px] text-[10px] text-text-subtle/70">
                 {formatRelative(note.updatedAt)}

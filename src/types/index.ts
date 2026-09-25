@@ -30,6 +30,14 @@ export interface SearchResult {
   matchedChunk?: string;
 }
 
+/** 全文检索命中（与后端 SearchHit 对应） */
+export interface SearchHit {
+  noteId: string;
+  title: string;
+  snippet: string;
+  score: number;
+}
+
 export type Speaker = "interviewer" | "me";
 
 export interface TranscriptSegment {

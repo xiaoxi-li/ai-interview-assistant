@@ -6,6 +6,7 @@ mod state;
 
 pub mod knowledge;
 pub mod providers;
+pub mod retrieval;
 pub mod storage;
 
 /// 应用基础信息（用于验证前后端 IPC 通路）
@@ -41,6 +42,7 @@ pub fn run() {
             commands::list_groups,
             commands::import_markdown,
             commands::update_note,
+            commands::search_notes,
             commands::create_note,
             commands::list_trash_notes,
             commands::delete_note,
