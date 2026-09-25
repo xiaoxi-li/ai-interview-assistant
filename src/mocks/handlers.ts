@@ -15,6 +15,20 @@ export async function mockInvoke<T>(
     case "list_groups":
       return MOCK_GROUPS as T;
 
+    case "list_tags":
+      return [
+        { id: "t1", name: "React", color: "#4F6BED" },
+        { id: "t2", name: "性能优化", color: "#4F6BED" },
+        { id: "t3", name: "行为面试", color: "#4F6BED" },
+      ] as T;
+
+    case "set_note_tags": {
+      const id = String(args?.id ?? "");
+      const tags = (args?.tags as string[]) ?? [];
+      const note = MOCK_NOTES.find((n) => n.id === id);
+      return (note ? { ...note, tags } : null) as T;
+    }
+
     case "list_notes":
       return MOCK_NOTES as T;
 

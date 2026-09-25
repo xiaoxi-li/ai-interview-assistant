@@ -31,6 +31,15 @@ pub struct GroupDto {
     pub order: i64,
 }
 
+/// 标签数据传输对象
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagDto {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+}
+
 /// 导入结果
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

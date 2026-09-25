@@ -2,8 +2,8 @@
 //!
 //! 约定：所有命令返回 `Result<T, String>`，错误直接以字符串形式透传给前端。
 
-use crate::knowledge::store::{GroupsRepo, NotesRepo};
-use crate::knowledge::{GroupDto, ImportOutcome, NoteDto};
+use crate::knowledge::store::{GroupsRepo, NotesRepo, TagsRepo};
+use crate::knowledge::{GroupDto, ImportOutcome, NoteDto, TagDto};
 use crate::retrieval::SearchHit;
 use crate::state::AppState;
 use std::path::PathBuf;
@@ -129,6 +129,88 @@ pub fn move_note(
     NotesRepo::new(&conn)
         .move_to_group(&id, group_id.as_deref())
         .map_err(|e| e.to_string())
+}
+
+/// 列出全部标签
+#[tauri::command]
+pub fn list_tags(state: State<'_, AppState>) -> Result<Vec<TagDto>, String> {
+    let conn = state.lock()?;
+    TagsRepo::new(&conn).list().map_err(|e| e.to_string())
+}
+
+/// 创建标签（同名则复用）
+#[tauri::command]
+pub fn create_tag(state: State<'_, AppState>, name: String) -> Result<TagDto, String> {
+    let conn = state.lock()?;
+    TagsRepo::new(&conn).ensure(&name).map_err(|e| e.to_string())
+}
+
+/// 重命名标签
+#[tauri::command]
+pub fn rename_tag(
+    state: State<'_, AppState>,
+    id: String,
+    name: String,
+) -> Result<bool, String> {
+    let conn = state.lock()?;
+    TagsRepo::new(&conn)
+        .rename(&id, &name)
+        .map_err(|e| e.to_string())
+}
+
+/// 删除标签；受影响笔记的全文索引同步刷新
+#[tauri::command]
+pub fn delete_tag(state: State<'_, AppState>, id: String) -> Result<bool, String> {
+    let conn = state.lock()?;
+    let repo = TagsRepo::new(&conn);
+    let affected = repo.note_ids_by_tag_id(&id).map_err(|e| e.to_string())?;
+
+    let deleted = repo.delete(&id).map_err(|e| e.to_string())?;
+    if deleted {
+        resync_notes(&conn, &affected);
+    }
+    Ok(deleted)
+}
+
+/// 覆盖设置笔记标签，并刷新检索索引
+#[tauri::command]
+pub fn set_note_tags(
+    state: State<'_, AppState>,
+    id: String,
+    tags: Vec<String>,
+) -> Result<NoteDto, String> {
+    let conn = state.lock()?;
+    TagsRepo::new(&conn)
+        .set_note_tags(&id, &tags)
+        .map_err(|e| e.to_string())?;
+
+    let note = NotesRepo::new(&conn)
+        .get(&id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("笔记不存在：{id}"))?;
+
+    crate::retrieval::sync_note(&conn, &note.id, &note.title, &note.content, &note.tags)
+        .map_err(|e| e.to_string())?;
+    index_note_quietly(&conn, &state, &note);
+    Ok(note)
+}
+
+/// 重新同步指定笔记的全文索引（标签变更后调用）
+fn resync_notes(conn: &rusqlite::Connection, note_ids: &[String]) {
+    let repo = NotesRepo::new(conn);
+    for note_id in note_ids {
+        match repo.get(note_id) {
+            Ok(Some(note)) => {
+                if let Err(err) =
+                    crate::retrieval::sync_note(conn, &note.id, &note.title, &note.content, &note.tags)
+                {
+                    eprintln!("索引同步失败（note={}）：{err}", note.id);
+                }
+            }
+            Ok(None) => {}
+            Err(err) => eprintln!("读取笔记失败（note={note_id}）：{err}"),
+        }
+    }
 }
 
 /// 列出全部群组

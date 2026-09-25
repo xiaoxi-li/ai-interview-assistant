@@ -1,6 +1,6 @@
 //! 知识库数据访问：笔记与群组仓储。
 
-use crate::knowledge::{GroupDto, NoteDto};
+use crate::knowledge::{GroupDto, NoteDto, TagDto};
 use rusqlite::{params, Connection, OptionalExtension, Result};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -388,6 +388,168 @@ impl<'a> GroupsRepo<'a> {
     }
 }
 
+/// 默认标签颜色（与前端主色一致）
+pub const DEFAULT_TAG_COLOR: &str = "#4F6BED";
+
+/// 标签仓储
+pub struct TagsRepo<'a> {
+    conn: &'a Connection,
+}
+
+impl<'a> TagsRepo<'a> {
+    pub fn new(conn: &'a Connection) -> Self {
+        Self { conn }
+    }
+
+    /// 全部标签（按名称排序）
+    pub fn list(&self) -> Result<Vec<TagDto>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, name, color FROM tags ORDER BY name")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(TagDto {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                color: row.get(2)?,
+            })
+        })?;
+        let mut tags = Vec::new();
+        for row in rows {
+            tags.push(row?);
+        }
+        Ok(tags)
+    }
+
+    /// 按名称查找标签，不存在则创建
+    pub fn ensure(&self, name: &str) -> Result<TagDto> {
+        let name = name.trim();
+        let existing = self
+            .conn
+            .query_row(
+                "SELECT id, name, color FROM tags WHERE name = ?1",
+                params![name],
+                |row| {
+                    Ok(TagDto {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        color: row.get(2)?,
+                    })
+                },
+            )
+            .optional()?;
+        if let Some(tag) = existing {
+            return Ok(tag);
+        }
+
+        let tag = TagDto {
+            id: new_id("t"),
+            name: name.to_string(),
+            color: DEFAULT_TAG_COLOR.to_string(),
+        };
+        self.conn.execute(
+            "INSERT INTO tags (id, name, color, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params![tag.id, tag.name, tag.color, now_ms()],
+        )?;
+        Ok(tag)
+    }
+
+    /// 重命名标签
+    pub fn rename(&self, id: &str, name: &str) -> Result<bool> {
+        let affected = self.conn.execute(
+            "UPDATE tags SET name = ?2 WHERE id = ?1",
+            params![id, name.trim()],
+        )?;
+        Ok(affected > 0)
+    }
+
+    /// 删除标签（笔记关联随之级联删除）
+    pub fn delete(&self, id: &str) -> Result<bool> {
+        let affected = self
+            .conn
+            .execute("DELETE FROM tags WHERE id = ?1", params![id])?;
+        Ok(affected > 0)
+    }
+
+    /// 覆盖设置笔记标签，返回生效后的标签名列表
+    pub fn set_note_tags(&self, note_id: &str, names: &[String]) -> Result<Vec<String>> {
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM note_tags WHERE note_id = ?1", params![note_id])?;
+
+        let mut applied: Vec<String> = Vec::new();
+        for raw in names {
+            let name = raw.trim();
+            if name.is_empty() || applied.iter().any(|n| n == name) {
+                continue;
+            }
+            let existing_id: Option<String> = tx
+                .query_row("SELECT id FROM tags WHERE name = ?1", params![name], |r| {
+                    r.get(0)
+                })
+                .optional()?;
+            let tag_id = match existing_id {
+                Some(id) => id,
+                None => {
+                    let id = new_id("t");
+                    tx.execute(
+                        "INSERT INTO tags (id, name, color, created_at) VALUES (?1, ?2, ?3, ?4)",
+                        params![id, name, DEFAULT_TAG_COLOR, now_ms()],
+                    )?;
+                    id
+                }
+            };
+            tx.execute(
+                "INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?1, ?2)",
+                params![note_id, tag_id],
+            )?;
+            applied.push(name.to_string());
+        }
+        tx.commit()?;
+        applied.sort();
+        Ok(applied)
+    }
+
+    /// 查询笔记的标签名列表
+    pub fn tags_of_note(&self, note_id: &str) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT t.name FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
+             WHERE nt.note_id = ?1 ORDER BY t.name",
+        )?;
+        let rows = stmt.query_map(params![note_id], |row| row.get::<_, String>(0))?;
+        let mut names = Vec::new();
+        for row in rows {
+            names.push(row?);
+        }
+        Ok(names)
+    }
+
+    /// 查询关联指定标签 ID 的笔记 ID
+    pub fn note_ids_by_tag_id(&self, tag_id: &str) -> Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT note_id FROM note_tags WHERE tag_id = ?1")?;
+        let rows = stmt.query_map(params![tag_id], |row| row.get::<_, String>(0))?;
+        let mut ids = Vec::new();
+        for row in rows {
+            ids.push(row?);
+        }
+        Ok(ids)
+    }
+
+    /// 查询带指定标签的笔记 ID
+    pub fn note_ids_with_tag(&self, name: &str) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT nt.note_id FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
+             WHERE t.name = ?1",
+        )?;
+        let rows = stmt.query_map(params![name], |row| row.get::<_, String>(0))?;
+        let mut ids = Vec::new();
+        for row in rows {
+            ids.push(row?);
+        }
+        Ok(ids)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -662,6 +824,83 @@ mod tests {
                 .map(|g| g.id)
                 .collect();
             assert_eq!(ordered, vec![c.id, a.id, b.id]);
+        });
+    }
+
+    #[test]
+    fn ensure_creates_tag_once_and_lists_it() {
+        with_db(|conn| {
+            let repo = TagsRepo::new(conn);
+            let tag = repo.ensure("架构").expect("ensure");
+            let again = repo.ensure("架构").expect("ensure again");
+
+            assert_eq!(tag.id, again.id, "同名标签应复用");
+            assert_eq!(tag.color, DEFAULT_TAG_COLOR);
+            assert_eq!(repo.list().expect("list").len(), 1);
+        });
+    }
+
+    #[test]
+    fn set_note_tags_dedupes_and_replaces() {
+        with_db(|conn| {
+            let tags = TagsRepo::new(conn);
+            let notes = NotesRepo::new(conn);
+            let note = notes.create("笔记", "内容", None).expect("create");
+
+            let applied = tags
+                .set_note_tags(
+                    &note.id,
+                    &["架构".to_string(), "架构".to_string(), "Rust".to_string(), " ".to_string()],
+                )
+                .expect("set tags");
+            assert_eq!(applied, vec!["Rust".to_string(), "架构".to_string()]);
+
+            let replaced = tags
+                .set_note_tags(&note.id, &["性能".to_string()])
+                .expect("replace");
+            assert_eq!(replaced, vec!["性能".to_string()]);
+            assert_eq!(
+                tags.tags_of_note(&note.id).expect("tags"),
+                vec!["性能".to_string()]
+            );
+        });
+    }
+
+    #[test]
+    fn note_dto_includes_tags() {
+        with_db(|conn| {
+            let notes = NotesRepo::new(conn);
+            let note = notes.create("笔记", "内容", None).expect("create");
+            TagsRepo::new(conn)
+                .set_note_tags(&note.id, &["架构".to_string()])
+                .expect("set");
+
+            let fetched = notes.get(&note.id).expect("get").expect("exists");
+            assert_eq!(fetched.tags, vec!["架构".to_string()]);
+        });
+    }
+
+    #[test]
+    fn find_notes_by_tag_then_delete_tag_cascades() {
+        with_db(|conn| {
+            let tags = TagsRepo::new(conn);
+            let notes = NotesRepo::new(conn);
+            let a = notes.create("A", "内容", None).expect("a");
+            let b = notes.create("B", "内容", None).expect("b");
+            let tag = tags.ensure("架构").expect("ensure");
+            tags.set_note_tags(&a.id, &["架构".to_string()]).expect("set a");
+            tags.set_note_tags(&b.id, &["架构".to_string()]).expect("set b");
+
+            let mut ids = tags.note_ids_with_tag("架构").expect("by tag");
+            ids.sort();
+            let mut expected = vec![a.id.clone(), b.id.clone()];
+            expected.sort();
+            assert_eq!(ids, expected);
+            assert_eq!(tags.note_ids_by_tag_id(&tag.id).expect("by id").len(), 2);
+
+            assert!(tags.delete(&tag.id).expect("delete tag"));
+            assert!(tags.list().expect("list").is_empty());
+            assert!(tags.note_ids_with_tag("架构").expect("by tag").is_empty());
         });
     }
 }

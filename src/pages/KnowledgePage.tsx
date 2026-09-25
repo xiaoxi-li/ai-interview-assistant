@@ -4,6 +4,7 @@ import {
   FilePlus2,
   FileText,
   FolderPlus,
+  Hash,
   Loader2,
   Plus,
   Search,
@@ -60,6 +61,10 @@ export default function KnowledgePage() {
   const search = useKnowledgeStore((s) => s.search);
   const searchMode = useKnowledgeStore((s) => s.searchMode);
   const setSearchMode = useKnowledgeStore((s) => s.setSearchMode);
+  const tags = useKnowledgeStore((s) => s.tags);
+  const selectedTag = useKnowledgeStore((s) => s.selectedTag);
+  const setSelectedTag = useKnowledgeStore((s) => s.setSelectedTag);
+  const setNoteTags = useKnowledgeStore((s) => s.setNoteTags);
 
   const [viewMode, setViewMode] = useState<ViewMode>("split");
 
@@ -98,14 +103,23 @@ export default function KnowledgePage() {
   const selected = notes.find((n) => n.id === selectedId) ?? null;
   const draft = useNoteDraft(selected);
 
+  // 按标签筛选（在群组筛选结果之上叠加）
+  const tagScopedNotes = useMemo(
+    () =>
+      selectedTag
+        ? groupScopedNotes.filter((n) => n.tags.includes(selectedTag))
+        : groupScopedNotes,
+    [groupScopedNotes, selectedTag]
+  );
+
   const searchActive = keyword.trim().length > 0;
   const searchScopedNotes = useMemo(() => {
-    if (!searchActive) return groupScopedNotes;
-    const byId = new Map(groupScopedNotes.map((n) => [n.id, n]));
+    if (!searchActive) return tagScopedNotes;
+    const byId = new Map(tagScopedNotes.map((n) => [n.id, n]));
     return hits
       .map((hit) => byId.get(hit.noteId))
       .filter((n): n is Note => Boolean(n));
-  }, [searchActive, groupScopedNotes, hits]);
+  }, [searchActive, tagScopedNotes, hits]);
 
   const visibleNotes = isTrash ? trashNotes : searchScopedNotes;
 
@@ -257,6 +271,43 @@ export default function KnowledgePage() {
               />
             )}
 
+            {!isTrash && tags.length > 0 && (
+              <div className="mt-3">
+                <div className="flex items-center gap-1 px-1 pb-1 text-[10px] uppercase tracking-wide text-text-subtle">
+                  <Hash className="h-3 w-3" />
+                  标签
+                  {selectedTag && (
+                    <button
+                      title="清除标签筛选"
+                      onClick={() => setSelectedTag(null)}
+                      className="ml-auto cursor-pointer text-[10px] text-primary-3 hover:underline"
+                    >
+                      清除
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1 px-1">
+                  {tags.map((tag) => {
+                    const active = selectedTag === tag.name;
+                    return (
+                      <button
+                        key={tag.id}
+                        onClick={() => setSelectedTag(active ? null : tag.name)}
+                        className={cn(
+                          "cursor-pointer rounded-full border px-2 py-0.5 text-[11px] transition-colors",
+                          active
+                            ? "border-primary/40 bg-primary/20 text-primary-3"
+                            : "border-white/10 bg-white/[0.04] text-text-subtle hover:text-text-muted"
+                        )}
+                      >
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="mt-3 flex items-center gap-2 px-1 pb-1 text-[10px] uppercase tracking-wide text-text-subtle">
               {isTrash ? "回收站" : "笔记"}
             </div>
@@ -303,9 +354,18 @@ export default function KnowledgePage() {
               viewMode={viewMode}
               saving={saving}
               savedAt={savedAt}
+              tags={selected.tags}
+              tagSuggestions={tags.map((t) => t.name)}
               onTitleChange={draft.setTitle}
               onContentChange={draft.setContent}
               onViewModeChange={setViewMode}
+              onAddTag={(tag) => setNoteTags(selected.id, [...selected.tags, tag])}
+              onRemoveTag={(tag) =>
+                setNoteTags(
+                  selected.id,
+                  selected.tags.filter((t) => t !== tag)
+                )
+              }
             />
           ) : (
             <div className="flex h-full items-center justify-center">

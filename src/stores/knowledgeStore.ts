@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { ipc } from "../lib/ipc";
-import type { Group, Note, SearchHit } from "../types";
+import type { Group, Note, SearchHit, Tag } from "../types";
 
 interface ImportOutcome {
   imported: number;
@@ -18,8 +18,11 @@ interface KnowledgeState {
   notes: Note[];
   trashNotes: Note[];
   groups: Group[];
+  tags: Tag[];
   view: KnowledgeView;
   selectedGroupId: SelectedGroup;
+  /** 标签筛选（null 表示不筛选） */
+  selectedTag: string | null;
   loading: boolean;
   importing: boolean;
   saving: boolean;
@@ -46,6 +49,8 @@ interface KnowledgeState {
   purgeNote: (id: string) => Promise<void>;
   emptyTrash: () => Promise<void>;
   moveNote: (id: string, groupId: string | null) => Promise<void>;
+  /** 覆盖设置笔记标签 */
+  setNoteTags: (noteId: string, tags: string[]) => Promise<void>;
   createGroup: (name: string, parentId: string | null) => Promise<void>;
   renameGroup: (id: string, name: string) => Promise<void>;
   deleteGroup: (id: string) => Promise<void>;
@@ -53,6 +58,7 @@ interface KnowledgeState {
   reorderGroups: (orderedIds: string[]) => Promise<void>;
   setView: (view: KnowledgeView) => void;
   setSelectedGroup: (groupId: SelectedGroup) => void;
+  setSelectedTag: (tag: string | null) => void;
   select: (id: string | null) => void;
   setKeyword: (keyword: string) => void;
 }
@@ -71,8 +77,10 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => {
     notes: [],
     trashNotes: [],
     groups: [],
+    tags: [],
     view: "all",
     selectedGroupId: undefined,
+    selectedTag: null,
     loading: false,
     importing: false,
     saving: false,
@@ -115,14 +123,16 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => {
         ipc<Note[]>("list_notes"),
         ipc<Note[]>("list_trash_notes"),
         ipc<Group[]>("list_groups"),
+        ipc<Tag[]>("list_tags"),
       ])
-        .then(([notes, trashNotes, groups]) => {
+        .then(([notes, trashNotes, groups, tags]) => {
           const current = get().selectedId;
           const stillExists = current && notes.some((n) => n.id === current);
           set({
             notes,
             trashNotes,
             groups,
+            tags,
             loading: false,
             selectedId: stillExists ? current : (notes[0]?.id ?? null),
           });
@@ -213,6 +223,25 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => {
     purgeNote: (id) => runAction("purge_note", { id }),
     emptyTrash: () => runAction("empty_trash"),
     moveNote: (id, groupId) => runAction("move_note", { id, groupId }),
+
+    setNoteTags: (noteId, tags) => {
+      set({ saving: true, error: null });
+      return ipc<Note>("set_note_tags", { id: noteId, tags })
+        .then((updated) => {
+          set((state) => ({
+            saving: false,
+            notes: state.notes.map((n) => (n.id === updated.id ? updated : n)),
+          }));
+          // 标签集合可能新增，刷新标签列表
+          return ipc<Tag[]>("list_tags")
+            .then((tags) => set({ tags }))
+            .catch((err) => console.error("刷新标签失败:", err));
+        })
+        .catch((err) => {
+          console.error("设置标签失败:", err);
+          set({ saving: false, error: String(err) });
+        });
+    },
     createGroup: (name, parentId) => runAction("create_group", { name, parentId }),
     renameGroup: (id, name) => runAction("rename_group", { id, name }),
     deleteGroup: (id) => {
@@ -226,6 +255,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => {
 
     setView: (view) => set({ view }),
     setSelectedGroup: (selectedGroupId) => set({ selectedGroupId }),
+    setSelectedTag: (selectedTag) => set({ selectedTag }),
     select: (id) => set({ selectedId: id }),
     setKeyword: (keyword) => set({ keyword }),
   };

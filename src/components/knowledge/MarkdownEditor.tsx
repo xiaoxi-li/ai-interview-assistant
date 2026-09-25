@@ -2,6 +2,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import EditorToolbar from "./EditorToolbar";
 import MarkdownView from "./MarkdownView";
+import TagEditor from "./TagEditor";
 import { cn } from "../../lib/utils";
 import type { ViewMode } from "../../types";
 
@@ -11,9 +12,15 @@ interface MarkdownEditorProps {
   viewMode: ViewMode;
   saving: boolean;
   savedAt: number | null;
+  /** 笔记标签 */
+  tags?: string[];
+  /** 全部已有标签（作为输入建议） */
+  tagSuggestions?: string[];
   onTitleChange: (value: string) => void;
   onContentChange: (value: string) => void;
   onViewModeChange: (mode: ViewMode) => void;
+  onAddTag?: (tag: string) => void;
+  onRemoveTag?: (tag: string) => void;
 }
 
 /**
@@ -27,9 +34,13 @@ export default function MarkdownEditor({
   viewMode,
   saving,
   savedAt,
+  tags = [],
+  tagSuggestions = [],
   onTitleChange,
   onContentChange,
   onViewModeChange,
+  onAddTag,
+  onRemoveTag,
 }: MarkdownEditorProps) {
   const showSource = viewMode !== "preview";
   const showPreview = viewMode !== "source";
@@ -44,6 +55,15 @@ export default function MarkdownEditor({
         onTitleChange={onTitleChange}
         onViewModeChange={onViewModeChange}
       />
+
+      {onAddTag && onRemoveTag && (
+        <TagEditor
+          tags={tags}
+          suggestions={tagSuggestions}
+          onAdd={onAddTag}
+          onRemove={onRemoveTag}
+        />
+      )}
 
       <div className="flex min-h-0 flex-1">
         {showSource && (
