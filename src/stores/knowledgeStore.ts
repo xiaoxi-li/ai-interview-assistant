@@ -8,9 +8,13 @@ interface ImportOutcome {
   notes: Note[];
 }
 
+export type KnowledgeView = "all" | "trash";
+
 interface KnowledgeState {
   notes: Note[];
+  trashNotes: Note[];
   groups: Group[];
+  view: KnowledgeView;
   loading: boolean;
   importing: boolean;
   saving: boolean;
@@ -18,19 +22,29 @@ interface KnowledgeState {
   error: string | null;
   selectedId: string | null;
   keyword: string;
-  /** 加载笔记与群组 */
+  /** 加载笔记、回收站与群组 */
   load: () => Promise<void>;
   /** 导入 Markdown 路径，返回成功导入数量 */
   importPaths: (paths: string[]) => Promise<number>;
   /** 保存笔记标题与正文 */
   updateNote: (id: string, title: string, content: string) => Promise<void>;
+  /** 新建空白笔记并选中 */
+  createNote: () => Promise<void>;
+  trashNote: (id: string) => Promise<void>;
+  restoreNote: (id: string) => Promise<void>;
+  purgeNote: (id: string) => Promise<void>;
+  emptyTrash: () => Promise<void>;
+  moveNote: (id: string, groupId: string | null) => Promise<void>;
+  setView: (view: KnowledgeView) => void;
   select: (id: string | null) => void;
   setKeyword: (keyword: string) => void;
 }
 
 export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
   notes: [],
+  trashNotes: [],
   groups: [],
+  view: "all",
   loading: false,
   importing: false,
   saving: false,
@@ -43,13 +57,15 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     set({ loading: true, error: null });
     return Promise.all([
       ipc<Note[]>("list_notes"),
+      ipc<Note[]>("list_trash_notes"),
       ipc<Group[]>("list_groups"),
     ])
-      .then(([notes, groups]) => {
+      .then(([notes, trashNotes, groups]) => {
         const current = get().selectedId;
         const stillExists = current && notes.some((n) => n.id === current);
         set({
           notes,
+          trashNotes,
           groups,
           loading: false,
           selectedId: stillExists ? current : (notes[0]?.id ?? null),
@@ -72,7 +88,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
         return get()
           .load()
           .then(() => {
-            set({ importing: false });
+            set({ importing: false, view: "all" });
             return outcome.imported;
           });
       })
@@ -100,6 +116,70 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
       });
   },
 
+  createNote: () => {
+    return ipc<Note>("create_note", { groupId: null })
+      .then((note) =>
+        get()
+          .load()
+          .then(() => set({ selectedId: note.id, view: "all" }))
+      )
+      .catch((err) => {
+        console.error("新建笔记失败:", err);
+        set({ error: String(err) });
+      });
+  },
+
+  trashNote: (id) => {
+    return ipc<boolean>("delete_note", { id })
+      .then(() => {
+        set((state) => ({
+          selectedId: state.selectedId === id ? null : state.selectedId,
+        }));
+        return get().load();
+      })
+      .catch((err) => {
+        console.error("删除笔记失败:", err);
+        set({ error: String(err) });
+      });
+  },
+
+  restoreNote: (id) => {
+    return ipc<boolean>("restore_note", { id })
+      .then(() => get().load())
+      .catch((err) => {
+        console.error("恢复笔记失败:", err);
+        set({ error: String(err) });
+      });
+  },
+
+  purgeNote: (id) => {
+    return ipc<boolean>("purge_note", { id })
+      .then(() => get().load())
+      .catch((err) => {
+        console.error("彻底删除失败:", err);
+        set({ error: String(err) });
+      });
+  },
+
+  emptyTrash: () => {
+    return ipc<number>("empty_trash")
+      .then(() => get().load())
+      .catch((err) => {
+        console.error("清空回收站失败:", err);
+        set({ error: String(err) });
+      });
+  },
+
+  moveNote: (id, groupId) => {
+    return ipc<boolean>("move_note", { id, groupId })
+      .then(() => get().load())
+      .catch((err) => {
+        console.error("移动笔记失败:", err);
+        set({ error: String(err) });
+      });
+  },
+
+  setView: (view) => set({ view }),
   select: (id) => set({ selectedId: id }),
   setKeyword: (keyword) => set({ keyword }),
 }));

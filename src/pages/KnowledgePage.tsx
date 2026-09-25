@@ -4,8 +4,11 @@ import {
   FilePlus2,
   FolderPlus,
   FolderTree,
+  FileText,
   Loader2,
+  Plus,
   Search,
+  Trash2,
 } from "lucide-react";
 import NoteList from "../components/knowledge/NoteList";
 import MarkdownEditor from "../components/knowledge/MarkdownEditor";
@@ -13,14 +16,19 @@ import { useFileDrop } from "../hooks/useFileDrop";
 import { useNoteDraft } from "../hooks/useNoteDraft";
 import { pickDirectory, pickMarkdownFiles } from "../lib/dialog";
 import { useKnowledgeStore } from "../stores/knowledgeStore";
+import { cn } from "../lib/utils";
 import type { ViewMode } from "../types";
 
 const ACTION_BTN =
   "flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:border-primary/40 hover:text-text disabled:cursor-not-allowed disabled:opacity-50";
+const PRIMARY_BTN =
+  "flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-3 py-1.5 text-[12px] text-primary-3 transition-colors hover:bg-primary/25";
 
 export default function KnowledgePage() {
   const notes = useKnowledgeStore((s) => s.notes);
+  const trashNotes = useKnowledgeStore((s) => s.trashNotes);
   const groups = useKnowledgeStore((s) => s.groups);
+  const view = useKnowledgeStore((s) => s.view);
   const loading = useKnowledgeStore((s) => s.loading);
   const importing = useKnowledgeStore((s) => s.importing);
   const saving = useKnowledgeStore((s) => s.saving);
@@ -30,6 +38,12 @@ export default function KnowledgePage() {
   const error = useKnowledgeStore((s) => s.error);
   const load = useKnowledgeStore((s) => s.load);
   const importPaths = useKnowledgeStore((s) => s.importPaths);
+  const createNote = useKnowledgeStore((s) => s.createNote);
+  const trashNote = useKnowledgeStore((s) => s.trashNote);
+  const restoreNote = useKnowledgeStore((s) => s.restoreNote);
+  const purgeNote = useKnowledgeStore((s) => s.purgeNote);
+  const emptyTrash = useKnowledgeStore((s) => s.emptyTrash);
+  const setView = useKnowledgeStore((s) => s.setView);
   const select = useKnowledgeStore((s) => s.select);
   const setKeyword = useKnowledgeStore((s) => s.setKeyword);
 
@@ -45,6 +59,8 @@ export default function KnowledgePage() {
 
   const selected = notes.find((n) => n.id === selectedId) ?? null;
   const draft = useNoteDraft(selected);
+  const isTrash = view === "trash";
+  const visibleNotes = isTrash ? trashNotes : notes;
 
   const handleImportFiles = () => {
     pickMarkdownFiles().then((paths) => importPaths(paths));
@@ -65,7 +81,7 @@ export default function KnowledgePage() {
         </span>
 
         <div className="ml-auto flex items-center gap-2">
-          <div className="flex w-60 items-center gap-2 rounded-lg border border-white/[0.08] bg-background-3/60 px-3 py-1.5">
+          <div className="flex w-56 items-center gap-2 rounded-lg border border-white/[0.08] bg-background-3/60 px-3 py-1.5">
             <Search className="h-3.5 w-3.5 shrink-0 text-text-subtle" />
             <input
               value={keyword}
@@ -74,6 +90,10 @@ export default function KnowledgePage() {
               className="w-full border-0 bg-transparent p-0 text-[13px] text-text outline-none placeholder:text-text-subtle"
             />
           </div>
+          <button onClick={createNote} className={PRIMARY_BTN}>
+            <Plus className="h-3.5 w-3.5" />
+            新建笔记
+          </button>
           <button
             onClick={handleImportFiles}
             disabled={importing}
@@ -104,15 +124,48 @@ export default function KnowledgePage() {
       )}
 
       <div className="flex min-h-0 flex-1">
-        {/* 笔记列表 */}
+        {/* 侧栏：视图切换 + 列表 */}
         <aside className="flex w-64 shrink-0 flex-col border-r border-white/5">
-          <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-text-muted">
-            <FolderTree className="h-3.5 w-3.5" />
-            全部笔记
-            <span className="ml-auto text-text-subtle">
-              {groups.length} 个群组
-            </span>
+          <div className="flex items-center gap-1 px-2 pt-2">
+            <button
+              onClick={() => setView("all")}
+              className={cn(
+                "flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] transition-colors",
+                !isTrash
+                  ? "bg-primary/15 text-primary-3"
+                  : "text-text-subtle hover:text-text-muted"
+              )}
+            >
+              <FolderTree className="h-3.5 w-3.5" />
+              全部 {notes.length}
+            </button>
+            <button
+              onClick={() => setView("trash")}
+              className={cn(
+                "flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] transition-colors",
+                isTrash
+                  ? "bg-danger/15 text-danger"
+                  : "text-text-subtle hover:text-text-muted"
+              )}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              回收站 {trashNotes.length}
+            </button>
           </div>
+
+          {isTrash && trashNotes.length > 0 && (
+            <button
+              onClick={emptyTrash}
+              className="mx-2 mt-2 cursor-pointer rounded-md border border-danger/30 bg-danger/10 py-1 text-[11px] text-danger transition-colors hover:bg-danger/20"
+            >
+              清空回收站
+            </button>
+          )}
+
+          <div className="mt-2 flex items-center gap-2 px-3 pb-1 text-[10px] text-text-subtle">
+            {isTrash ? "回收站中的笔记不可编辑" : `${groups.length} 个群组`}
+          </div>
+
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
             {loading ? (
               <p className="px-2 py-6 text-center text-[12px] text-text-subtle">
@@ -120,18 +173,37 @@ export default function KnowledgePage() {
               </p>
             ) : (
               <NoteList
-                notes={notes}
+                notes={visibleNotes}
                 selectedId={selectedId}
                 keyword={keyword}
+                mode={view}
                 onSelect={select}
+                onTrash={trashNote}
+                onRestore={restoreNote}
+                onPurge={purgeNote}
               />
             )}
           </div>
         </aside>
 
-        {/* 编辑器 / 空态 */}
+        {/* 主区 */}
         <section className="min-w-0 flex-1">
-          {selected ? (
+          {isTrash ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="glass flex max-w-md flex-col items-center gap-3 rounded-xl px-10 py-12 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-danger/15">
+                  <Trash2 className="h-6 w-6 text-danger" />
+                </div>
+                <h2 className="text-[15px] font-semibold">回收站</h2>
+                <p className="text-[12px] leading-relaxed text-text-muted">
+                  已删除的笔记不会出现在列表中。可在此恢复，或彻底删除后不可找回。
+                </p>
+                <p className="text-[11px] text-text-subtle">
+                  共 {trashNotes.length} 篇
+                </p>
+              </div>
+            </div>
+          ) : selected ? (
             <MarkdownEditor
               title={draft.title}
               content={draft.content}
@@ -146,11 +218,11 @@ export default function KnowledgePage() {
             <div className="flex h-full items-center justify-center">
               <div className="glass flex max-w-md flex-col items-center gap-3 rounded-xl px-10 py-12 text-center">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-3 shadow-lg shadow-primary/25">
-                  <BookOpen className="h-6 w-6 text-white" />
+                  <FileText className="h-6 w-6 text-white" />
                 </div>
                 <h2 className="text-[15px] font-semibold">知识库尚空</h2>
                 <p className="text-[12px] leading-relaxed text-text-muted">
-                  导入 Markdown 笔记后，即可在此进行源码 / 预览双视图编辑。
+                  新建笔记或导入 Markdown 文件，即可进行源码 / 预览双视图编辑。
                 </p>
               </div>
             </div>

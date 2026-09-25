@@ -132,6 +132,69 @@ impl<'a> NotesRepo<'a> {
         Ok(n as usize)
     }
 
+    /// 新建空白笔记
+    pub fn create_empty(&self, group_id: Option<&str>) -> Result<NoteDto> {
+        self.create("未命名笔记", "", group_id)
+    }
+
+    /// 移入回收站（软删除）；返回是否命中记录
+    pub fn trash(&self, id: &str) -> Result<bool> {
+        let affected = self.conn.execute(
+            "UPDATE notes SET is_deleted = 1, deleted_at = ?2, updated_at = ?2
+             WHERE id = ?1 AND is_deleted = 0",
+            params![id, now_ms()],
+        )?;
+        Ok(affected > 0)
+    }
+
+    /// 从回收站恢复；返回是否命中记录
+    pub fn restore(&self, id: &str) -> Result<bool> {
+        let affected = self.conn.execute(
+            "UPDATE notes SET is_deleted = 0, deleted_at = NULL, updated_at = ?2
+             WHERE id = ?1 AND is_deleted = 1",
+            params![id, now_ms()],
+        )?;
+        Ok(affected > 0)
+    }
+
+    /// 彻底删除单条笔记（级联清理标签关联、版本与分块）
+    pub fn purge(&self, id: &str) -> Result<bool> {
+        let affected = self
+            .conn
+            .execute("DELETE FROM notes WHERE id = ?1", params![id])?;
+        Ok(affected > 0)
+    }
+
+    /// 清空回收站，返回删除条数
+    pub fn empty_trash(&self) -> Result<usize> {
+        let affected = self
+            .conn
+            .execute("DELETE FROM notes WHERE is_deleted = 1", [])?;
+        Ok(affected)
+    }
+
+    /// 移动笔记到指定群组（None 表示移出群组）
+    pub fn move_to_group(&self, id: &str, group_id: Option<&str>) -> Result<bool> {
+        let affected = self.conn.execute(
+            "UPDATE notes SET group_id = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, group_id, now_ms()],
+        )?;
+        Ok(affected > 0)
+    }
+
+    /// 列出回收站中的笔记（按删除时间倒序）
+    pub fn list_trash(&self) -> Result<Vec<NoteDto>> {
+        let sql =
+            format!("SELECT {NOTE_COLUMNS} FROM notes WHERE is_deleted = 1 ORDER BY deleted_at DESC");
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map([], map_note)?;
+        let mut notes = Vec::new();
+        for row in rows {
+            notes.push(row?);
+        }
+        Ok(notes)
+    }
+
     fn tags_of(&self, note_id: &str) -> Result<Vec<String>> {
         let mut stmt = self.conn.prepare(
             "SELECT t.name FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
@@ -288,6 +351,87 @@ mod tests {
         with_db(|conn| {
             let repo = NotesRepo::new(conn);
             assert!(repo.update("missing", "t", "c").expect("update").is_none());
+        });
+    }
+
+    #[test]
+    fn create_empty_note_has_default_title() {
+        with_db(|conn| {
+            let repo = NotesRepo::new(conn);
+            let note = repo.create_empty(None).expect("create");
+            assert_eq!(note.title, "未命名笔记");
+            assert!(note.content.is_empty());
+        });
+    }
+
+    #[test]
+    fn trash_moves_note_out_of_active_list() {
+        with_db(|conn| {
+            let repo = NotesRepo::new(conn);
+            let note = repo.create("待删除", "内容", None).expect("create");
+
+            assert!(repo.trash(&note.id).expect("trash"));
+            assert_eq!(repo.list(false).expect("list").len(), 0);
+            assert_eq!(repo.list_trash().expect("trash list").len(), 1);
+            // 重复删除应返回 false
+            assert!(!repo.trash(&note.id).expect("trash twice"));
+        });
+    }
+
+    #[test]
+    fn restore_returns_note_to_active_list() {
+        with_db(|conn| {
+            let repo = NotesRepo::new(conn);
+            let note = repo.create("恢复我", "内容", None).expect("create");
+            repo.trash(&note.id).expect("trash");
+
+            assert!(repo.restore(&note.id).expect("restore"));
+            assert_eq!(repo.list(false).expect("list").len(), 1);
+            assert!(repo.list_trash().expect("trash list").is_empty());
+            // 未在回收站的笔记不可恢复
+            assert!(!repo.restore(&note.id).expect("restore twice"));
+        });
+    }
+
+    #[test]
+    fn purge_and_empty_trash_remove_records_permanently() {
+        with_db(|conn| {
+            let repo = NotesRepo::new(conn);
+            let a = repo.create("A", "a", None).expect("create a");
+            let b = repo.create("B", "b", None).expect("create b");
+            repo.trash(&a.id).expect("trash a");
+            repo.trash(&b.id).expect("trash b");
+
+            assert!(repo.purge(&a.id).expect("purge"));
+            assert!(repo.get(&a.id).expect("get").is_none());
+            assert_eq!(repo.empty_trash().expect("empty"), 1);
+            assert!(repo.get(&b.id).expect("get").is_none());
+        });
+    }
+
+    #[test]
+    fn move_note_updates_group_and_clears_it() {
+        with_db(|conn| {
+            let repo = NotesRepo::new(conn);
+            conn.execute(
+                "INSERT INTO groups (id, name, parent_id, sort_order, created_at, updated_at)
+                 VALUES ('g1', '前端', NULL, 0, 0, 0)",
+                [],
+            )
+            .expect("insert group");
+
+            let note = repo.create("移动我", "内容", None).expect("create");
+            assert!(repo.move_to_group(&note.id, Some("g1")).expect("move in"));
+            assert_eq!(
+                repo.get(&note.id).expect("get").expect("exists").group_id,
+                Some("g1".to_string())
+            );
+
+            assert!(repo.move_to_group(&note.id, None).expect("move out"));
+            assert_eq!(
+                repo.get(&note.id).expect("get").expect("exists").group_id,
+                None
+            );
         });
     }
 }
