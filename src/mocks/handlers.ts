@@ -18,6 +18,7 @@ export async function mockInvoke<T>(
     case "list_notes":
       return MOCK_NOTES as T;
 
+    case "search_similar_notes":
     case "search_notes": {
       const query = String(args?.query ?? "").trim().toLowerCase();
       if (!query) return [] as T;

@@ -25,10 +25,12 @@ pub fn update_note(
     content: String,
 ) -> Result<NoteDto, String> {
     let conn = state.lock()?;
-    NotesRepo::new(&conn)
+    let note = NotesRepo::new(&conn)
         .update(&id, &title, &content)
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("笔记不存在：{id}"))
+        .ok_or_else(|| format!("笔记不存在：{id}"))?;
+    index_note_quietly(&conn, &state, &note);
+    Ok(note)
 }
 
 /// 全文检索笔记（FTS5 + jieba 中文分词）
@@ -43,6 +45,30 @@ pub fn search_notes(
         .map_err(|e| e.to_string())
 }
 
+/// 语义检索笔记（分块向量 + sqlite-vec 相似度）
+#[tauri::command]
+pub fn search_similar_notes(
+    state: State<'_, AppState>,
+    query: String,
+    top_k: Option<usize>,
+) -> Result<Vec<SearchHit>, String> {
+    let conn = state.lock()?;
+    crate::retrieval::index::search_notes(
+        &conn,
+        state.embedding.as_ref(),
+        &query,
+        top_k.unwrap_or(10),
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// 向量索引采用"尽力而为"策略：失败不阻断笔记写入，仅记录告警。
+fn index_note_quietly(conn: &rusqlite::Connection, state: &AppState, note: &NoteDto) {
+    if let Err(err) = crate::retrieval::index::reindex_note(conn, state.embedding.as_ref(), note) {
+        eprintln!("向量索引失败（note={}）：{err}", note.id);
+    }
+}
+
 /// 新建空白笔记
 #[tauri::command]
 pub fn create_note(
@@ -50,9 +76,11 @@ pub fn create_note(
     group_id: Option<String>,
 ) -> Result<NoteDto, String> {
     let conn = state.lock()?;
-    NotesRepo::new(&conn)
+    let note = NotesRepo::new(&conn)
         .create_empty(group_id.as_deref())
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    index_note_quietly(&conn, &state, &note);
+    Ok(note)
 }
 
 /// 列出回收站中的笔记
@@ -180,6 +208,11 @@ pub fn import_markdown(
     }
     let inputs: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
     let conn = state.lock()?;
-    crate::knowledge::import_paths(&conn, &inputs, group_id.as_deref())
-        .map_err(|e| e.to_string())
+    let outcome = crate::knowledge::import_paths(&conn, &inputs, group_id.as_deref())
+        .map_err(|e| e.to_string())?;
+    // 导入后建立向量索引，便于语义检索立即命中
+    for note in &outcome.notes {
+        index_note_quietly(&conn, &state, note);
+    }
+    Ok(outcome)
 }

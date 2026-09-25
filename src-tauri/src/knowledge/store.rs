@@ -192,6 +192,7 @@ impl<'a> NotesRepo<'a> {
             .execute("DELETE FROM notes WHERE id = ?1", params![id])?;
         if affected > 0 {
             crate::retrieval::prune_orphans(self.conn)?;
+            crate::retrieval::index::prune_orphans(self.conn)?;
         }
         Ok(affected > 0)
     }
@@ -203,6 +204,7 @@ impl<'a> NotesRepo<'a> {
             .execute("DELETE FROM notes WHERE is_deleted = 1", [])?;
         if affected > 0 {
             crate::retrieval::prune_orphans(self.conn)?;
+            crate::retrieval::index::prune_orphans(self.conn)?;
         }
         Ok(affected)
     }

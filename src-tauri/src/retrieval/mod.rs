@@ -3,7 +3,9 @@
 //! P0 仅提供 BM25 全文召回；向量召回与 RRF 融合在后续任务接入，
 //! 接口保持稳定以免上层改动。
 
+pub mod chunker;
 pub mod fts;
+pub mod index;
 pub mod tokenizer;
 
 use serde::{Deserialize, Serialize};

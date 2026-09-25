@@ -58,6 +58,8 @@ export default function KnowledgePage() {
   const setKeyword = useKnowledgeStore((s) => s.setKeyword);
   const hits = useKnowledgeStore((s) => s.hits);
   const search = useKnowledgeStore((s) => s.search);
+  const searchMode = useKnowledgeStore((s) => s.searchMode);
+  const setSearchMode = useKnowledgeStore((s) => s.setSearchMode);
 
   const [viewMode, setViewMode] = useState<ViewMode>("split");
 
@@ -131,9 +133,39 @@ export default function KnowledgePage() {
             <input
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder="按标题 / 内容 / 标签筛选…"
+              placeholder={
+                searchMode === "semantic" ? "语义检索相似笔记…" : "按标题 / 内容 / 标签检索…"
+              }
               className="w-full border-0 bg-transparent p-0 text-[13px] text-text outline-none placeholder:text-text-subtle"
             />
+          </div>
+
+          {/* 检索模式切换：关键词（FTS5）/ 语义（向量） */}
+          <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-background-3/60 p-0.5">
+            <button
+              onClick={() => setSearchMode("keyword")}
+              title="关键词检索（FTS5 + 中文分词）"
+              className={cn(
+                "cursor-pointer rounded-md px-2 py-1 text-[11px] transition-colors",
+                searchMode === "keyword"
+                  ? "bg-primary/20 text-primary-3"
+                  : "text-text-subtle hover:text-text-muted"
+              )}
+            >
+              关键词
+            </button>
+            <button
+              onClick={() => setSearchMode("semantic")}
+              title="语义检索（向量相似度）"
+              className={cn(
+                "cursor-pointer rounded-md px-2 py-1 text-[11px] transition-colors",
+                searchMode === "semantic"
+                  ? "bg-primary/20 text-primary-3"
+                  : "text-text-subtle hover:text-text-muted"
+              )}
+            >
+              语义
+            </button>
           </div>
           <button onClick={() => createNote()} className={PRIMARY_BTN}>
             <Plus className="h-3.5 w-3.5" />

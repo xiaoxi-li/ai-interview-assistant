@@ -9,6 +9,8 @@ interface ImportOutcome {
 }
 
 export type KnowledgeView = "all" | "trash";
+/** keyword = FTS5 全文检索；semantic = 向量语义检索 */
+export type SearchMode = "keyword" | "semantic";
 /** undefined = 全部笔记；null = 未分组 */
 export type SelectedGroup = string | null | undefined;
 
@@ -25,12 +27,14 @@ interface KnowledgeState {
   error: string | null;
   selectedId: string | null;
   keyword: string;
-  /** 全文检索命中结果（关键词为空时清空） */
+  /** 检索命中结果（关键词为空时清空） */
   hits: SearchHit[];
+  searchMode: SearchMode;
   /** 加载笔记、回收站与群组 */
   load: () => Promise<void>;
-  /** 执行全文检索 */
+  /** 按当前检索模式执行检索 */
   search: (keyword: string) => Promise<void>;
+  setSearchMode: (mode: SearchMode) => void;
   /** 导入 Markdown 路径，返回成功导入数量 */
   importPaths: (paths: string[]) => Promise<number>;
   /** 保存笔记标题与正文 */
@@ -77,6 +81,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => {
     selectedId: null,
     keyword: "",
     hits: [],
+    searchMode: "keyword",
 
     search: (keyword) => {
       const query = keyword.trim();
@@ -84,12 +89,24 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => {
         set({ hits: [] });
         return Promise.resolve();
       }
-      return ipc<SearchHit[]>("search_notes", { query, limit: 50 })
+      const semantic = get().searchMode === "semantic";
+      const command = semantic ? "search_similar_notes" : "search_notes";
+      const args = semantic ? { query, topK: 20 } : { query, limit: 50 };
+      return ipc<SearchHit[]>(command, args)
         .then((hits) => set({ hits }))
         .catch((err) => {
           console.error("检索失败:", err);
           set({ hits: [], error: String(err) });
         });
+    },
+
+    setSearchMode: (searchMode) => {
+      set({ searchMode });
+      // 切换模式后立即用当前关键词重查
+      const keyword = get().keyword;
+      if (keyword.trim()) {
+        get().search(keyword);
+      }
     },
 
     load: () => {

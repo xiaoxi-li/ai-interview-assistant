@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::sync::Arc;
 use tauri::Manager;
 
 mod commands;
@@ -33,7 +34,14 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let db_path = data_dir.join("ai-interview.db");
             let db = storage::Db::open(&db_path)?;
-            app.manage(state::AppState::new(db.into_shared_conn(), db_path));
+            // P0 使用确定性 Mock 嵌入；真实本地 ONNX 模型在模型管理中台接入后替换
+            let embedding: Arc<dyn providers::EmbeddingProvider> =
+                Arc::new(providers::MockEmbeddingProvider::default());
+            app.manage(state::AppState::new(
+                db.into_shared_conn(),
+                db_path,
+                embedding,
+            ));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -43,6 +51,7 @@ pub fn run() {
             commands::import_markdown,
             commands::update_note,
             commands::search_notes,
+            commands::search_similar_notes,
             commands::create_note,
             commands::list_trash_notes,
             commands::delete_note,
