@@ -163,3 +163,36 @@
   border-top: 1px solid #2a3448;
   margin: 1.2em 0;
 }
+
+/* 代码高亮（highlight.js 精简主题） */
+.markdown-body .hljs-keyword,
+.markdown-body .hljs-selector-tag,
+.markdown-body .hljs-built_in {
+  color: #c792ea;
+}
+.markdown-body .hljs-string,
+.markdown-body .hljs-attr,
+.markdown-body .hljs-template-variable {
+  color: #c3e88d;
+}
+.markdown-body .hljs-number,
+.markdown-body .hljs-literal {
+  color: #f78c6c;
+}
+.markdown-body .hljs-comment,
+.markdown-body .hljs-quote {
+  color: #6b7488;
+  font-style: italic;
+}
+.markdown-body .hljs-function,
+.markdown-body .hljs-title {
+  color: #82aaff;
+}
+.markdown-body .hljs-type,
+.markdown-body .hljs-class {
+  color: #ffcb6b;
+}
+.markdown-body .hljs-variable,
+.markdown-body .hljs-tag {
+  color: #e6eaf2;
+}

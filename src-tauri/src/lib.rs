@@ -1,9 +1,14 @@
 use serde::Serialize;
+use tauri::Manager;
 
+mod commands;
+mod state;
+
+pub mod knowledge;
 pub mod providers;
 pub mod storage;
 
-/// 应用基础信息（骨架阶段用于验证前后端 IPC 通路）
+/// 应用基础信息（用于验证前后端 IPC 通路）
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct AppInfo {
     pub name: String,
@@ -20,7 +25,22 @@ fn app_info() -> AppInfo {
 
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_info])
+        .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            // 数据库存放于系统应用数据目录
+            let data_dir = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&data_dir)?;
+            let db_path = data_dir.join("ai-interview.db");
+            let db = storage::Db::open(&db_path)?;
+            app.manage(state::AppState::new(db.into_shared_conn(), db_path));
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            app_info,
+            commands::list_notes,
+            commands::list_groups,
+            commands::import_markdown,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
