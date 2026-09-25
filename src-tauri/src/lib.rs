@@ -52,6 +52,7 @@ pub fn run() {
             commands::update_note,
             commands::search_notes,
             commands::search_similar_notes,
+            commands::search_hybrid_notes,
             commands::create_note,
             commands::list_trash_notes,
             commands::delete_note,

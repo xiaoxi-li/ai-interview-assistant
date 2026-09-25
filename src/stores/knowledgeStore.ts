@@ -9,8 +9,14 @@ interface ImportOutcome {
 }
 
 export type KnowledgeView = "all" | "trash";
-/** keyword = FTS5 全文检索；semantic = 向量语义检索 */
-export type SearchMode = "keyword" | "semantic";
+/** keyword = FTS5 全文检索；semantic = 向量语义检索；hybrid = 双路 RRF 融合 */
+export type SearchMode = "keyword" | "semantic" | "hybrid";
+
+const SEARCH_COMMANDS: Record<SearchMode, { command: string; key: string }> = {
+  keyword: { command: "search_notes", key: "limit" },
+  semantic: { command: "search_similar_notes", key: "topK" },
+  hybrid: { command: "search_hybrid_notes", key: "topK" },
+};
 /** undefined = 全部笔记；null = 未分组 */
 export type SelectedGroup = string | null | undefined;
 
@@ -97,9 +103,8 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => {
         set({ hits: [] });
         return Promise.resolve();
       }
-      const semantic = get().searchMode === "semantic";
-      const command = semantic ? "search_similar_notes" : "search_notes";
-      const args = semantic ? { query, topK: 20 } : { query, limit: 50 };
+      const { command, key } = SEARCH_COMMANDS[get().searchMode];
+      const args = { query, [key]: key === "limit" ? 50 : 20 };
       return ipc<SearchHit[]>(command, args)
         .then((hits) => set({ hits }))
         .catch((err) => {

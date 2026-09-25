@@ -148,7 +148,11 @@ export default function KnowledgePage() {
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               placeholder={
-                searchMode === "semantic" ? "语义检索相似笔记…" : "按标题 / 内容 / 标签检索…"
+                searchMode === "semantic"
+                  ? "语义检索相似笔记…"
+                  : searchMode === "hybrid"
+                    ? "混合检索（关键词 + 语义）…"
+                    : "按标题 / 内容 / 标签检索…"
               }
               className="w-full border-0 bg-transparent p-0 text-[13px] text-text outline-none placeholder:text-text-subtle"
             />
@@ -179,6 +183,18 @@ export default function KnowledgePage() {
               )}
             >
               语义
+            </button>
+            <button
+              onClick={() => setSearchMode("hybrid")}
+              title="混合检索（BM25 + 向量 RRF 融合）"
+              className={cn(
+                "cursor-pointer rounded-md px-2 py-1 text-[11px] transition-colors",
+                searchMode === "hybrid"
+                  ? "bg-primary/20 text-primary-3"
+                  : "text-text-subtle hover:text-text-muted"
+              )}
+            >
+              混合
             </button>
           </div>
           <button onClick={() => createNote()} className={PRIMARY_BTN}>

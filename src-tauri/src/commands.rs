@@ -62,6 +62,18 @@ pub fn search_similar_notes(
     .map_err(|e| e.to_string())
 }
 
+/// 混合检索：BM25 + 向量 RRF 融合
+#[tauri::command]
+pub fn search_hybrid_notes(
+    state: State<'_, AppState>,
+    query: String,
+    top_k: Option<usize>,
+) -> Result<Vec<SearchHit>, String> {
+    let conn = state.lock()?;
+    crate::retrieval::search_hybrid(&conn, state.embedding.as_ref(), &query, top_k.unwrap_or(10))
+        .map_err(|e| e.to_string())
+}
+
 /// 向量索引采用"尽力而为"策略：失败不阻断笔记写入，仅记录告警。
 fn index_note_quietly(conn: &rusqlite::Connection, state: &AppState, note: &NoteDto) {
     if let Err(err) = crate::retrieval::index::reindex_note(conn, state.embedding.as_ref(), note) {
