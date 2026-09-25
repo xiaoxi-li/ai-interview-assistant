@@ -1,0 +1,27 @@
+# 统一换行符：仓库内保持 LF，检出时按系统转换（项目需跨 Windows/macOS）
+* text=auto eol=lf
+
+# Windows 脚本必须 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制文件，禁止换行转换与 diff
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.pdf binary
+*.zip binary
+*.msi binary
+*.dmg binary
+
+# 生成的 lockfile 不参与 diff 统计
+pnpm-lock.yaml -diff
+yarn.lock -diff
+package-lock.json -diff
