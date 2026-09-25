@@ -15,6 +15,21 @@ pub fn list_notes(state: State<'_, AppState>) -> Result<Vec<NoteDto>, String> {
     NotesRepo::new(&conn).list(false).map_err(|e| e.to_string())
 }
 
+/// 更新笔记标题与正文
+#[tauri::command]
+pub fn update_note(
+    state: State<'_, AppState>,
+    id: String,
+    title: String,
+    content: String,
+) -> Result<NoteDto, String> {
+    let conn = state.lock()?;
+    NotesRepo::new(&conn)
+        .update(&id, &title, &content)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("笔记不存在：{id}"))
+}
+
 /// 列出全部群组
 #[tauri::command]
 pub fn list_groups(state: State<'_, AppState>) -> Result<Vec<GroupDto>, String> {

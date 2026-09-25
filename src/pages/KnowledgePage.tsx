@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   BookOpen,
   FilePlus2,
@@ -8,10 +8,12 @@ import {
   Search,
 } from "lucide-react";
 import NoteList from "../components/knowledge/NoteList";
-import NotePreview from "../components/knowledge/NotePreview";
+import MarkdownEditor from "../components/knowledge/MarkdownEditor";
 import { useFileDrop } from "../hooks/useFileDrop";
+import { useNoteDraft } from "../hooks/useNoteDraft";
 import { pickDirectory, pickMarkdownFiles } from "../lib/dialog";
 import { useKnowledgeStore } from "../stores/knowledgeStore";
+import type { ViewMode } from "../types";
 
 const ACTION_BTN =
   "flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:border-primary/40 hover:text-text disabled:cursor-not-allowed disabled:opacity-50";
@@ -21,6 +23,8 @@ export default function KnowledgePage() {
   const groups = useKnowledgeStore((s) => s.groups);
   const loading = useKnowledgeStore((s) => s.loading);
   const importing = useKnowledgeStore((s) => s.importing);
+  const saving = useKnowledgeStore((s) => s.saving);
+  const savedAt = useKnowledgeStore((s) => s.savedAt);
   const selectedId = useKnowledgeStore((s) => s.selectedId);
   const keyword = useKnowledgeStore((s) => s.keyword);
   const error = useKnowledgeStore((s) => s.error);
@@ -28,6 +32,8 @@ export default function KnowledgePage() {
   const importPaths = useKnowledgeStore((s) => s.importPaths);
   const select = useKnowledgeStore((s) => s.select);
   const setKeyword = useKnowledgeStore((s) => s.setKeyword);
+
+  const [viewMode, setViewMode] = useState<ViewMode>("split");
 
   const { isDragging } = useFileDrop((paths) => {
     importPaths(paths);
@@ -38,6 +44,7 @@ export default function KnowledgePage() {
   }, [load]);
 
   const selected = notes.find((n) => n.id === selectedId) ?? null;
+  const draft = useNoteDraft(selected);
 
   const handleImportFiles = () => {
     pickMarkdownFiles().then((paths) => importPaths(paths));
@@ -102,7 +109,9 @@ export default function KnowledgePage() {
           <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-text-muted">
             <FolderTree className="h-3.5 w-3.5" />
             全部笔记
-            <span className="ml-auto text-text-subtle">{groups.length} 个群组</span>
+            <span className="ml-auto text-text-subtle">
+              {groups.length} 个群组
+            </span>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
             {loading ? (
@@ -120,9 +129,32 @@ export default function KnowledgePage() {
           </div>
         </aside>
 
-        {/* 内容预览 */}
+        {/* 编辑器 / 空态 */}
         <section className="min-w-0 flex-1">
-          <NotePreview note={selected} />
+          {selected ? (
+            <MarkdownEditor
+              title={draft.title}
+              content={draft.content}
+              viewMode={viewMode}
+              saving={saving}
+              savedAt={savedAt}
+              onTitleChange={draft.setTitle}
+              onContentChange={draft.setContent}
+              onViewModeChange={setViewMode}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <div className="glass flex max-w-md flex-col items-center gap-3 rounded-xl px-10 py-12 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-3 shadow-lg shadow-primary/25">
+                  <BookOpen className="h-6 w-6 text-white" />
+                </div>
+                <h2 className="text-[15px] font-semibold">知识库尚空</h2>
+                <p className="text-[12px] leading-relaxed text-text-muted">
+                  导入 Markdown 笔记后，即可在此进行源码 / 预览双视图编辑。
+                </p>
+              </div>
+            </div>
+          )}
         </section>
       </div>
 
@@ -132,9 +164,7 @@ export default function KnowledgePage() {
           <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-primary/50 bg-background-2/60 px-14 py-10">
             <FilePlus2 className="h-8 w-8 text-primary-3" />
             <p className="text-[13px] text-text">释放以导入 Markdown 文件</p>
-            <p className="text-[11px] text-text-subtle">
-              支持单文件与整个文件夹
-            </p>
+            <p className="text-[11px] text-text-subtle">支持单文件与整个文件夹</p>
           </div>
         </div>
       )}

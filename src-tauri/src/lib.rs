@@ -40,6 +40,7 @@ pub fn run() {
             commands::list_notes,
             commands::list_groups,
             commands::import_markdown,
+            commands::update_note,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

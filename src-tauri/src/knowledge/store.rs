@@ -71,6 +71,19 @@ impl<'a> NotesRepo<'a> {
         })
     }
 
+    /// 更新笔记标题与正文；笔记不存在时返回 None
+    pub fn update(&self, id: &str, title: &str, content: &str) -> Result<Option<NoteDto>> {
+        let now = now_ms();
+        let affected = self.conn.execute(
+            "UPDATE notes SET title = ?2, content = ?3, updated_at = ?4 WHERE id = ?1",
+            params![id, title, content, now],
+        )?;
+        if affected == 0 {
+            return Ok(None);
+        }
+        self.get(id)
+    }
+
     /// 按 ID 查询（含回收站中的笔记）
     pub fn get(&self, id: &str) -> Result<Option<NoteDto>> {
         let sql = format!("SELECT {NOTE_COLUMNS} FROM notes WHERE id = ?1");
@@ -249,6 +262,32 @@ mod tests {
                 let n = repo.create("t", "c", None).expect("create");
                 assert!(ids.insert(n.id), "ID 出现重复");
             }
+        });
+    }
+
+    #[test]
+    fn update_changes_title_and_content() {
+        with_db(|conn| {
+            let repo = NotesRepo::new(conn);
+            let created = repo.create("原标题", "原正文", None).expect("create");
+
+            let updated = repo
+                .update(&created.id, "新标题", "新正文\n\n| a | b |")
+                .expect("update")
+                .expect("exists");
+
+            assert_eq!(updated.title, "新标题");
+            assert_eq!(updated.content, "新正文\n\n| a | b |");
+            assert_eq!(updated.created_at, created.created_at);
+            assert!(updated.updated_at >= created.updated_at);
+        });
+    }
+
+    #[test]
+    fn update_unknown_id_returns_none() {
+        with_db(|conn| {
+            let repo = NotesRepo::new(conn);
+            assert!(repo.update("missing", "t", "c").expect("update").is_none());
         });
     }
 }

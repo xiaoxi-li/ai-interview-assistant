@@ -13,6 +13,8 @@ interface KnowledgeState {
   groups: Group[];
   loading: boolean;
   importing: boolean;
+  saving: boolean;
+  savedAt: number | null;
   error: string | null;
   selectedId: string | null;
   keyword: string;
@@ -20,6 +22,8 @@ interface KnowledgeState {
   load: () => Promise<void>;
   /** 导入 Markdown 路径，返回成功导入数量 */
   importPaths: (paths: string[]) => Promise<number>;
+  /** 保存笔记标题与正文 */
+  updateNote: (id: string, title: string, content: string) => Promise<void>;
   select: (id: string | null) => void;
   setKeyword: (keyword: string) => void;
 }
@@ -29,6 +33,8 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
   groups: [],
   loading: false,
   importing: false,
+  saving: false,
+  savedAt: null,
   error: null,
   selectedId: null,
   keyword: "",
@@ -74,6 +80,23 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
         console.error("导入失败:", err);
         set({ importing: false, error: String(err) });
         return 0;
+      });
+  },
+
+  updateNote: (id, title, content) => {
+    set({ saving: true, error: null });
+    return ipc<Note>("update_note", { id, title, content })
+      .then((updated) => {
+        set((state) => ({
+          saving: false,
+          savedAt: Date.now(),
+          // 局部替换，避免整表刷新导致编辑器抖动
+          notes: state.notes.map((n) => (n.id === updated.id ? updated : n)),
+        }));
+      })
+      .catch((err) => {
+        console.error("保存笔记失败:", err);
+        set({ saving: false, error: String(err) });
       });
   },
 
