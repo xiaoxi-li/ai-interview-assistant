@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+pub mod providers;
 pub mod storage;
 
 /// 应用基础信息（骨架阶段用于验证前后端 IPC 通路）

@@ -8,7 +8,7 @@
 
 use rusqlite::{ffi::sqlite3_auto_extension, Connection, Result};
 use std::path::Path;
-use std::sync::Once;
+use std::sync::{Arc, Mutex, Once};
 
 /// 嵌入向量维度（需与 `migrations/001_init.sql` 中 `vec_chunks` 声明一致）
 pub const EMBEDDING_DIM: usize = 384;
@@ -86,6 +86,11 @@ impl Db {
 
     pub fn conn_mut(&mut self) -> &mut Connection {
         &mut self.conn
+    }
+
+    /// 转为可共享的连接句柄（供并发组件如 VectorStore 使用）
+    pub fn into_shared_conn(self) -> Arc<Mutex<Connection>> {
+        Arc::new(Mutex::new(self.conn))
     }
 
     /// 当前 schema 版本
