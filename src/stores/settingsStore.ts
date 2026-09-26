@@ -5,6 +5,8 @@ import type {
   ASRConfig,
   AsrCredentialStatus,
   AsrProviderPreset,
+  AudioConfig,
+  AudioDevice,
   ConnectionTest,
   PlatformPreset,
 } from "../types";
@@ -45,6 +47,13 @@ interface SettingsState {
   loadAsrCredentialStatus: (provider: string) => Promise<void>;
   saveAsrCredential: (provider: string, field: string, value: string) => Promise<void>;
   deleteAsrCredentials: (provider: string) => Promise<void>;
+  /** 音频设备配置 */
+  audioConfig: AudioConfig | null;
+  /** 已枚举的设备列表 */
+  audioDevices: AudioDevice[];
+  loadAudioSettings: () => Promise<void>;
+  refreshAudioDevices: () => Promise<void>;
+  saveAudioConfig: (config: AudioConfig) => Promise<void>;
   /** 查询指定平台的密钥状态 */
   loadApiKeyStatus: (platform: string) => Promise<void>;
   /** 保存密钥（空串表示清除） */
@@ -73,7 +82,27 @@ export const useSettingsStore = create<SettingsState>((set) => {
     asrConfig: null,
     asrProviders: [],
     asrCredentials: {},
+    audioConfig: null,
+    audioDevices: [],
     error: null,
+
+    loadAudioSettings: () =>
+      Promise.all([
+        ipc<AudioConfig>("get_audio_config"),
+        ipc<AudioDevice[]>("list_audio_devices"),
+      ])
+        .then(([audioConfig, audioDevices]) => set({ audioConfig, audioDevices }))
+        .catch((err) => fail("加载音频设备配置", err)),
+
+    refreshAudioDevices: () =>
+      ipc<AudioDevice[]>("list_audio_devices")
+        .then((audioDevices) => set({ audioDevices }))
+        .catch((err) => fail("刷新音频设备", err)),
+
+    saveAudioConfig: (config) =>
+      ipc<AudioConfig>("save_audio_config", { config })
+        .then((saved) => set({ audioConfig: saved }))
+        .catch((err) => fail("保存音频设备配置", err)),
 
     loadAsrSettings: () =>
       Promise.all([

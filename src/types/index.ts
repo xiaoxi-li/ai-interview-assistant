@@ -175,6 +175,8 @@ export interface AppSettings {
 export interface AudioDevice {
   id: string;
   name: string;
+  /** input = 麦克风；output = 系统音频来源 */
+  kind: "input" | "output";
   isDefault: boolean;
 }
 

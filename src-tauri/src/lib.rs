@@ -5,6 +5,7 @@ use tauri::Manager;
 mod commands;
 mod state;
 
+pub mod audio;
 pub mod config;
 pub mod knowledge;
 pub mod providers;
@@ -90,6 +91,9 @@ pub fn run() {
             commands::get_asr_credential_status,
             commands::save_asr_credential,
             commands::delete_asr_credentials,
+            commands::list_audio_devices,
+            commands::get_audio_config,
+            commands::save_audio_config,
             commands::export_notes_markdown,
             commands::export_backup_json,
             commands::backup_database,

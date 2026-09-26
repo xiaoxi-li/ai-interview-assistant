@@ -4,6 +4,7 @@
 //! 敏感字段（API Key）不落库，由 [`crate::security`] 存入系统钥匙链。
 
 pub mod asr;
+pub mod audio;
 
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};

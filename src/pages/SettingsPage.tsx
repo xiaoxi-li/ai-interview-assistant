@@ -2,10 +2,10 @@ import { useEffect } from "react";
 import { Settings as SettingsIcon } from "lucide-react";
 import AiSettingsSection from "../components/settings/AiSettingsSection";
 import AsrSettingsSection from "../components/settings/AsrSettingsSection";
+import AudioSettingsSection from "../components/settings/AudioSettingsSection";
 import { useSettingsStore } from "../stores/settingsStore";
 
 const PLACEHOLDER_SECTIONS = [
-  { title: "音频设备", desc: "麦克风与系统音频输出设备选择", task: "ST-05" },
   { title: "模型管理", desc: "嵌入 / VAD / 本地 ASR 模型的下载、更新与删除", task: "ST-10" },
   { title: "知识库", desc: "存储路径、向量库路径、默认嵌入模型", task: "ST-06" },
   { title: "界面", desc: "主题、快捷键、开机自启、托盘行为", task: "ST-07" },
@@ -32,13 +32,19 @@ export default function SettingsPage() {
   const loadAsrCredentialStatus = useSettingsStore((s) => s.loadAsrCredentialStatus);
   const saveAsrCredential = useSettingsStore((s) => s.saveAsrCredential);
   const deleteAsrCredentials = useSettingsStore((s) => s.deleteAsrCredentials);
+  const audioConfig = useSettingsStore((s) => s.audioConfig);
+  const audioDevices = useSettingsStore((s) => s.audioDevices);
+  const loadAudioSettings = useSettingsStore((s) => s.loadAudioSettings);
+  const refreshAudioDevices = useSettingsStore((s) => s.refreshAudioDevices);
+  const saveAudioConfig = useSettingsStore((s) => s.saveAudioConfig);
 
   const platform = aiConfig?.platform;
 
   useEffect(() => {
     loadAiSettings();
     loadAsrSettings();
-  }, [loadAiSettings, loadAsrSettings]);
+    loadAudioSettings();
+  }, [loadAiSettings, loadAsrSettings, loadAudioSettings]);
 
   useEffect(() => {
     if (platform) {
@@ -82,6 +88,15 @@ export default function SettingsPage() {
               onSaveCredential={saveAsrCredential}
               onDeleteCredentials={deleteAsrCredentials}
               onProviderChange={loadAsrCredentialStatus}
+            />
+          )}
+
+          {audioConfig && (
+            <AudioSettingsSection
+              config={audioConfig}
+              devices={audioDevices}
+              onRefresh={refreshAudioDevices}
+              onSave={saveAudioConfig}
             />
           )}
 

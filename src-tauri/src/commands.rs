@@ -241,6 +241,32 @@ pub fn restore_backup(
     Ok(summary)
 }
 
+/// 枚举音频设备（输入=麦克风，输出=系统音频来源）
+#[tauri::command]
+pub fn list_audio_devices() -> Vec<crate::audio::DeviceInfo> {
+    crate::audio::list_devices()
+}
+
+/// 读取音频设备配置
+#[tauri::command]
+pub fn get_audio_config(
+    state: State<'_, AppState>,
+) -> Result<crate::config::audio::AudioConfig, String> {
+    let conn = state.lock()?;
+    crate::config::audio::load_audio_config(&conn).map_err(|e| e.to_string())
+}
+
+/// 保存音频设备配置
+#[tauri::command]
+pub fn save_audio_config(
+    state: State<'_, AppState>,
+    config: crate::config::audio::AudioConfig,
+) -> Result<crate::config::audio::AudioConfig, String> {
+    let conn = state.lock()?;
+    crate::config::audio::save_audio_config(&conn, &config)?;
+    crate::config::audio::load_audio_config(&conn).map_err(|e| e.to_string())
+}
+
 /// ASR 服务商预设（供设置页渲染）
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]

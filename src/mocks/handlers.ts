@@ -65,6 +65,20 @@ export async function mockInvoke<T>(
     case "save_ai_config":
       return (args?.config ?? null) as T;
 
+    case "list_audio_devices":
+      return [
+        { id: "麦克风 (USB Audio)", name: "麦克风 (USB Audio)", kind: "input", isDefault: true },
+        { id: "麦克风 (Realtek)", name: "麦克风 (Realtek)", kind: "input", isDefault: false },
+        { id: "扬声器 (Realtek)", name: "扬声器 (Realtek)", kind: "output", isDefault: true },
+        { id: "耳机 (Bluetooth)", name: "耳机 (Bluetooth)", kind: "output", isDefault: false },
+      ] as T;
+
+    case "get_audio_config":
+      return { micDeviceId: null, systemDeviceId: null } as T;
+
+    case "save_audio_config":
+      return (args?.config ?? null) as T;
+
     case "list_asr_providers":
       return [
         {
