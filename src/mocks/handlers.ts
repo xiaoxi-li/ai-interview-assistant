@@ -250,6 +250,43 @@ export async function mockInvoke<T>(
     case "list_transcript_finals":
       return [] as T;
 
+    // ---------- 问题识别（IA-06） ----------
+    case "trigger_question":
+      return null as T;
+
+    case "list_questions":
+      return [
+        {
+          id: "q-mock-1",
+          sessionId: "s-mock-system",
+          question: "介绍一下你最近负责的项目",
+          answer: "",
+          sources: [],
+          ts: Date.now() - 30_000,
+        },
+      ] as T;
+
+    case "latest_question":
+      return null as T;
+
+    case "get_question_config":
+      return {
+        autoDetect: true,
+        threshold: 0.5,
+        minChars: 4,
+        mergeWindowMs: 3000,
+      } as T;
+
+    case "save_question_config":
+      return (args?.config ?? null) as T;
+
+    case "analyze_question_text":
+      return {
+        isQuestion: true,
+        score: 0.95,
+        signals: ["祈使式提问「介绍一下」"],
+      } as T;
+
     case "list_audio_devices":
       return [
         { id: "麦克风 (USB Audio)", name: "麦克风 (USB Audio)", kind: "input", isDefault: true },

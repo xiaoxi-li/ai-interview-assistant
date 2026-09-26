@@ -1,0 +1,117 @@
+import { useCallback, useEffect } from "react";
+import { HelpCircle, RefreshCw } from "lucide-react";
+import { cn } from "../../lib/utils";
+import { useQuestionEvents } from "../../hooks/useQuestionEvents";
+import { useInterviewStore } from "../../stores/interviewStore";
+
+/** 分数 → 展示语气 */
+function scoreTone(score: number): string {
+  if (score >= 1.0) return "bg-success/15 text-success";
+  if (score >= 0.6) return "bg-primary/15 text-primary-3";
+  return "bg-warning/15 text-warning";
+}
+
+export default function QuestionPanel() {
+  const asrStatus = useInterviewStore((s) => s.asrStatus);
+  const currentQuestion = useInterviewStore((s) => s.currentQuestion);
+  const questionManual = useInterviewStore((s) => s.questionManual);
+  const questions = useInterviewStore((s) => s.questions);
+  const applyQuestionPush = useInterviewStore((s) => s.applyQuestionPush);
+  const triggerQuestion = useInterviewStore((s) => s.triggerQuestion);
+  const loadQuestions = useInterviewStore((s) => s.loadQuestions);
+
+  const sessionId = asrStatus?.sessionId ?? null;
+
+  useQuestionEvents(applyQuestionPush);
+
+  const refresh = useCallback(() => {
+    if (sessionId) loadQuestions(sessionId);
+  }, [sessionId, loadQuestions]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return (
+    <section className="glass flex flex-col rounded-xl p-4">
+      <header className="mb-3 flex items-center gap-2">
+        <HelpCircle className="h-4 w-4 text-primary-3" />
+        <h2 className="text-[13px] font-semibold">问题识别</h2>
+        {currentQuestion && (
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[10px]",
+              questionManual ? "bg-warning/15 text-warning" : "bg-primary/15 text-primary-3"
+            )}
+          >
+            {questionManual ? "手动触发" : "自动识别"}
+          </span>
+        )}
+        <span className="ml-auto text-[10px] text-text-subtle">
+          已识别 {questions.length} 个问题
+        </span>
+      </header>
+
+      {currentQuestion ? (
+        <div className="rounded-lg border border-primary/25 bg-primary/[0.07] p-3">
+          <p className="text-[13px] font-medium leading-relaxed text-text">
+            {currentQuestion.text}
+          </p>
+
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span
+              className={cn(
+                "rounded px-1.5 py-0.5 text-[10px]",
+                scoreTone(currentQuestion.score)
+              )}
+              title="判定得分（阈值 0.5，越高越确定）"
+            >
+              置信度 {currentQuestion.score.toFixed(2)}
+            </span>
+            {currentQuestion.signals.map((signal) => (
+              <span
+                key={signal}
+                className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-text-muted"
+              >
+                {signal}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="rounded-lg border border-white/[0.06] bg-background-3/30 px-3 py-6 text-center text-[11px] leading-relaxed text-text-subtle">
+          {asrStatus?.running
+            ? "正在监听面试官语音，识别到问题后会显示在这里。"
+            : "开始转写后，面试官的问题会被自动识别；也可随时手动触发识别。"}
+        </p>
+      )}
+
+      {questions.length > 1 && (
+        <ul className="mt-3 flex max-h-32 flex-col gap-1 overflow-y-auto">
+          {questions
+            .slice(-4)
+            .reverse()
+            .map((pair) => (
+              <li
+                key={pair.id}
+                className="truncate rounded border border-white/[0.06] bg-background-3/30 px-2 py-1 text-[11px] text-text-muted"
+                title={pair.question}
+              >
+                {pair.question}
+              </li>
+            ))}
+        </ul>
+      )}
+
+      <button
+        onClick={() => triggerQuestion()}
+        disabled={!asrStatus?.running}
+        className="mt-3 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-4 py-2 text-[12px] text-text-muted transition-colors hover:border-primary/30 hover:text-primary-3 disabled:cursor-not-allowed disabled:opacity-50"
+        title="用最近的面试官语音立即识别一次问题"
+      >
+        <RefreshCw className="h-3.5 w-3.5" />
+        手动识别当前问题
+      </button>
+    </section>
+  );
+}

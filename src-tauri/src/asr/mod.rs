@@ -24,6 +24,15 @@ pub fn speaker_for_source(source: &str) -> Option<Speaker> {
     }
 }
 
+/// 采集泵控制指令
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AsrControl {
+    /// 停止会话
+    Stop,
+    /// 手动触发一次问题识别（IA-06）
+    TriggerQuestion,
+}
+
 /// 一次 ASR 会话的运行时句柄
 pub struct AsrSession {
     pub id: String,
@@ -31,7 +40,7 @@ pub struct AsrSession {
     pub speaker: Speaker,
     pub engine: String,
     pub started_at: i64,
-    stop_tx: Option<Sender<()>>,
+    control_tx: Option<Sender<AsrControl>>,
     pump: Option<JoinHandle<()>>,
 }
 
@@ -42,7 +51,7 @@ impl AsrSession {
         speaker: Speaker,
         engine: String,
         started_at: i64,
-        stop_tx: Sender<()>,
+        control_tx: Sender<AsrControl>,
         pump: JoinHandle<()>,
     ) -> Self {
         Self {
@@ -51,15 +60,24 @@ impl AsrSession {
             speaker,
             engine,
             started_at,
-            stop_tx: Some(stop_tx),
+            control_tx: Some(control_tx),
             pump: Some(pump),
         }
     }
 
+    /// 发送控制指令（会话已停止时返回 Err）
+    pub fn send(&self, control: AsrControl) -> Result<(), String> {
+        self.control_tx
+            .as_ref()
+            .ok_or_else(|| "ASR 会话已停止".to_string())?
+            .send(control)
+            .map_err(|_| "ASR 采集泵已退出，无法发送指令".to_string())
+    }
+
     /// 停止会话并等待采集泵退出（幂等）
     pub fn stop(&mut self) {
-        if let Some(tx) = self.stop_tx.take() {
-            let _ = tx.send(());
+        if let Some(tx) = self.control_tx.take() {
+            let _ = tx.send(AsrControl::Stop);
         }
         if let Some(pump) = self.pump.take() {
             let _ = pump.join();

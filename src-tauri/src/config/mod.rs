@@ -6,6 +6,7 @@
 pub mod asr;
 pub mod audio;
 pub mod interface;
+pub mod interview;
 pub mod knowledge;
 pub mod privacy;
 

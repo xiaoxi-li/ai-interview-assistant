@@ -128,6 +128,50 @@ export interface TranscriptSegment {
   ts: number;
 }
 
+/** 识别出的面试官问题 */
+export interface DetectedQuestion {
+  text: string;
+  score: number;
+  /** 命中的可读信号（如「含疑问词「怎么」」） */
+  signals: string[];
+  ts: number;
+}
+
+/** 后端推送的问题事件（`interview://question`） */
+export interface QuestionPush {
+  sessionId: string;
+  /** 是否为手动触发（快捷键/按钮） */
+  manual: boolean;
+  question: DetectedQuestion;
+  /** 落库后的问答记录 ID */
+  qaId: string | null;
+}
+
+/** 问答对（qa_pairs） */
+export interface QaPair {
+  id: string;
+  sessionId: string;
+  question: string;
+  answer: string;
+  sources: string[];
+  ts: number;
+}
+
+/** 问题识别配置 */
+export interface QuestionConfig {
+  autoDetect: boolean;
+  threshold: number;
+  minChars: number;
+  mergeWindowMs: number;
+}
+
+/** 单段文本的问题判定结果（预览/调试） */
+export interface QuestionScore {
+  isQuestion: boolean;
+  score: number;
+  signals: string[];
+}
+
 /** 音频采集状态 */
 export interface CaptureStatus {
   running: boolean;

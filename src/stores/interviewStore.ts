@@ -5,6 +5,10 @@ import type {
   AsrSessionStatus,
   AudioDevice,
   CaptureStatus,
+  DetectedQuestion,
+  QaPair,
+  QuestionConfig,
+  QuestionPush,
   Speaker,
   TranscriptPush,
 } from "../types";
@@ -42,6 +46,15 @@ interface InterviewState {
   asrError: string | null;
   startingAsr: boolean;
 
+  /** 最近识别出的问题（IA-06） */
+  currentQuestion: DetectedQuestion | null;
+  /** 最近一次问题是否为手动触发 */
+  questionManual: boolean;
+  /** 会话内已识别的问题（落库记录） */
+  questions: QaPair[];
+  /** 问题识别配置 */
+  questionConfig: QuestionConfig | null;
+
   loadCaptureStatus: () => Promise<void>;
   startCapture: (source: CaptureSource, deviceId?: string | null) => Promise<void>;
   stopCapture: () => Promise<void>;
@@ -52,6 +65,13 @@ interface InterviewState {
   stopTranscription: () => Promise<void>;
   applyTranscriptPush: (push: TranscriptPush) => void;
   clearTranscript: () => void;
+
+  applyQuestionPush: (push: QuestionPush) => void;
+  triggerQuestion: () => Promise<void>;
+  loadQuestions: (sessionId: string) => Promise<void>;
+  loadQuestionConfig: () => Promise<void>;
+  saveQuestionConfig: (config: QuestionConfig) => Promise<void>;
+  resetQuestions: () => void;
 }
 
 export const useInterviewStore = create<InterviewState>((set, get) => {
@@ -73,6 +93,11 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
     partial: null,
     asrError: null,
     startingAsr: false,
+
+    currentQuestion: null,
+    questionManual: false,
+    questions: [],
+    questionConfig: null,
 
     loadCaptureStatus: () =>
       Promise.all([
@@ -120,7 +145,18 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
         source,
         deviceId: deviceId ?? null,
       })
-        .then((asrStatus) => set({ asrStatus, startingAsr: false, partial: null }))
+        .then((asrStatus) =>
+          set({
+            asrStatus,
+            startingAsr: false,
+            partial: null,
+            // 新会话：清空上一场残留的转写与问题
+            transcript: [],
+            currentQuestion: null,
+            questionManual: false,
+            questions: [],
+          })
+        )
         .catch((err) => {
           console.error("启动转写失败:", err);
           set({ startingAsr: false, asrError: String(err) });
@@ -158,5 +194,54 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
     },
 
     clearTranscript: () => set({ transcript: [], partial: null, asrError: null }),
+
+    applyQuestionPush: (push) => {
+      const { question, manual, qaId, sessionId } = push;
+      set((state) => ({
+        currentQuestion: question,
+        questionManual: manual,
+        questions: qaId
+          ? [
+              ...state.questions,
+              {
+                id: qaId,
+                sessionId,
+                question: question.text,
+                answer: "",
+                sources: [],
+                ts: question.ts,
+              },
+            ]
+          : state.questions,
+      }));
+    },
+
+    triggerQuestion: () => {
+      return ipc<void>("trigger_question").catch((err) => {
+        console.error("手动识别问题失败:", err);
+        set({ asrError: String(err) });
+      });
+    },
+
+    loadQuestions: (sessionId) => {
+      return ipc<QaPair[]>("list_questions", { sessionId, limit: 100 })
+        .then((questions) => set({ questions }))
+        .catch((err) => fail("读取问题记录", err));
+    },
+
+    loadQuestionConfig: () => {
+      return ipc<QuestionConfig>("get_question_config")
+        .then((questionConfig) => set({ questionConfig }))
+        .catch((err) => fail("读取问题识别配置", err));
+    },
+
+    saveQuestionConfig: (config) => {
+      return ipc<QuestionConfig>("save_question_config", { config })
+        .then((questionConfig) => set({ questionConfig }))
+        .catch((err) => fail("保存问题识别配置", err));
+    },
+
+    resetQuestions: () =>
+      set({ currentQuestion: null, questionManual: false, questions: [] }),
   };
 });

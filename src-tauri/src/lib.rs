@@ -8,6 +8,7 @@ mod state;
 pub mod asr;
 pub mod audio;
 pub mod config;
+pub mod interview;
 pub mod knowledge;
 pub mod models;
 pub mod providers;
@@ -111,6 +112,12 @@ pub fn run() {
             commands::stop_asr_session,
             commands::list_transcript_segments,
             commands::list_transcript_finals,
+            commands::trigger_question,
+            commands::list_questions,
+            commands::latest_question,
+            commands::get_question_config,
+            commands::save_question_config,
+            commands::analyze_question_text,
             commands::list_audio_devices,
             commands::get_audio_config,
             commands::save_audio_config,

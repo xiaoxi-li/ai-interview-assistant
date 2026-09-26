@@ -3,17 +3,21 @@
 //! 约定：所有命令返回 `Result<T, String>`，错误直接以字符串形式透传给前端。
 
 use crate::asr::{
-    AsrPipeline, AsrSession, LocalAsrEngine, SherpaOnnxEngine, TranscriptRepo,
+    AsrControl, AsrPipeline, AsrSession, LocalAsrEngine, SherpaOnnxEngine, TranscriptRepo,
     DEFAULT_PARTIAL_INTERVAL_MS,
 };
 use crate::audio::capture::{pcm16_to_samples, rms_level};
 use crate::audio::vad::VadConfig;
 use crate::audio::{AudioCapture, FRAME_SAMPLES};
 use crate::config::asr::CLOUD_ASR_IMPLEMENTED;
+use crate::config::interview::QuestionConfig;
+use crate::interview::question::{QuestionDetector, QuestionScore};
+use crate::interview::store::{QaPairDto, QaRepo};
+use crate::interview::DetectedQuestion;
 use crate::knowledge::export::{ExportSummary, RestoreSummary};
 use crate::knowledge::store::{now_ms, GroupsRepo, NotesRepo, TagsRepo, VersionsRepo};
 use crate::knowledge::{GroupDto, ImportOutcome, NoteDto, NoteVersionDto, TagDto};
-use crate::providers::types::{AsrMode, TranscriptEvent};
+use crate::providers::types::{AsrMode, Speaker, TranscriptEvent};
 use crate::providers::AiProvider;
 use crate::retrieval::SearchHit;
 use crate::state::AppState;
@@ -669,6 +673,12 @@ pub fn start_asr_session(
         );
     }
 
+    // 问题识别配置（IA-06）
+    let question_config = {
+        let conn = state.lock()?;
+        crate::config::interview::load_question_config(&conn).map_err(|e| e.to_string())?
+    };
+
     // 2) 构造本地引擎；模型缺失时返回可操作错误
     let engine = SherpaOnnxEngine::new(&state.models_dir, &config.language)
         .map_err(|e| e.to_string())?;
@@ -679,7 +689,7 @@ pub fn start_asr_session(
         let mut runtime = state.asr_lock()?;
         runtime.stop();
     }
-    let events = {
+    let audio_rx = {
         let mut manager = state.capture_lock()?;
         manager.stop_all();
         let capture = match source.as_str() {
@@ -688,9 +698,9 @@ pub fn start_asr_session(
             other => return Err(format!("未知的采集来源：{other}")),
         };
         capture.start(device_id.as_deref().unwrap_or(""))?;
-        let events = capture.take_events()?;
+        let audio_rx = capture.take_events()?;
         manager.running = Some(source.clone());
-        events
+        audio_rx
     };
 
     // 4) 建会话记录 + 启动采集泵
@@ -701,11 +711,15 @@ pub fn start_asr_session(
             .map_err(|e| e.to_string())?
     };
 
-    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+    let (control_tx, control_rx) = mpsc::channel::<AsrControl>();
     let app_handle = app.clone();
     let conn_handle = state.conn.clone();
     let session_id = session.id.clone();
     let threshold = config.vad_threshold;
+    let auto_detect = question_config.auto_detect;
+    let question_threshold = question_config.threshold;
+    let question_min_chars = question_config.min_chars;
+    let question_window_ms = question_config.merge_window_ms;
 
     let pump = thread::spawn(move || {
         let mut pipeline = AsrPipeline::new(
@@ -715,12 +729,33 @@ pub fn start_asr_session(
             threshold,
             DEFAULT_PARTIAL_INTERVAL_MS,
         );
+        let mut detector =
+            QuestionDetector::new(question_threshold, question_min_chars, question_window_ms);
 
+        let mut stopping = false;
         loop {
-            if stop_rx.try_recv().is_ok() {
+            // 处理控制指令（停止 / 手动触发问题识别）
+            while let Ok(control) = control_rx.try_recv() {
+                match control {
+                    AsrControl::Stop => stopping = true,
+                    AsrControl::TriggerQuestion => {
+                        if let Some(question) = detector.trigger(now_ms()) {
+                            handle_detected_question(
+                                &app_handle,
+                                &conn_handle,
+                                &session_id,
+                                &question,
+                                true,
+                            );
+                        }
+                    }
+                }
+            }
+            if stopping {
                 break;
             }
-            match events.recv_timeout(Duration::from_millis(200)) {
+
+            match audio_rx.recv_timeout(Duration::from_millis(100)) {
                 Ok(chunk) => {
                     if chunk.ts < 0 {
                         handle_transcript_events(
@@ -748,13 +783,21 @@ pub fn start_asr_session(
                         if frame.len() < FRAME_SAMPLES {
                             break;
                         }
-                        let events = pipeline.push_frame(frame, chunk.ts);
-                        if !events.is_empty() {
+                        let frame_events = pipeline.push_frame(frame, chunk.ts);
+                        if !frame_events.is_empty() {
                             handle_transcript_events(
                                 &app_handle,
                                 &conn_handle,
                                 &session_id,
-                                &events,
+                                &frame_events,
+                            );
+                            feed_questions(
+                                &mut detector,
+                                &app_handle,
+                                &conn_handle,
+                                &session_id,
+                                auto_detect,
+                                &frame_events,
                             );
                         }
                     }
@@ -764,10 +807,23 @@ pub fn start_asr_session(
             }
         }
 
-        // 停止/断流：冲刷未完成的语音段
+        // 停止/断流：冲刷未完成的语音段与问题缓冲
         let tail = pipeline.flush();
         if !tail.is_empty() {
             handle_transcript_events(&app_handle, &conn_handle, &session_id, &tail);
+            feed_questions(
+                &mut detector,
+                &app_handle,
+                &conn_handle,
+                &session_id,
+                auto_detect,
+                &tail,
+            );
+        }
+        if auto_detect {
+            if let Some(question) = detector.flush() {
+                handle_detected_question(&app_handle, &conn_handle, &session_id, &question, false);
+            }
         }
     });
 
@@ -779,7 +835,7 @@ pub fn start_asr_session(
             speaker,
             engine_name,
             session.started_at,
-            stop_tx,
+            control_tx,
             pump,
         ));
     }
@@ -835,6 +891,125 @@ pub fn list_transcript_finals(
     TranscriptRepo::new(&conn)
         .list_finals(&session_id)
         .map_err(|e| e.to_string())
+}
+
+// ==================== 问题识别（IA-06） ====================
+
+/// 记录识别出的问题并广播（`interview://question`）
+fn handle_detected_question(
+    app: &tauri::AppHandle,
+    conn: &std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>,
+    session_id: &str,
+    question: &DetectedQuestion,
+    manual: bool,
+) {
+    use tauri::Emitter;
+
+    let qa_id = match conn.lock() {
+        Ok(guard) => QaRepo::new(&guard)
+            .create_question(session_id, &question.text, question.ts)
+            .map(|pair| pair.id)
+            .map_err(|err| eprintln!("问题落库失败（session={session_id}）：{err}"))
+            .ok(),
+        Err(err) => {
+            eprintln!("问题落库跳过（连接锁中毒）：{err}");
+            None
+        }
+    };
+
+    let _ = app.emit(
+        "interview://question",
+        serde_json::json!({
+            "sessionId": session_id,
+            "manual": manual,
+            "question": question,
+            "qaId": qa_id,
+        }),
+    );
+}
+
+/// 从转写事件中筛出面试官发言并送入问题检测器（自动模式下命中即产出）
+fn feed_questions(
+    detector: &mut QuestionDetector,
+    app: &tauri::AppHandle,
+    conn: &std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>,
+    session_id: &str,
+    auto_detect: bool,
+    events: &[TranscriptEvent],
+) {
+    for event in events {
+        if let TranscriptEvent::Final {
+            speaker: Speaker::Interviewer,
+            text,
+        } = event
+        {
+            if let Some(question) = detector.push(text, now_ms()) {
+                if auto_detect {
+                    handle_detected_question(app, conn, session_id, &question, false);
+                }
+            }
+        }
+    }
+}
+
+/// 手动触发一次问题识别（供快捷键 / 界面按钮调用）
+#[tauri::command]
+pub fn trigger_question(state: State<'_, AppState>) -> Result<(), String> {
+    let runtime = state.asr_lock()?;
+    let session = runtime
+        .session
+        .as_ref()
+        .ok_or_else(|| "当前没有进行中的转写会话，无法识别问题".to_string())?;
+    session.send(AsrControl::TriggerQuestion)
+}
+
+/// 读取某会话已识别的问题（按时间正序）
+#[tauri::command]
+pub fn list_questions(
+    state: State<'_, AppState>,
+    session_id: String,
+    limit: Option<usize>,
+) -> Result<Vec<QaPairDto>, String> {
+    let conn = state.lock()?;
+    QaRepo::new(&conn)
+        .list(&session_id, limit.unwrap_or(100))
+        .map_err(|e| e.to_string())
+}
+
+/// 读取最近识别出的问题
+#[tauri::command]
+pub fn latest_question(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<Option<QaPairDto>, String> {
+    let conn = state.lock()?;
+    QaRepo::new(&conn)
+        .latest(&session_id)
+        .map_err(|e| e.to_string())
+}
+
+/// 读取问题识别配置
+#[tauri::command]
+pub fn get_question_config(state: State<'_, AppState>) -> Result<QuestionConfig, String> {
+    let conn = state.lock()?;
+    crate::config::interview::load_question_config(&conn).map_err(|e| e.to_string())
+}
+
+/// 保存问题识别配置
+#[tauri::command]
+pub fn save_question_config(
+    state: State<'_, AppState>,
+    config: QuestionConfig,
+) -> Result<QuestionConfig, String> {
+    let conn = state.lock()?;
+    crate::config::interview::save_question_config(&conn, &config)?;
+    Ok(config)
+}
+
+/// 对给定文本做一次问题判定（界面预览 / 调试用）
+#[tauri::command]
+pub fn analyze_question_text(text: String) -> QuestionScore {
+    crate::interview::question::analyze(&text)
 }
 
 /// 枚举音频设备（输入=麦克风，输出=系统音频来源）
