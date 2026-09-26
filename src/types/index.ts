@@ -95,6 +95,23 @@ export interface AIConfig {
   temperature: number;
 }
 
+/** 音频采集状态 */
+export interface CaptureStatus {
+  running: boolean;
+  source: "mic" | "system" | null;
+  micDevice: string;
+  systemDevice: string;
+  loopbackAvailable: boolean;
+}
+
+/** 后端推送的音频电平事件 */
+export interface AudioLevelEvent {
+  source: string;
+  level: number;
+  ts: number;
+  frames: number;
+}
+
 /** 知识库存储配置（路径变更需重启生效） */
 export interface KnowledgeConfig {
   dbPath: string | null;

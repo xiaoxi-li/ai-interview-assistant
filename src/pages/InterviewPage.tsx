@@ -1,4 +1,5 @@
 import { Mic, Sparkles } from "lucide-react";
+import AudioCapturePanel from "../components/interview/AudioCapturePanel";
 
 export default function InterviewPage() {
   return (
@@ -12,7 +13,12 @@ export default function InterviewPage() {
         </span>
       </div>
 
-      <div className="flex min-h-0 flex-1 items-center justify-center">
+      <div className="flex min-h-0 flex-1 gap-4 overflow-hidden p-4">
+        <div className="w-80 shrink-0 overflow-y-auto">
+          <AudioCapturePanel />
+        </div>
+
+        <div className="flex min-w-0 flex-1 items-center justify-center">
         <div className="glass flex max-w-lg flex-col items-center gap-3 rounded-xl px-10 py-12 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-3 shadow-lg shadow-primary/25">
             <Sparkles className="h-6 w-6 text-white" />
@@ -23,8 +29,9 @@ export default function InterviewPage() {
             知识库，结合 AI 流式生成回答。
           </p>
           <div className="mt-1 rounded-md border border-white/8 bg-background-3/60 px-3 py-1.5 text-[11px] text-text-subtle">
-            音频捕获与转写链路将在 IA-01 / IA-04 任务中实现
+            转写与 AI 回答链路将在 IA-04 / IA-08 任务中实现
           </div>
+        </div>
         </div>
       </div>
     </div>

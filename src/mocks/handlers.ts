@@ -165,6 +165,43 @@ export async function mockInvoke<T>(
     case "clear_local_data":
       return { notes: 0, groups: 0, tags: 0, sessions: 0 } as T;
 
+    case "list_loopback_devices":
+      return [
+        {
+          id: "立体声混音 (Realtek)",
+          name: "立体声混音 (Realtek)",
+          kind: "input",
+          isDefault: false,
+        },
+      ] as T;
+
+    case "audio_capture_status":
+      return {
+        running: false,
+        source: null,
+        micDevice: "",
+        systemDevice: "",
+        loopbackAvailable: true,
+      } as T;
+
+    case "start_audio_capture":
+      return {
+        running: true,
+        source: String(args?.source ?? "mic"),
+        micDevice: "麦克风 (USB Audio)",
+        systemDevice: "立体声混音 (Realtek)",
+        loopbackAvailable: true,
+      } as T;
+
+    case "stop_audio_capture":
+      return {
+        running: false,
+        source: null,
+        micDevice: "麦克风 (USB Audio)",
+        systemDevice: "立体声混音 (Realtek)",
+        loopbackAvailable: true,
+      } as T;
+
     case "list_audio_devices":
       return [
         { id: "麦克风 (USB Audio)", name: "麦克风 (USB Audio)", kind: "input", isDefault: true },

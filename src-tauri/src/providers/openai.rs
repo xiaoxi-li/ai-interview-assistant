@@ -71,10 +71,16 @@ pub fn build_messages(messages: &[ChatMessage]) -> Vec<Value> {
         .collect()
 }
 
-/// 构造流式请求体
+/// 构造流式请求体；请求未指定模型时回退到配置中的默认模型
 pub fn build_chat_body(config: &AiConfig, request: &ChatRequest) -> Value {
+    let model = if request.model.trim().is_empty() {
+        config.model.clone()
+    } else {
+        request.model.clone()
+    };
+
     json!({
-        "model": request.model,
+        "model": model,
         "messages": build_messages(&request.messages),
         "temperature": request.temperature,
         "stream": true,
@@ -345,6 +351,15 @@ mod tests {
         assert_eq!(body["stream"], true);
         assert_eq!(body["messages"][0]["role"], "user");
         assert_eq!(body["messages"][0]["content"], "你好");
+    }
+
+    #[test]
+    fn build_chat_body_falls_back_to_configured_model() {
+        let mut empty_model = request();
+        empty_model.model = "  ".into();
+
+        let body = build_chat_body(&config_with("https://x".into()), &empty_model);
+        assert_eq!(body["model"], "test-model", "空模型名应回退到配置模型");
     }
 
     #[test]

@@ -397,6 +397,109 @@ pub fn clear_local_data(
     crate::knowledge::clear_all_data(&conn).map_err(|e| e.to_string())
 }
 
+/// 音频采集状态
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaptureStatus {
+    pub running: bool,
+    /// 当前采集来源：mic / system
+    pub source: Option<String>,
+    pub mic_device: String,
+    pub system_device: String,
+    /// 是否检测到系统音频回环设备
+    pub loopback_available: bool,
+}
+
+fn capture_status(state: &AppState) -> Result<CaptureStatus, String> {
+    let manager = state.capture_lock()?;
+    Ok(CaptureStatus {
+        running: manager.running.is_some(),
+        source: manager.running.clone(),
+        mic_device: manager.mic.device_name().to_string(),
+        system_device: manager.system.device_name().to_string(),
+        loopback_available: !crate::audio::loopback_candidates().is_empty(),
+    })
+}
+
+/// 列出可用于采集系统音频的回环设备
+#[tauri::command]
+pub fn list_loopback_devices() -> Vec<crate::audio::DeviceInfo> {
+    crate::audio::loopback_candidates()
+}
+
+/// 查询当前采集状态
+#[tauri::command]
+pub fn audio_capture_status(state: State<'_, AppState>) -> Result<CaptureStatus, String> {
+    capture_status(&state)
+}
+
+/// 启动音频采集（source: mic / system），并推送音量电平事件 `audio://level`
+#[tauri::command]
+pub fn start_audio_capture(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    source: String,
+    device_id: Option<String>,
+) -> Result<CaptureStatus, String> {
+    use crate::audio::AudioCapture;
+    use tauri::Emitter;
+
+    let (events, source_label) = {
+        let mut manager = state.capture_lock()?;
+        // 单路采集：切换来源时先停止现有采集
+        manager.stop_all();
+
+        let capture = match source.as_str() {
+            "mic" => &mut manager.mic,
+            "system" => &mut manager.system,
+            other => return Err(format!("未知的采集来源：{other}")),
+        };
+
+        let device = device_id.unwrap_or_default();
+        capture.start(&device)?;
+        let events = capture.take_events()?;
+        manager.running = Some(source.clone());
+        (events, source)
+    };
+
+    // 电平泵：把 PCM 帧换算为 RMS 并推送给前端（音频数据本身不出主进程）
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        for chunk in events.iter() {
+            if chunk.ts < 0 {
+                let _ = app_handle.emit(
+                    "audio://error",
+                    serde_json::json!({ "source": source_label, "message": "音频流发生错误" }),
+                );
+                continue;
+            }
+            let samples = crate::audio::capture::pcm16_to_samples(&chunk.data);
+            let level = crate::audio::capture::rms_level(&samples);
+            let _ = app_handle.emit(
+                "audio://level",
+                serde_json::json!({
+                    "source": source_label,
+                    "level": level,
+                    "ts": chunk.ts,
+                    "frames": samples.len(),
+                }),
+            );
+        }
+    });
+
+    capture_status(&state)
+}
+
+/// 停止音频采集
+#[tauri::command]
+pub fn stop_audio_capture(state: State<'_, AppState>) -> Result<CaptureStatus, String> {
+    {
+        let mut manager = state.capture_lock()?;
+        manager.stop_all();
+    }
+    capture_status(&state)
+}
+
 /// 枚举音频设备（输入=麦克风，输出=系统音频来源）
 #[tauri::command]
 pub fn list_audio_devices() -> Vec<crate::audio::DeviceInfo> {

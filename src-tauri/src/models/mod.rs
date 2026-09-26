@@ -279,7 +279,6 @@ pub fn delete_model(models_dir: &Path, spec: &ModelSpec) -> Result<bool, String>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{Read as _, Write as _};
     use std::net::TcpListener;
     use std::thread;
 
