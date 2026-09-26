@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useAnswerEvents } from "../../hooks/useAnswerEvents";
+import { useT } from "../../hooks/useT";
 import { useAppStore } from "../../stores/appStore";
 import { useInterviewStore } from "../../stores/interviewStore";
 import { useKnowledgeStore } from "../../stores/knowledgeStore";
@@ -39,6 +40,7 @@ export default function AnswerPanel() {
 
   const [copied, setCopied] = useState(false);
   const autoHandledRef = useRef<string | null>(null);
+  const t = useT();
 
   const sessionId = asrStatus?.sessionId ?? null;
   const streaming = answerStatus === "streaming" || answerStatus === "thinking";
@@ -98,7 +100,7 @@ export default function AnswerPanel() {
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-3 shadow-lg shadow-primary/25">
           <Sparkles className="h-3.5 w-3.5 text-white" />
         </div>
-        <h2 className="text-[13px] font-semibold">AI 回答</h2>
+        <h2 className="text-[13px] font-semibold">{t("AI 回答")}</h2>
 
         {answerModel && (
           <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-text-subtle">
@@ -108,7 +110,7 @@ export default function AnswerPanel() {
         {streaming && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary-3" />}
         {answerStatus === "done" && (
           <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] text-success">
-            已完成
+            {t("已完成")}
           </span>
         )}
 
@@ -116,7 +118,7 @@ export default function AnswerPanel() {
           <button
             onClick={handleCopy}
             disabled={!answerText}
-            title="复制回答"
+            title={t("复制回答")}
             className="cursor-pointer rounded p-1 text-text-subtle transition-colors hover:bg-white/10 hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
           >
             {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
@@ -124,11 +126,11 @@ export default function AnswerPanel() {
           <button
             onClick={() => sessionId && generateAnswer(sessionId, currentQaId, true)}
             disabled={!currentQaId || streaming}
-            title="重新生成回答"
+            title={t("重新生成")}
             className="flex cursor-pointer items-center gap-1 rounded border border-white/10 px-2 py-1 text-[10px] text-text-muted transition-colors hover:border-primary/30 hover:text-primary-3 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <RefreshCw className="h-3 w-3" />
-            重新生成
+            {t("重新生成")}
           </button>
         </div>
       </header>
@@ -149,9 +151,9 @@ export default function AnswerPanel() {
         <p className="rounded-lg border border-white/[0.06] bg-background-3/30 px-3 py-6 text-center text-[11px] leading-relaxed text-text-subtle">
           {currentQaId
             ? streaming
-              ? "正在结合知识库生成回答…"
-              : "识别到问题后会自动生成回答，也可点击「重新生成」。"
-            : "尚未识别到问题。开始转写并识别到问题后，这里会输出可直接口述的回答。"}
+              ? t("正在结合知识库生成回答…")
+              : t("识别到问题后会自动生成回答，也可点击「重新生成」。")
+            : t("尚未识别到问题。开始转写并识别到问题后，这里会输出可直接口述的回答。")}
         </p>
       )}
 
@@ -159,9 +161,9 @@ export default function AnswerPanel() {
         <div className="mt-3">
           <div className="mb-1.5 flex items-center gap-1.5">
             <BookOpen className="h-3.5 w-3.5 text-text-subtle" />
-            <span className="text-[11px] font-medium text-text-muted">引用来源</span>
+            <span className="text-[11px] font-medium text-text-muted">{t("引用来源")}</span>
             <span className="ml-auto text-[10px] text-text-subtle">
-              {citations.length} 篇
+              {t("{count} 篇", { count: citations.length })}
             </span>
           </div>
 
@@ -172,7 +174,11 @@ export default function AnswerPanel() {
                   type="button"
                   disabled={!citation.noteId}
                   onClick={() => openNote(citation.noteId)}
-                  title={citation.noteId ? "在知识库中打开该笔记" : "该引用缺少笔记 ID"}
+                  title={
+                    citation.noteId
+                      ? t("在知识库中打开该笔记")
+                      : t("该引用缺少笔记 ID")
+                  }
                   className={cn(
                     "flex w-full flex-col gap-0.5 rounded-lg border border-white/[0.06] bg-background-3/30 px-2.5 py-2 text-left transition-colors",
                     citation.noteId
@@ -183,7 +189,7 @@ export default function AnswerPanel() {
                   <span className="flex items-center gap-2">
                     <span className="text-[10px] text-text-subtle">[{index + 1}]</span>
                     <span className="truncate text-[11px] font-medium text-text">
-                      {citation.title || "未命名笔记"}
+                      {citation.title || t("未命名笔记")}
                     </span>
                     {citation.score !== null && (
                       <span className="ml-auto shrink-0 text-[10px] text-text-subtle">

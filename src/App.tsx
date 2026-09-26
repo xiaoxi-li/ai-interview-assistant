@@ -12,6 +12,7 @@ import {
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { cn, isTauri } from "./lib/utils";
 import { isMiniWindow, openMiniWindow } from "./lib/window";
+import { useT } from "./hooks/useT";
 import { useAppStore, type PageKey } from "./stores/appStore";
 import KnowledgePage from "./pages/KnowledgePage";
 import InterviewPage from "./pages/InterviewPage";
@@ -48,6 +49,7 @@ export default function App() {
   const onboarded = useAppStore((s) => s.onboarded);
   const onboardingLoaded = useAppStore((s) => s.onboardingLoaded);
   const loadOnboarding = useAppStore((s) => s.loadOnboarding);
+  const t = useT();
 
   useEffect(() => {
     loadOnboarding();
@@ -83,7 +85,7 @@ export default function App() {
             <Mic className="h-3.5 w-3.5 text-white" />
           </div>
           <span className="text-[13px] font-medium tracking-wide">
-            AI 面试助手
+            {t("AI 面试助手")}
           </span>
           <span className="rounded border border-primary/20 bg-primary/10 px-1.5 py-[1px] text-[10px] text-primary-3">
             v0.1.0
@@ -92,28 +94,28 @@ export default function App() {
 
         <div className="flex items-center gap-0.5">
           <button
-            title="迷你模式（仅显示当前问题与 AI 回答）"
+            title={t("迷你模式（仅显示当前问题与 AI 回答）")}
             onClick={() => openMiniWindow().catch((err) => console.error(err))}
             className="flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-primary/20 hover:text-primary-3"
           >
             <Minimize2 className="h-3.5 w-3.5" />
           </button>
           <button
-            title="最小化"
+            title={t("最小化")}
             onClick={() => controlWindow("minimize")}
             className="flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-white/5 hover:text-text"
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
           <button
-            title="最大化"
+            title={t("最大化")}
             onClick={() => controlWindow("toggleMaximize")}
             className="flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-white/5 hover:text-text"
           >
             <Square className="h-3 w-3" />
           </button>
           <button
-            title="关闭"
+            title={t("关闭")}
             onClick={() => controlWindow("close")}
             className="flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-danger/80 hover:text-white"
           >
@@ -137,7 +139,7 @@ export default function App() {
               )}
             >
               <Icon className="h-[18px] w-[18px]" />
-              <span>{label}</span>
+              <span>{t(label)}</span>
             </button>
           ))}
         </nav>

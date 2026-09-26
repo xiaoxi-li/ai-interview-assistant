@@ -2,6 +2,7 @@ import { useCallback, useEffect } from "react";
 import { BookOpen, HelpCircle, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useQuestionEvents } from "../../hooks/useQuestionEvents";
+import { useT } from "../../hooks/useT";
 import { useInterviewStore } from "../../stores/interviewStore";
 
 /** 分数 → 展示语气 */
@@ -25,6 +26,7 @@ export default function QuestionPanel() {
   const loadQuestions = useInterviewStore((s) => s.loadQuestions);
   const recallSources = useInterviewStore((s) => s.recallSources);
 
+  const t = useT();
   const sessionId = asrStatus?.sessionId ?? null;
 
   useQuestionEvents(applyQuestionPush);
@@ -48,7 +50,7 @@ export default function QuestionPanel() {
     <section className="glass flex flex-col rounded-xl p-4">
       <header className="mb-3 flex items-center gap-2">
         <HelpCircle className="h-4 w-4 text-primary-3" />
-        <h2 className="text-[13px] font-semibold">问题识别</h2>
+        <h2 className="text-[13px] font-semibold">{t("问题识别")}</h2>
         {currentQuestion && (
           <span
             className={cn(
@@ -56,11 +58,11 @@ export default function QuestionPanel() {
               questionManual ? "bg-warning/15 text-warning" : "bg-primary/15 text-primary-3"
             )}
           >
-            {questionManual ? "手动触发" : "自动识别"}
+            {questionManual ? t("手动触发") : t("自动识别")}
           </span>
         )}
         <span className="ml-auto text-[10px] text-text-subtle">
-          已识别 {questions.length} 个问题
+          {t("已识别 {count} 个问题", { count: questions.length })}
         </span>
       </header>
 
@@ -77,9 +79,9 @@ export default function QuestionPanel() {
                   "rounded px-1.5 py-0.5 text-[10px]",
                   scoreTone(currentQuestion.score)
                 )}
-                title="判定得分（阈值 0.5，越高越确定）"
+                title={t("判定得分（阈值 0.5，越高越确定）")}
               >
-                置信度 {currentQuestion.score.toFixed(2)}
+                {t("置信度")} {currentQuestion.score.toFixed(2)}
               </span>
               {currentQuestion.signals.map((signal) => (
                 <span
@@ -96,13 +98,13 @@ export default function QuestionPanel() {
           <div className="mt-3">
             <div className="mb-1.5 flex items-center gap-1.5">
               <BookOpen className="h-3.5 w-3.5 text-text-subtle" />
-              <span className="text-[11px] font-medium text-text-muted">知识库参考</span>
+              <span className="text-[11px] font-medium text-text-muted">{t("知识库参考")}</span>
               {sourcesLoading && (
                 <Loader2 className="h-3 w-3 animate-spin text-text-subtle" />
               )}
               {!sourcesLoading && (
                 <span className="ml-auto text-[10px] text-text-subtle">
-                  {sources.length} 条片段
+                  {t("{count} 条片段", { count: sources.length })}
                 </span>
               )}
             </div>
@@ -131,8 +133,9 @@ export default function QuestionPanel() {
             ) : (
               !sourcesLoading && (
                 <p className="rounded-lg border border-white/[0.06] bg-background-3/30 px-2.5 py-3 text-[11px] leading-relaxed text-text-subtle">
-                  知识库中未召回到相关内容
-                  {recallQueries.length > 0 && `（查询：${recallQueries.join(" / ")}）`}
+                  {t("知识库中未召回到相关内容")}
+                  {recallQueries.length > 0 &&
+                    t("（查询：{queries}）", { queries: recallQueries.join(" / ") })}
                 </p>
               )
             )}
@@ -141,8 +144,8 @@ export default function QuestionPanel() {
       ) : (
         <p className="rounded-lg border border-white/[0.06] bg-background-3/30 px-3 py-6 text-center text-[11px] leading-relaxed text-text-subtle">
           {asrStatus?.running
-            ? "正在监听面试官语音，识别到问题后会显示在这里。"
-            : "开始转写后，面试官的问题会被自动识别；也可随时手动触发识别。"}
+            ? t("正在监听面试官语音，识别到问题后会显示在这里。")
+            : t("开始转写后，面试官的问题会被自动识别；也可随时手动触发识别。")}
         </p>
       )}
 
@@ -167,10 +170,10 @@ export default function QuestionPanel() {
         onClick={() => triggerQuestion()}
         disabled={!asrStatus?.running}
         className="mt-3 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-4 py-2 text-[12px] text-text-muted transition-colors hover:border-primary/30 hover:text-primary-3 disabled:cursor-not-allowed disabled:opacity-50"
-        title="用最近的面试官语音立即识别一次问题"
+        title={t("用最近的面试官语音立即识别一次问题")}
       >
         <RefreshCw className="h-3.5 w-3.5" />
-        手动识别当前问题
+        {t("手动识别当前问题")}
       </button>
     </section>
   );

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Settings as SettingsIcon } from "lucide-react";
+import { Languages, Settings as SettingsIcon } from "lucide-react";
 import AiSettingsSection from "../components/settings/AiSettingsSection";
 import AsrSettingsSection from "../components/settings/AsrSettingsSection";
 import AudioSettingsSection from "../components/settings/AudioSettingsSection";
@@ -8,11 +8,18 @@ import KnowledgeSettingsSection from "../components/settings/KnowledgeSettingsSe
 import ModelManagerSection from "../components/settings/ModelManagerSection";
 import PrivacySettingsSection from "../components/settings/PrivacySettingsSection";
 import { useModelProgress } from "../hooks/useModelProgress";
+import { useT } from "../hooks/useT";
+import { LOCALES, type Locale } from "../lib/i18n";
+import { useAppStore } from "../stores/appStore";
 import { useSettingsStore } from "../stores/settingsStore";
 
 const PLACEHOLDER_SECTIONS: { title: string; desc: string; task: string }[] = [];
 
 export default function SettingsPage() {
+  const locale = useAppStore((s) => s.locale);
+  const setLocale = useAppStore((s) => s.setLocale);
+  const t = useT();
+
   const aiConfig = useSettingsStore((s) => s.aiConfig);
   const presets = useSettingsStore((s) => s.presets);
   const apiKeys = useSettingsStore((s) => s.apiKeys);
@@ -92,7 +99,24 @@ export default function SettingsPage() {
     <div className="flex h-full flex-col">
       <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/5 px-4">
         <SettingsIcon className="h-4 w-4 text-primary-3" />
-        <h1 className="text-[15px] font-semibold">设置</h1>
+        <h1 className="text-[15px] font-semibold">{t("设置")}</h1>
+
+        {/* 界面语言（i18n）：中文原文为键，英文按需翻译 */}
+        <label className="ml-auto flex items-center gap-1.5 text-[11px] text-text-subtle">
+          <Languages className="h-3.5 w-3.5" />
+          {t("界面语言")}
+          <select
+            value={locale}
+            onChange={(event) => setLocale(event.target.value as Locale)}
+            className="cursor-pointer rounded-lg border border-white/10 bg-background-3/60 px-2 py-1 text-[11px] text-text outline-none transition-colors focus:border-primary/50"
+          >
+            {LOCALES.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">

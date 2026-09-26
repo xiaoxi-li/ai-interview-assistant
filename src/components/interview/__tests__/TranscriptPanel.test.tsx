@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import TranscriptPanel from "../TranscriptPanel";
+import { useAppStore } from "../../../stores/appStore";
 import { useInterviewStore, type TranscriptLine } from "../../../stores/interviewStore";
 import type { AsrEngineInfo, AsrSessionStatus } from "../../../types";
 
@@ -65,7 +66,19 @@ function resetStore(overrides: Partial<ReturnType<typeof useInterviewStore.getSt
 
 describe("TranscriptPanel", () => {
   beforeEach(() => {
+    // 每个用例重置语言，避免相互影响
+    useAppStore.setState({ locale: "zh-CN" });
     resetStore();
+  });
+
+  it("英文环境下展示英文文案", () => {
+    useAppStore.setState({ locale: "en-US" });
+    resetStore();
+    render(<TranscriptPanel />);
+
+    expect(screen.getByText("Live transcript")).toBeTruthy();
+    expect(screen.getByText("Start transcription")).toBeTruthy();
+    expect(screen.getByText("Dual channel (speaker separation)")).toBeTruthy();
   });
 
   it("空状态提示音频不出本机", () => {

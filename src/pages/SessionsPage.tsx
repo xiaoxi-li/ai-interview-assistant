@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { cn, formatClock, formatDateTime } from "../lib/utils";
+import { useT } from "../hooks/useT";
 import { useSessionStore } from "../stores/sessionStore";
 
 const SPEAKER_LABEL: Record<string, string> = {
@@ -33,6 +34,8 @@ export default function SessionsPage() {
   const deleteSession = useSessionStore((s) => s.deleteSession);
   const exportSession = useSessionStore((s) => s.exportSession);
   const clearNotice = useSessionStore((s) => s.clearNotice);
+
+  const t = useT();
 
   useEffect(() => {
     loadSessions();
@@ -55,8 +58,10 @@ export default function SessionsPage() {
     <div className="flex h-full flex-col">
       <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/5 px-4">
         <History className="h-4 w-4 text-primary-3" />
-        <h1 className="text-[15px] font-semibold">会话历史</h1>
-        <span className="text-[11px] text-text-subtle">共 {sessions.length} 场</span>
+        <h1 className="text-[15px] font-semibold">{t("会话历史")}</h1>
+        <span className="text-[11px] text-text-subtle">
+          {t("共 {count} 场", { count: sessions.length })}
+        </span>
         <button
           onClick={() => loadSessions()}
           disabled={loading}

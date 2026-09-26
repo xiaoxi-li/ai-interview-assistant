@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { ipc } from "../lib/ipc";
+import { loadLocale, saveLocale, type Locale } from "../lib/i18n";
 
 export type PageKey =
   | "knowledge"
@@ -15,8 +16,12 @@ interface AppState {
   onboarded: boolean;
   /** 向导状态是否已从后端读取（避免首帧闪烁） */
   onboardingLoaded: boolean;
+  /** 界面语言 */
+  locale: Locale;
   setCurrentPage: (page: PageKey) => void;
   setOnboarded: (value: boolean) => void;
+  /** 切换界面语言（本地持久化） */
+  setLocale: (locale: Locale) => void;
   /** 读取向导完成状态 */
   loadOnboarding: () => Promise<void>;
   /** 标记向导完成并进入主界面 */
@@ -27,8 +32,13 @@ export const useAppStore = create<AppState>((set) => ({
   currentPage: "knowledge",
   onboarded: false,
   onboardingLoaded: false,
+  locale: loadLocale(),
   setCurrentPage: (page) => set({ currentPage: page }),
   setOnboarded: (value) => set({ onboarded: value }),
+  setLocale: (locale) => {
+    saveLocale(locale);
+    set({ locale });
+  },
 
   loadOnboarding: () =>
     ipc<boolean>("get_onboarding_state")
