@@ -104,6 +104,25 @@ pub enum Speaker {
     Interviewer,
 }
 
+impl Speaker {
+    /// 数据库/事件中使用的稳定字符串标识
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Speaker::Me => "me",
+            Speaker::Interviewer => "interviewer",
+        }
+    }
+
+    /// 由字符串解析；未知值返回 None
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "me" => Some(Speaker::Me),
+            "interviewer" => Some(Speaker::Interviewer),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AsrMode {
@@ -138,4 +157,35 @@ pub enum TranscriptEvent {
 pub struct VectorHit {
     pub chunk_id: String,
     pub distance: f32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn speaker_round_trips_through_string() {
+        for speaker in [Speaker::Me, Speaker::Interviewer] {
+            assert_eq!(Speaker::parse(speaker.as_str()), Some(speaker));
+        }
+    }
+
+    #[test]
+    fn speaker_parse_is_case_insensitive_and_rejects_unknown() {
+        assert_eq!(Speaker::parse(" ME "), Some(Speaker::Me));
+        assert_eq!(Speaker::parse("Interviewer"), Some(Speaker::Interviewer));
+        assert_eq!(Speaker::parse("system"), None);
+    }
+
+    #[test]
+    fn collect_text_concatenates_only_tokens() {
+        let deltas = vec![
+            ChatDelta::Start,
+            ChatDelta::Token { text: "你".into() },
+            ChatDelta::Token { text: "好".into() },
+            ChatDelta::Done { finish_reason: "stop".into() },
+            ChatDelta::Error { message: "ignored".into() },
+        ];
+        assert_eq!(collect_text(&deltas), "你好");
+    }
 }

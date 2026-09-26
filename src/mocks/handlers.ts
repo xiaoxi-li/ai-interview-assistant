@@ -202,6 +202,54 @@ export async function mockInvoke<T>(
         loopbackAvailable: true,
       } as T;
 
+    // ---------- 本地 ASR（P0 唯一通路） ----------
+    case "asr_session_status":
+      return {
+        running: false,
+        sessionId: null,
+        source: null,
+        speaker: null,
+        engine: null,
+        startedAt: null,
+      } as T;
+
+    case "list_asr_engines":
+      return [
+        {
+          id: "asr-paraformer-zh",
+          label: "本地 ASR（sherpa-onnx 中文 paraformer）",
+          ready: false,
+          detail:
+            "本地 ASR 模型尚未下载：C:\\Users\\demo\\AppData\\Roaming\\ai-interview\\models\\asr\\sherpa-onnx-paraformer-zh.tar.bz2。请前往「设置 → 模型管理」下载「本地 ASR（Paraformer 中文）」后重试。",
+        },
+      ] as T;
+
+    case "start_asr_session": {
+      const source = String(args?.source ?? "system");
+      return {
+        running: true,
+        sessionId: `s-mock-${source}`,
+        source,
+        speaker: source === "system" ? "interviewer" : "me",
+        engine: "sherpa-onnx",
+        startedAt: Date.now(),
+      } as T;
+    }
+
+    case "stop_asr_session":
+      return {
+        running: false,
+        sessionId: null,
+        source: null,
+        speaker: null,
+        engine: null,
+        startedAt: null,
+      } as T;
+
+    case "list_transcript_segments":
+    case "list_transcript_finals":
+      return [] as T;
+
     case "list_audio_devices":
       return [
         { id: "麦克风 (USB Audio)", name: "麦克风 (USB Audio)", kind: "input", isDefault: true },

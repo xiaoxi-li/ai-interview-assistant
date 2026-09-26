@@ -78,6 +78,13 @@ pub fn all_cloud_providers() -> Vec<CloudAsrProvider> {
 /// 本地 ASR 默认模型（sherpa-onnx 中文 paraformer）
 pub const DEFAULT_LOCAL_MODEL: &str = "sherpa-onnx-paraformer-zh";
 
+/// 云端 ASR 协议适配是否已实现。
+///
+/// 阶段性决策：P0 只做本地 ASR 通路，云端多厂商（讯飞/阿里/腾讯）WebSocket 协议
+/// 适配整体延后至 P1。配置项与凭证管理保留，接入时只需把此常量改为 `true`
+/// 并补充各服务商实现。
+pub const CLOUD_ASR_IMPLEMENTED: bool = false;
+
 /// VAD 阈值合法区间
 pub const VAD_THRESHOLD_MIN: f32 = 0.0;
 pub const VAD_THRESHOLD_MAX: f32 = 1.0;
@@ -137,8 +144,8 @@ impl AsrConfig {
 
 impl Default for AsrConfig {
     fn default() -> Self {
-        // 方案确认：首次启动向导显式选择，默认取云端（向导会覆盖）
-        Self::from_mode(AsrMode::Cloud)
+        // 阶段性决策：P0 只做本地 ASR 通路，默认取本地模式
+        Self::from_mode(AsrMode::Local)
     }
 }
 
@@ -174,12 +181,18 @@ mod tests {
     }
 
     #[test]
-    fn default_config_targets_cloud_with_zh_language() {
+    fn default_config_targets_local_with_zh_language() {
         let config = AsrConfig::default();
-        assert_eq!(config.mode, AsrMode::Cloud);
+        assert_eq!(config.mode, AsrMode::Local, "P0 默认走本地 ASR 通路");
         assert_eq!(config.cloud_provider, CloudAsrProvider::Xfyun);
         assert_eq!(config.language, "zh-CN");
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn cloud_protocol_is_not_implemented_in_p0() {
+        // 阶段性决策固定为 false；P1 接入云端协议后此断言需同步更新
+        assert!(!CLOUD_ASR_IMPLEMENTED, "P0 阶段云端 ASR 协议未实现");
     }
 
     #[test]
@@ -204,10 +217,11 @@ mod tests {
     #[test]
     fn active_model_follows_mode() {
         let mut config = AsrConfig::default();
-        assert_eq!(config.active_model(), "iat");
-
-        config.mode = AsrMode::Local;
+        // P0 默认本地模式
         assert_eq!(config.active_model(), DEFAULT_LOCAL_MODEL);
+
+        config.mode = AsrMode::Cloud;
+        assert_eq!(config.active_model(), "iat");
     }
 
     #[test]

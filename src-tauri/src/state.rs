@@ -39,6 +39,8 @@ pub struct AppState {
     pub secrets: Arc<dyn SecretStore>,
     /// 音频采集管理（内部流由专用线程持有，此处仅存跨线程句柄）
     pub capture: Mutex<CaptureManager>,
+    /// ASR 运行时（同一时刻最多一个本地 ASR 会话）
+    pub asr: Mutex<crate::asr::AsrRuntime>,
 }
 
 impl AppState {
@@ -56,7 +58,13 @@ impl AppState {
             embedding,
             secrets,
             capture: Mutex::new(CaptureManager::default()),
+            asr: Mutex::new(crate::asr::AsrRuntime::default()),
         }
+    }
+
+    /// 获取 ASR 运行时锁
+    pub fn asr_lock(&self) -> Result<MutexGuard<'_, crate::asr::AsrRuntime>, String> {
+        self.asr.lock().map_err(|e| format!("ASR 锁已中毒：{e}"))
     }
 
     /// 获取采集管理锁

@@ -2,13 +2,25 @@
 //!
 //! 约定：所有命令返回 `Result<T, String>`，错误直接以字符串形式透传给前端。
 
+use crate::asr::{
+    AsrPipeline, AsrSession, LocalAsrEngine, SherpaOnnxEngine, TranscriptRepo,
+    DEFAULT_PARTIAL_INTERVAL_MS,
+};
+use crate::audio::capture::{pcm16_to_samples, rms_level};
+use crate::audio::vad::VadConfig;
+use crate::audio::{AudioCapture, FRAME_SAMPLES};
+use crate::config::asr::CLOUD_ASR_IMPLEMENTED;
 use crate::knowledge::export::{ExportSummary, RestoreSummary};
-use crate::knowledge::store::{GroupsRepo, NotesRepo, TagsRepo, VersionsRepo};
+use crate::knowledge::store::{now_ms, GroupsRepo, NotesRepo, TagsRepo, VersionsRepo};
 use crate::knowledge::{GroupDto, ImportOutcome, NoteDto, NoteVersionDto, TagDto};
+use crate::providers::types::{AsrMode, TranscriptEvent};
 use crate::providers::AiProvider;
 use crate::retrieval::SearchHit;
 use crate::state::AppState;
 use std::path::PathBuf;
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::thread;
+use std::time::Duration;
 use tauri::State;
 
 /// 列出全部笔记（不含回收站），按更新时间倒序
@@ -454,8 +466,12 @@ pub fn start_audio_capture(
     source: String,
     device_id: Option<String>,
 ) -> Result<CaptureStatus, String> {
-    use crate::audio::AudioCapture;
     use tauri::Emitter;
+
+    // 电平试听与 ASR 会话互斥：ASR 泵独占采集事件流
+    if state.asr_lock()?.is_running() {
+        return Err("本地 ASR 会话进行中，采集事件流已被转写占用；请先停止转写再单独试听电平。".into());
+    }
 
     let (events, source_label) = {
         let mut manager = state.capture_lock()?;
@@ -511,6 +527,314 @@ pub fn stop_audio_capture(state: State<'_, AppState>) -> Result<CaptureStatus, S
         manager.stop_all();
     }
     capture_status(&state)
+}
+
+// ==================== 本地 ASR（P0 唯一通路） ====================
+
+/// 本地 ASR 会话状态
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AsrSessionStatus {
+    pub running: bool,
+    pub session_id: Option<String>,
+    pub source: Option<String>,
+    /// `me` / `interviewer`
+    pub speaker: Option<String>,
+    pub engine: Option<String>,
+    pub started_at: Option<i64>,
+}
+
+fn asr_status(state: &AppState) -> Result<AsrSessionStatus, String> {
+    let runtime = state.asr_lock()?;
+    Ok(match &runtime.session {
+        Some(session) => AsrSessionStatus {
+            running: true,
+            session_id: Some(session.id.clone()),
+            source: Some(session.source.clone()),
+            speaker: Some(session.speaker.as_str().to_string()),
+            engine: Some(session.engine.clone()),
+            started_at: Some(session.started_at),
+        },
+        None => AsrSessionStatus {
+            running: false,
+            session_id: None,
+            source: None,
+            speaker: None,
+            engine: None,
+            started_at: None,
+        },
+    })
+}
+
+/// 查询本地 ASR 会话状态
+#[tauri::command]
+pub fn asr_session_status(state: State<'_, AppState>) -> Result<AsrSessionStatus, String> {
+    asr_status(&state)
+}
+
+/// 列出本地可用的 ASR 引擎及其就绪状态
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AsrEngineInfo {
+    pub id: String,
+    pub label: String,
+    /// 是否可直接使用（模型与推理均就绪）
+    pub ready: bool,
+    pub detail: String,
+}
+
+#[tauri::command]
+pub fn list_asr_engines(state: State<'_, AppState>) -> Vec<AsrEngineInfo> {
+    let language = state
+        .lock()
+        .ok()
+        .and_then(|conn| crate::config::asr::load_asr_config(&conn).ok())
+        .map(|config| config.language)
+        .unwrap_or_else(|| "zh-CN".to_string());
+
+    let (ready, detail) = match SherpaOnnxEngine::new(&state.models_dir, &language) {
+        Ok(engine) => (
+            false,
+            format!(
+                "模型已就绪（{}）；native 推理尚未接入",
+                engine.model_path().display()
+            ),
+        ),
+        Err(err) => (false, err.to_string()),
+    };
+
+    vec![AsrEngineInfo {
+        id: crate::asr::LOCAL_ASR_MODEL_ID.to_string(),
+        label: "本地 ASR（sherpa-onnx 中文 paraformer）".to_string(),
+        ready,
+        detail,
+    }]
+}
+
+/// 广播转写事件并按需落库
+fn handle_transcript_events(
+    app: &tauri::AppHandle,
+    conn: &std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>,
+    session_id: &str,
+    events: &[TranscriptEvent],
+) {
+    use tauri::Emitter;
+
+    for event in events {
+        let _ = app.emit(
+            "asr://transcript",
+            serde_json::json!({
+                "sessionId": session_id,
+                "event": event,
+                "ts": now_ms(),
+            }),
+        );
+
+        // 仅 final 落库：partial 会被后续结果覆盖，落库意义有限
+        if let TranscriptEvent::Final { speaker, text } = event {
+            match conn.lock() {
+                Ok(guard) => {
+                    if let Err(err) =
+                        TranscriptRepo::new(&guard).append(session_id, *speaker, text, true, now_ms())
+                    {
+                        eprintln!("转写落库失败（session={session_id}）：{err}");
+                    }
+                }
+                Err(err) => eprintln!("转写落库跳过（连接锁中毒）：{err}"),
+            }
+        }
+    }
+}
+
+/// 启动本地 ASR 会话（默认走本地引擎；采样→VAD 分段→识别→事件+落库）
+#[tauri::command]
+pub fn start_asr_session(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    source: String,
+    device_id: Option<String>,
+) -> Result<AsrSessionStatus, String> {
+    let speaker = crate::asr::speaker_for_source(&source)
+        .ok_or_else(|| format!("未知采集来源：{source}"))?;
+
+    // 1) 读取配置并强制本地通路
+    let config = {
+        let conn = state.lock()?;
+        crate::config::asr::load_asr_config(&conn).map_err(|e| e.to_string())?
+    };
+    if config.mode == AsrMode::Cloud && !CLOUD_ASR_IMPLEMENTED {
+        return Err(
+            "云端 ASR 尚未接入（计划于 P1）。请到「设置 → 语音识别」将模式切换为「本地（隐私优先）」后再开始转写。"
+                .into(),
+        );
+    }
+
+    // 2) 构造本地引擎；模型缺失时返回可操作错误
+    let engine = SherpaOnnxEngine::new(&state.models_dir, &config.language)
+        .map_err(|e| e.to_string())?;
+    let engine_name = engine.name().to_string();
+
+    // 3) 停止既有会话与采集，启动新采集
+    {
+        let mut runtime = state.asr_lock()?;
+        runtime.stop();
+    }
+    let events = {
+        let mut manager = state.capture_lock()?;
+        manager.stop_all();
+        let capture = match source.as_str() {
+            "mic" => &mut manager.mic,
+            "system" => &mut manager.system,
+            other => return Err(format!("未知的采集来源：{other}")),
+        };
+        capture.start(device_id.as_deref().unwrap_or(""))?;
+        let events = capture.take_events()?;
+        manager.running = Some(source.clone());
+        events
+    };
+
+    // 4) 建会话记录 + 启动采集泵
+    let session = {
+        let conn = state.lock()?;
+        TranscriptRepo::new(&conn)
+            .start_session(&format!("面试会话 · {source}"))
+            .map_err(|e| e.to_string())?
+    };
+
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+    let app_handle = app.clone();
+    let conn_handle = state.conn.clone();
+    let session_id = session.id.clone();
+    let threshold = config.vad_threshold;
+
+    let pump = thread::spawn(move || {
+        let mut pipeline = AsrPipeline::new(
+            Box::new(engine),
+            speaker,
+            VadConfig::default(),
+            threshold,
+            DEFAULT_PARTIAL_INTERVAL_MS,
+        );
+
+        loop {
+            if stop_rx.try_recv().is_ok() {
+                break;
+            }
+            match events.recv_timeout(Duration::from_millis(200)) {
+                Ok(chunk) => {
+                    if chunk.ts < 0 {
+                        handle_transcript_events(
+                            &app_handle,
+                            &conn_handle,
+                            &session_id,
+                            &[TranscriptEvent::Error {
+                                message: "音频流发生错误，请检查设备后重试".into(),
+                            }],
+                        );
+                        continue;
+                    }
+
+                    let samples = pcm16_to_samples(&chunk.data);
+                    let level = rms_level(&samples);
+                    {
+                        use tauri::Emitter;
+                        let _ = app_handle.emit(
+                            "audio://level",
+                            serde_json::json!({ "source": "asr", "level": level, "ts": chunk.ts }),
+                        );
+                    }
+
+                    for frame in samples.chunks(FRAME_SAMPLES) {
+                        if frame.len() < FRAME_SAMPLES {
+                            break;
+                        }
+                        let events = pipeline.push_frame(frame, chunk.ts);
+                        if !events.is_empty() {
+                            handle_transcript_events(
+                                &app_handle,
+                                &conn_handle,
+                                &session_id,
+                                &events,
+                            );
+                        }
+                    }
+                }
+                Err(RecvTimeoutError::Timeout) => continue,
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
+        }
+
+        // 停止/断流：冲刷未完成的语音段
+        let tail = pipeline.flush();
+        if !tail.is_empty() {
+            handle_transcript_events(&app_handle, &conn_handle, &session_id, &tail);
+        }
+    });
+
+    {
+        let mut runtime = state.asr_lock()?;
+        runtime.session = Some(AsrSession::new(
+            session.id,
+            source,
+            speaker,
+            engine_name,
+            session.started_at,
+            stop_tx,
+            pump,
+        ));
+    }
+
+    asr_status(&state)
+}
+
+/// 停止本地 ASR 会话
+#[tauri::command]
+pub fn stop_asr_session(state: State<'_, AppState>) -> Result<AsrSessionStatus, String> {
+    let session_id = {
+        let mut runtime = state.asr_lock()?;
+        let id = runtime.session_id();
+        runtime.stop();
+        id
+    };
+
+    {
+        let mut manager = state.capture_lock()?;
+        manager.stop_all();
+    }
+
+    if let Some(id) = session_id {
+        let conn = state.lock()?;
+        if let Err(err) = TranscriptRepo::new(&conn).end_session(&id) {
+            eprintln!("结束会话失败（session={id}）：{err}");
+        }
+    }
+
+    asr_status(&state)
+}
+
+/// 读取某会话的转写段落（含 partial 记录，按时间正序）
+#[tauri::command]
+pub fn list_transcript_segments(
+    state: State<'_, AppState>,
+    session_id: String,
+    limit: Option<usize>,
+) -> Result<Vec<crate::asr::TranscriptSegmentDto>, String> {
+    let conn = state.lock()?;
+    TranscriptRepo::new(&conn)
+        .list_segments(&session_id, limit.unwrap_or(500))
+        .map_err(|e| e.to_string())
+}
+
+/// 读取某会话的最终转写文本
+#[tauri::command]
+pub fn list_transcript_finals(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<Vec<crate::asr::TranscriptSegmentDto>, String> {
+    let conn = state.lock()?;
+    TranscriptRepo::new(&conn)
+        .list_finals(&session_id)
+        .map_err(|e| e.to_string())
 }
 
 /// 枚举音频设备（输入=麦克风，输出=系统音频来源）

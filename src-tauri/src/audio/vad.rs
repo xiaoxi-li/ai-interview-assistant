@@ -271,6 +271,19 @@ impl VadSegmenter {
     pub fn tail_padding_frames(&self) -> u32 {
         self.tail_frames
     }
+
+    /// 当前进行中的语音段样本（供上层产出 partial 转写结果）
+    pub fn current_segment_samples(&self) -> &[f32] {
+        &self.current
+    }
+
+    /// 是否已确认处于语音段中（MaybeSpeech 不算，避免噪声触发 partial）
+    pub fn is_in_confirmed_speech(&self) -> bool {
+        matches!(
+            self.state,
+            SegmenterState::Speech | SegmenterState::MaybeSilence
+        )
+    }
 }
 
 /// 单段摘要（供诊断报告使用）
@@ -513,6 +526,43 @@ mod tests {
         feed(&mut segmenter, &[true; 20]);
         assert!(segmenter.flush().is_some());
         assert!(segmenter.flush().is_none(), "重复 flush 不应产出");
+    }
+
+    #[test]
+    fn current_segment_samples_tracks_in_progress_speech() {
+        let mut segmenter = VadSegmenter::with_energy_vad(VadConfig::default(), 0.5);
+        assert!(segmenter.current_segment_samples().is_empty());
+        assert!(!segmenter.is_in_confirmed_speech());
+
+        // 静音阶段不应暴露进行中样本
+        feed(&mut segmenter, &[false; 3]);
+        assert!(segmenter.current_segment_samples().is_empty());
+
+        // 达到 min_speech(200ms=10 帧) 后进入确认语音
+        let mut ts = 0i64;
+        for _ in 0..10 {
+            ts += TS_STEP;
+            segmenter.push_frame(&speech_frame(), ts);
+        }
+        assert!(segmenter.is_in_confirmed_speech());
+        assert!(
+            !segmenter.current_segment_samples().is_empty(),
+            "确认语音段应可用于产出 partial"
+        );
+    }
+
+    #[test]
+    fn short_speech_below_threshold_is_not_confirmed() {
+        let mut segmenter = VadSegmenter::with_energy_vad(VadConfig::default(), 0.5);
+        let mut ts = 0i64;
+        for _ in 0..3 {
+            ts += TS_STEP;
+            segmenter.push_frame(&speech_frame(), ts);
+        }
+        assert!(
+            !segmenter.is_in_confirmed_speech(),
+            "未达 min_speech 的片段不应产出 partial"
+        );
     }
 
     /// 拼装 16kHz 单声道测试音频：若干段语音之间插入静音

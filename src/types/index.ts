@@ -51,14 +51,6 @@ export interface SearchHit {
 
 export type Speaker = "interviewer" | "me";
 
-export interface TranscriptSegment {
-  id: string;
-  speaker: Speaker;
-  text: string;
-  isFinal: boolean;
-  timestamp: number;
-}
-
 export type AnswerStatus = "idle" | "thinking" | "streaming" | "done" | "error";
 
 export interface AnswerState {
@@ -93,6 +85,47 @@ export interface AIConfig {
   model: string;
   stream: boolean;
   temperature: number;
+}
+
+/** 本地 ASR 转写事件（与后端 TranscriptEvent 对应） */
+export type TranscriptEvent =
+  | { kind: "partial"; speaker: Speaker; text: string }
+  | { kind: "final"; speaker: Speaker; text: string }
+  | { kind: "error"; message: string };
+
+/** 后端推送的转写事件载荷（`asr://transcript`） */
+export interface TranscriptPush {
+  sessionId: string;
+  event: TranscriptEvent;
+  ts: number;
+}
+
+/** 本地 ASR 会话状态 */
+export interface AsrSessionStatus {
+  running: boolean;
+  sessionId: string | null;
+  source: "mic" | "system" | null;
+  speaker: Speaker | null;
+  engine: string | null;
+  startedAt: number | null;
+}
+
+/** 本地 ASR 引擎信息 */
+export interface AsrEngineInfo {
+  id: string;
+  label: string;
+  ready: boolean;
+  detail: string;
+}
+
+/** 转写段落（落库记录，与后端 TranscriptSegmentDto 对应） */
+export interface TranscriptSegment {
+  id: string;
+  sessionId: string;
+  speaker: Speaker;
+  text: string;
+  isFinal: boolean;
+  ts: number;
 }
 
 /** 音频采集状态 */

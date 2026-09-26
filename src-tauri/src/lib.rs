@@ -5,6 +5,7 @@ use tauri::Manager;
 mod commands;
 mod state;
 
+pub mod asr;
 pub mod audio;
 pub mod config;
 pub mod knowledge;
@@ -104,6 +105,12 @@ pub fn run() {
             commands::audio_capture_status,
             commands::start_audio_capture,
             commands::stop_audio_capture,
+            commands::asr_session_status,
+            commands::list_asr_engines,
+            commands::start_asr_session,
+            commands::stop_asr_session,
+            commands::list_transcript_segments,
+            commands::list_transcript_finals,
             commands::list_audio_devices,
             commands::get_audio_config,
             commands::save_audio_config,
