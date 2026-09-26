@@ -211,6 +211,18 @@ export async function mockInvoke<T>(
         speaker: null,
         engine: null,
         startedAt: null,
+        paused: false,
+      } as T;
+
+    case "set_asr_paused":
+      return {
+        running: true,
+        sessionId: "s-mock-system",
+        source: "system",
+        speaker: "interviewer",
+        engine: "sherpa-onnx",
+        startedAt: Date.now(),
+        paused: Boolean(args?.paused),
       } as T;
 
     case "list_asr_engines":

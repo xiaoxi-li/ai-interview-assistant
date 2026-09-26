@@ -108,6 +108,8 @@ export interface AsrSessionStatus {
   speaker: Speaker | null;
   engine: string | null;
   startedAt: number | null;
+  /** 采集是否已暂停 */
+  paused: boolean;
 }
 
 /** 本地 ASR 引擎信息 */

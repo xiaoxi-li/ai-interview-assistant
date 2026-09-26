@@ -548,9 +548,12 @@ pub struct AsrSessionStatus {
     pub speaker: Option<String>,
     pub engine: Option<String>,
     pub started_at: Option<i64>,
+    /// 采集是否已暂停（IA-12）
+    pub paused: bool,
 }
 
 fn asr_status(state: &AppState) -> Result<AsrSessionStatus, String> {
+    let paused = state.asr_paused.load(Ordering::SeqCst);
     let runtime = state.asr_lock()?;
     Ok(match &runtime.session {
         Some(session) => AsrSessionStatus {
@@ -560,6 +563,7 @@ fn asr_status(state: &AppState) -> Result<AsrSessionStatus, String> {
             speaker: Some(session.speaker.as_str().to_string()),
             engine: Some(session.engine.clone()),
             started_at: Some(session.started_at),
+            paused,
         },
         None => AsrSessionStatus {
             running: false,
@@ -568,6 +572,7 @@ fn asr_status(state: &AppState) -> Result<AsrSessionStatus, String> {
             speaker: None,
             engine: None,
             started_at: None,
+            paused: false,
         },
     })
 }
@@ -691,6 +696,7 @@ pub fn start_asr_session(
         let mut runtime = state.asr_lock()?;
         runtime.stop();
     }
+    state.asr_paused.store(false, Ordering::SeqCst);
     let audio_rx = {
         let mut manager = state.capture_lock()?;
         manager.stop_all();
@@ -716,6 +722,7 @@ pub fn start_asr_session(
     let (control_tx, control_rx) = mpsc::channel::<AsrControl>();
     let app_handle = app.clone();
     let conn_handle = state.conn.clone();
+    let paused_handle = state.asr_paused.clone();
     let session_id = session.id.clone();
     let threshold = config.vad_threshold;
     let auto_detect = question_config.auto_detect;
@@ -759,6 +766,10 @@ pub fn start_asr_session(
 
             match audio_rx.recv_timeout(Duration::from_millis(100)) {
                 Ok(chunk) => {
+                    // 暂停期间丢弃音频帧（仍保持通道排空，避免积压）
+                    if paused_handle.load(Ordering::SeqCst) {
+                        continue;
+                    }
                     if chunk.ts < 0 {
                         handle_transcript_events(
                             &app_handle,
@@ -854,6 +865,7 @@ pub fn stop_asr_session(state: State<'_, AppState>) -> Result<AsrSessionStatus, 
         runtime.stop();
         id
     };
+    state.asr_paused.store(false, Ordering::SeqCst);
 
     {
         let mut manager = state.capture_lock()?;
@@ -867,6 +879,19 @@ pub fn stop_asr_session(state: State<'_, AppState>) -> Result<AsrSessionStatus, 
         }
     }
 
+    asr_status(&state)
+}
+
+/// 暂停 / 继续采集（IA-12）：暂停期间丢弃音频帧，会话与转写记录保留
+#[tauri::command]
+pub fn set_asr_paused(state: State<'_, AppState>, paused: bool) -> Result<AsrSessionStatus, String> {
+    {
+        let runtime = state.asr_lock()?;
+        if !runtime.is_running() {
+            return Err("当前没有进行中的转写会话".into());
+        }
+    }
+    state.asr_paused.store(paused, Ordering::SeqCst);
     asr_status(&state)
 }
 

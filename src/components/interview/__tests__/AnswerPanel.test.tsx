@@ -20,6 +20,7 @@ const runningStatus: AsrSessionStatus = {
   speaker: "interviewer",
   engine: "sherpa-onnx",
   startedAt: 1000,
+  paused: false,
 };
 
 const questionConfig: QuestionConfig = {

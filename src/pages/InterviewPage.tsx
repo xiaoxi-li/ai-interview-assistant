@@ -3,6 +3,7 @@ import AudioCapturePanel from "../components/interview/AudioCapturePanel";
 import TranscriptPanel from "../components/interview/TranscriptPanel";
 import QuestionPanel from "../components/interview/QuestionPanel";
 import AnswerPanel from "../components/interview/AnswerPanel";
+import ShortcutBar from "../components/interview/ShortcutBar";
 import { useInterviewStore } from "../stores/interviewStore";
 import { cn } from "../lib/utils";
 
@@ -10,6 +11,7 @@ export default function InterviewPage() {
   const asrStatus = useInterviewStore((s) => s.asrStatus);
 
   const running = asrStatus?.running ?? false;
+  const paused = asrStatus?.paused ?? false;
 
   return (
     <div className="flex h-full flex-col">
@@ -23,11 +25,13 @@ export default function InterviewPage() {
               running ? "animate-pulse-dot bg-success" : "bg-text-subtle"
             )}
           />
-          {asrStatus?.running
-            ? asrStatus.source === "system"
-              ? "正在转写面试官"
-              : "正在转写我的语音"
-            : "未开始捕获"}
+          {!asrStatus?.running
+            ? "未开始捕获"
+            : paused
+              ? "已暂停采集"
+              : asrStatus.source === "system"
+                ? "正在转写面试官"
+                : "正在转写我的语音"}
         </span>
       </div>
 
@@ -37,6 +41,7 @@ export default function InterviewPage() {
         </div>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto">
+          <ShortcutBar />
           <TranscriptPanel />
           <QuestionPanel />
           <AnswerPanel />

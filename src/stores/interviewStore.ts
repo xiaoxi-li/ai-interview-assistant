@@ -83,6 +83,8 @@ interface InterviewState {
 
   applyQuestionPush: (push: QuestionPush) => void;
   triggerQuestion: () => Promise<void>;
+  /** 暂停 / 继续采集（IA-12） */
+  setAsrPaused: (paused: boolean) => Promise<void>;
   loadQuestions: (sessionId: string) => Promise<void>;
   loadQuestionConfig: () => Promise<void>;
   saveQuestionConfig: (config: QuestionConfig) => Promise<void>;
@@ -274,6 +276,15 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
         console.error("手动识别问题失败:", err);
         set({ asrError: String(err) });
       });
+    },
+
+    setAsrPaused: (paused) => {
+      return ipc<AsrSessionStatus>("set_asr_paused", { paused })
+        .then((asrStatus) => set({ asrStatus }))
+        .catch((err) => {
+          console.error("切换采集暂停失败:", err);
+          set({ asrError: String(err) });
+        });
     },
 
     loadQuestions: (sessionId) => {

@@ -107,6 +107,7 @@ pub fn run() {
             commands::start_audio_capture,
             commands::stop_audio_capture,
             commands::asr_session_status,
+            commands::set_asr_paused,
             commands::list_asr_engines,
             commands::start_asr_session,
             commands::stop_asr_session,

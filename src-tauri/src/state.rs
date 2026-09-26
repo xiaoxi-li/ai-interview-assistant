@@ -43,6 +43,8 @@ pub struct AppState {
     pub asr: Mutex<crate::asr::AsrRuntime>,
     /// 回答生成的「代数」：递增即取消上一轮流式生成（IA-08）
     pub answer_generation: Arc<std::sync::atomic::AtomicU64>,
+    /// 采集暂停标记（IA-12）：置位后采集泵丢弃音频帧，但会话保持
+    pub asr_paused: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl AppState {
@@ -62,6 +64,7 @@ impl AppState {
             capture: Mutex::new(CaptureManager::default()),
             asr: Mutex::new(crate::asr::AsrRuntime::default()),
             answer_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            asr_paused: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 

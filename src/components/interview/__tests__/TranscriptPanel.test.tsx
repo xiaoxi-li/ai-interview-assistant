@@ -28,6 +28,7 @@ const idleStatus: AsrSessionStatus = {
   speaker: null,
   engine: null,
   startedAt: null,
+  paused: false,
 };
 
 function finalLine(overrides: Partial<TranscriptLine> = {}): TranscriptLine {
