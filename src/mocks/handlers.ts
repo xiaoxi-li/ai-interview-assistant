@@ -65,6 +65,29 @@ export async function mockInvoke<T>(
     case "save_ai_config":
       return (args?.config ?? null) as T;
 
+    case "get_interface_config":
+      return {
+        theme: "dark",
+        hotkeys: [
+          { action: "ask", accelerator: "Ctrl+Shift+A" },
+          { action: "regenerate", accelerator: "Ctrl+Shift+R" },
+          { action: "copy_answer", accelerator: "Ctrl+Shift+C" },
+          { action: "pause_capture", accelerator: "Ctrl+Shift+P" },
+          { action: "toggle_mini", accelerator: "Ctrl+Shift+M" },
+        ],
+        autoStart: false,
+        trayBehavior: "minimize",
+      } as T;
+
+    case "save_interface_config":
+      return (args?.config ?? null) as T;
+
+    case "get_autostart":
+      return false as T;
+
+    case "set_autostart":
+      return Boolean(args?.enabled) as T;
+
     case "get_storage_paths":
       return {
         dbPath: "C:\\Users\\demo\\AppData\\Roaming\\ai-interview\\ai-interview.db",

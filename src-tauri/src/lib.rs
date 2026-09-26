@@ -32,6 +32,10 @@ fn app_info() -> AppInfo {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .setup(|app| {
             // 数据库存放于系统应用数据目录
             let data_dir = app.path().app_data_dir()?;
@@ -101,6 +105,10 @@ pub fn run() {
             commands::get_privacy_config,
             commands::save_privacy_config,
             commands::clear_local_data,
+            commands::get_interface_config,
+            commands::save_interface_config,
+            commands::get_autostart,
+            commands::set_autostart,
             commands::get_storage_paths,
             commands::get_knowledge_config,
             commands::save_knowledge_config,

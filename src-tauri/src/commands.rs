@@ -241,6 +241,46 @@ pub fn restore_backup(
     Ok(summary)
 }
 
+/// 读取界面配置
+#[tauri::command]
+pub fn get_interface_config(
+    state: State<'_, AppState>,
+) -> Result<crate::config::interface::InterfaceConfig, String> {
+    let conn = state.lock()?;
+    crate::config::interface::load_interface_config(&conn).map_err(|e| e.to_string())
+}
+
+/// 保存界面配置
+#[tauri::command]
+pub fn save_interface_config(
+    state: State<'_, AppState>,
+    config: crate::config::interface::InterfaceConfig,
+) -> Result<crate::config::interface::InterfaceConfig, String> {
+    let conn = state.lock()?;
+    crate::config::interface::save_interface_config(&conn, &config)?;
+    crate::config::interface::load_interface_config(&conn).map_err(|e| e.to_string())
+}
+
+/// 查询开机自启状态
+#[tauri::command]
+pub fn get_autostart(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+/// 设置开机自启
+#[tauri::command]
+pub fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let manager = app.autolaunch();
+    if enabled {
+        manager.enable().map_err(|e| e.to_string())?;
+    } else {
+        manager.disable().map_err(|e| e.to_string())?;
+    }
+    manager.is_enabled().map_err(|e| e.to_string())
+}
+
 /// 当前生效的存储路径（用于界面展示默认值）
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]

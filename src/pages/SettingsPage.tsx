@@ -3,15 +3,14 @@ import { Settings as SettingsIcon } from "lucide-react";
 import AiSettingsSection from "../components/settings/AiSettingsSection";
 import AsrSettingsSection from "../components/settings/AsrSettingsSection";
 import AudioSettingsSection from "../components/settings/AudioSettingsSection";
+import InterfaceSettingsSection from "../components/settings/InterfaceSettingsSection";
 import KnowledgeSettingsSection from "../components/settings/KnowledgeSettingsSection";
 import ModelManagerSection from "../components/settings/ModelManagerSection";
 import PrivacySettingsSection from "../components/settings/PrivacySettingsSection";
 import { useModelProgress } from "../hooks/useModelProgress";
 import { useSettingsStore } from "../stores/settingsStore";
 
-const PLACEHOLDER_SECTIONS = [
-  { title: "界面", desc: "主题、快捷键、开机自启、托盘行为", task: "ST-07" },
-];
+const PLACEHOLDER_SECTIONS: { title: string; desc: string; task: string }[] = [];
 
 export default function SettingsPage() {
   const aiConfig = useSettingsStore((s) => s.aiConfig);
@@ -54,6 +53,11 @@ export default function SettingsPage() {
   const storagePaths = useSettingsStore((s) => s.storagePaths);
   const loadKnowledgeSettings = useSettingsStore((s) => s.loadKnowledgeSettings);
   const saveKnowledgeConfig = useSettingsStore((s) => s.saveKnowledgeConfig);
+  const interfaceConfig = useSettingsStore((s) => s.interfaceConfig);
+  const autoStartEnabled = useSettingsStore((s) => s.autoStartEnabled);
+  const loadInterfaceSettings = useSettingsStore((s) => s.loadInterfaceSettings);
+  const saveInterfaceConfig = useSettingsStore((s) => s.saveInterfaceConfig);
+  const setAutoStart = useSettingsStore((s) => s.setAutoStart);
 
   // 订阅模型下载进度事件
   useModelProgress(applyModelProgress);
@@ -67,6 +71,7 @@ export default function SettingsPage() {
     loadPrivacySettings();
     loadModels();
     loadKnowledgeSettings();
+    loadInterfaceSettings();
   }, [
     loadAiSettings,
     loadAsrSettings,
@@ -74,6 +79,7 @@ export default function SettingsPage() {
     loadPrivacySettings,
     loadModels,
     loadKnowledgeSettings,
+    loadInterfaceSettings,
   ]);
 
   useEffect(() => {
@@ -156,6 +162,15 @@ export default function SettingsPage() {
               clearing={clearing}
               onSave={savePrivacyConfig}
               onClearData={clearLocalData}
+            />
+          )}
+
+          {interfaceConfig && (
+            <InterfaceSettingsSection
+              config={interfaceConfig}
+              autoStartEnabled={autoStartEnabled}
+              onSave={saveInterfaceConfig}
+              onToggleAutoStart={setAutoStart}
             />
           )}
 

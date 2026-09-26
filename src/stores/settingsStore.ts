@@ -8,6 +8,7 @@ import type {
   AudioConfig,
   AudioDevice,
   ConnectionTest,
+  InterfaceConfig,
   KnowledgeConfig,
   ModelProgress,
   ModelStatus,
@@ -61,6 +62,13 @@ interface SettingsState {
   loadAudioSettings: () => Promise<void>;
   refreshAudioDevices: () => Promise<void>;
   saveAudioConfig: (config: AudioConfig) => Promise<void>;
+  /** 界面配置 */
+  interfaceConfig: InterfaceConfig | null;
+  /** 系统级开机自启状态 */
+  autoStartEnabled: boolean;
+  loadInterfaceSettings: () => Promise<void>;
+  saveInterfaceConfig: (config: InterfaceConfig) => Promise<void>;
+  setAutoStart: (enabled: boolean) => Promise<void>;
   /** 知识库配置 */
   knowledgeConfig: KnowledgeConfig | null;
   /** 当前生效的存储路径 */
@@ -114,8 +122,30 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     asrCredentials: {},
     audioConfig: null,
     audioDevices: [],
+    interfaceConfig: null,
+    autoStartEnabled: false,
     knowledgeConfig: null,
     storagePaths: null,
+
+    loadInterfaceSettings: () =>
+      Promise.all([
+        ipc<InterfaceConfig>("get_interface_config"),
+        ipc<boolean>("get_autostart"),
+      ])
+        .then(([interfaceConfig, autoStartEnabled]) =>
+          set({ interfaceConfig, autoStartEnabled })
+        )
+        .catch((err) => fail("加载界面配置", err)),
+
+    saveInterfaceConfig: (config) =>
+      ipc<InterfaceConfig>("save_interface_config", { config })
+        .then((saved) => set({ interfaceConfig: saved }))
+        .catch((err) => fail("保存界面配置", err)),
+
+    setAutoStart: (enabled) =>
+      ipc<boolean>("set_autostart", { enabled })
+        .then((autoStartEnabled) => set({ autoStartEnabled }))
+        .catch((err) => fail("设置开机自启", err)),
     models: [],
     modelProgress: {},
     downloadingId: null,

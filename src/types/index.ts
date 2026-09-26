@@ -194,9 +194,21 @@ export interface AudioConfig {
   systemDeviceId: string | null;
 }
 
+export type HotkeyAction =
+  | "ask"
+  | "regenerate"
+  | "copy_answer"
+  | "pause_capture"
+  | "toggle_mini";
+
+export interface HotkeyBinding {
+  action: string;
+  accelerator: string;
+}
+
 export interface InterfaceConfig {
   theme: "dark" | "light";
-  hotkeys: Record<string, string>;
+  hotkeys: HotkeyBinding[];
   autoStart: boolean;
   trayBehavior: "minimize" | "quit";
 }
