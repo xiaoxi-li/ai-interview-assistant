@@ -98,7 +98,7 @@ impl<'a> TranscriptRepo<'a> {
     pub fn latest_open_session(&self) -> rusqlite::Result<Option<SessionDto>> {
         let sql = format!(
             "SELECT {SESSION_COLUMNS} FROM sessions WHERE ended_at IS NULL
-             ORDER BY started_at DESC LIMIT 1"
+             ORDER BY started_at DESC, rowid DESC LIMIT 1"
         );
         self.conn.query_row(&sql, [], map_session).optional()
     }
@@ -165,6 +165,16 @@ impl<'a> TranscriptRepo<'a> {
     pub fn count_segments(&self, session_id: &str) -> rusqlite::Result<usize> {
         let count: i64 = self.conn.query_row(
             "SELECT count(*) FROM transcript_segments WHERE session_id = ?1",
+            params![session_id],
+            |row| row.get(0),
+        )?;
+        Ok(count as usize)
+    }
+
+    /// 仅统计最终结果条数（会话列表展示用）
+    pub fn count_finals(&self, session_id: &str) -> rusqlite::Result<usize> {
+        let count: i64 = self.conn.query_row(
+            "SELECT count(*) FROM transcript_segments WHERE session_id = ?1 AND is_final = 1",
             params![session_id],
             |row| row.get(0),
         )?;

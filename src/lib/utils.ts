@@ -35,3 +35,27 @@ export function excerpt(text: string, max = 120): string {
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
+
+/** 时间戳 → 相对会话开始的偏移（mm:ss），用于回放时间线 */
+export function formatClock(ts: number, origin = 0): string {
+  const totalSeconds = Math.max(0, Math.floor((ts - origin) / 1000));
+  const mm = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+  const ss = String(totalSeconds % 60).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
+/** 时间戳 → 本地日期时间（用于会话列表与详情头部） */
+export function formatDateTime(ts: number): string {
+  const d = new Date(ts);
+  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+  return `${date} ${formatTime(ts).slice(0, 5)}`;
+}
+
+/** 文件大小展示 */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}

@@ -1541,6 +1541,59 @@ pub fn analyze_question_text(text: String) -> QuestionScore {
     crate::interview::question::analyze(&text)
 }
 
+// ==================== 会话记录（IA-10） ====================
+
+/// 列出历史会话（按开始时间倒序）
+#[tauri::command]
+pub fn list_sessions(
+    state: State<'_, AppState>,
+    limit: Option<usize>,
+) -> Result<Vec<crate::interview::SessionSummaryDto>, String> {
+    let conn = state.lock()?;
+    crate::interview::session::list_sessions(&conn, limit.unwrap_or(100)).map_err(|e| e.to_string())
+}
+
+/// 读取会话详情（转写时间线 + 问答记录）
+#[tauri::command]
+pub fn get_session_detail(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<crate::interview::SessionDetailDto, String> {
+    let conn = state.lock()?;
+    crate::interview::session::session_detail(&conn, &session_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("会话不存在：{session_id}"))
+}
+
+/// 删除会话（转写与问答级联删除）
+#[tauri::command]
+pub fn delete_session(state: State<'_, AppState>, session_id: String) -> Result<bool, String> {
+    let conn = state.lock()?;
+    crate::interview::session::delete_session(&conn, &session_id).map_err(|e| e.to_string())
+}
+
+/// 导出会话（format: markdown / json）
+#[tauri::command]
+pub fn export_session(
+    state: State<'_, AppState>,
+    session_id: String,
+    dest: String,
+    format: String,
+) -> Result<crate::interview::SessionExportSummary, String> {
+    let detail = {
+        let conn = state.lock()?;
+        crate::interview::session::session_detail(&conn, &session_id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("会话不存在：{session_id}"))?
+    };
+    // 文件写入不持有数据库锁
+    crate::interview::session::export_session_to_file(
+        &detail,
+        std::path::Path::new(&dest),
+        &format,
+    )
+}
+
 // ==================== 知识库召回（IA-07） ====================
 
 /// 按问题召回知识库片段，并把引用来源写回问答记录

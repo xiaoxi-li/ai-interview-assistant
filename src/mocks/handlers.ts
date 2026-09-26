@@ -362,6 +362,80 @@ export async function mockInvoke<T>(
         ts: Date.now(),
       } as T;
 
+    // ---------- 会话记录（IA-10） ----------
+    case "list_sessions":
+      return [
+        {
+          id: "s-mock-1",
+          title: "面试会话 · 双通道",
+          startedAt: Date.now() - 3_600_000,
+          endedAt: Date.now() - 2_400_000,
+          segmentCount: 12,
+          questionCount: 3,
+        },
+        {
+          id: "s-mock-2",
+          title: "面试会话 · system",
+          startedAt: Date.now() - 86_400_000,
+          endedAt: null,
+          segmentCount: 4,
+          questionCount: 1,
+        },
+      ] as T;
+
+    case "get_session_detail": {
+      const sessionId = String(args?.sessionId ?? "s-mock-1");
+      const startedAt = Date.now() - 3_600_000;
+      return {
+        session: {
+          id: sessionId,
+          title: "面试会话 · 双通道",
+          startedAt,
+          endedAt: startedAt + 1_200_000,
+        },
+        segments: [
+          {
+            id: "t1",
+            sessionId,
+            speaker: "interviewer",
+            text: "介绍一下你最近负责的项目",
+            isFinal: true,
+            ts: startedAt + 12_000,
+          },
+          {
+            id: "t2",
+            sessionId,
+            speaker: "me",
+            text: "我负责桌面端应用的架构设计",
+            isFinal: true,
+            ts: startedAt + 20_000,
+          },
+        ],
+        qa: [
+          {
+            id: "q-mock-1",
+            sessionId,
+            question: "介绍一下你最近负责的项目",
+            answer: "我负责桌面端应用架构设计，主要做模块拆分与性能优化。",
+            sources: [{ noteId: "note-mock-1", title: "项目架构设计" }],
+            ts: startedAt + 12_000,
+          },
+        ],
+      } as T;
+    }
+
+    case "delete_session":
+      return true as T;
+
+    case "export_session":
+      return {
+        path: String(args?.dest ?? ""),
+        format: String(args?.format ?? "markdown"),
+        segments: 2,
+        questions: 1,
+        bytes: 2048,
+      } as T;
+
     case "recall_for_question":
       return {
         question: "介绍一下你最近负责的项目",

@@ -6,7 +6,13 @@
 pub mod answer;
 pub mod question;
 pub mod recall;
+pub mod session;
 pub mod store;
+
+pub use session::{
+    delete_session, export_session_to_file, list_sessions, session_detail, session_to_json,
+    session_to_markdown, SessionDetailDto, SessionExportSummary, SessionSummaryDto,
+};
 
 pub use answer::{build_answer_messages, render_context, source_refs, SYSTEM_PROMPT};
 

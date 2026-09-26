@@ -185,6 +185,10 @@ pub fn run() {
             commands::backup_database,
             commands::restore_backup,
             commands::set_stealth_window,
+            commands::list_sessions,
+            commands::get_session_detail,
+            commands::delete_session,
+            commands::export_session,
             commands::apply_global_hotkeys,
         ])
         // 托盘行为：关闭主窗口时按配置最小化到托盘（IA-11）

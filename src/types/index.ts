@@ -162,6 +162,39 @@ export interface SourceRef {
   title: string;
 }
 
+/** 会话摘要（列表） */
+export interface SessionSummary {
+  id: string;
+  title: string;
+  startedAt: number;
+  endedAt: number | null;
+  /** 最终转写条数 */
+  segmentCount: number;
+  /** 识别出的问题数 */
+  questionCount: number;
+}
+
+/** 会话详情（回放） */
+export interface SessionDetail {
+  session: {
+    id: string;
+    title: string;
+    startedAt: number;
+    endedAt: number | null;
+  };
+  segments: TranscriptSegment[];
+  qa: QaPair[];
+}
+
+/** 会话导出结果 */
+export interface SessionExportSummary {
+  path: string;
+  format: string;
+  segments: number;
+  questions: number;
+  bytes: number;
+}
+
 /** 问答对（qa_pairs） */
 export interface QaPair {
   id: string;
