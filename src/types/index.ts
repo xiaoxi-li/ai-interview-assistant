@@ -104,12 +104,19 @@ export interface TranscriptPush {
 export interface AsrSessionStatus {
   running: boolean;
   sessionId: string | null;
-  source: "mic" | "system" | null;
+  /** dual 表示双通道（说话人区分）会话 */
+  source: "mic" | "system" | "dual" | null;
   speaker: Speaker | null;
   engine: string | null;
   startedAt: number | null;
   /** 采集是否已暂停 */
   paused: boolean;
+  /** 是否双通道（区分「我」与「面试官」） */
+  dual: boolean;
+  /** 麦克风通道是否启用回声消除 */
+  aecEnabled: boolean;
+  /** 回声抑制量（dB） */
+  aecErleDb: number | null;
 }
 
 /** 本地 ASR 引擎信息 */
@@ -218,7 +225,12 @@ export interface QuestionScore {
 /** 音频采集状态 */
 export interface CaptureStatus {
   running: boolean;
+  /** 单路采集时的来源；双通道并行时为 null */
   source: "mic" | "system" | null;
+  /** 麦克风通道是否在采集 */
+  micRunning: boolean;
+  /** 系统音频通道是否在采集 */
+  systemRunning: boolean;
   micDevice: string;
   systemDevice: string;
   loopbackAvailable: boolean;

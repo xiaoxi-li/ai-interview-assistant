@@ -77,6 +77,11 @@ interface InterviewState {
 
   loadAsrStatus: () => Promise<void>;
   startTranscription: (source: CaptureSource, deviceId?: string | null) => Promise<void>;
+  /** 启动双通道会话（IA-05：同时转写「我」与「面试官」） */
+  startDualTranscription: (
+    micDeviceId?: string | null,
+    systemDeviceId?: string | null
+  ) => Promise<void>;
   stopTranscription: () => Promise<void>;
   applyTranscriptPush: (push: TranscriptPush) => void;
   clearTranscript: () => void;
@@ -279,6 +284,33 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
         console.error("手动识别问题失败:", err);
         set({ asrError: String(err) });
       });
+    },
+
+    startDualTranscription: (micDeviceId, systemDeviceId) => {
+      set({ startingAsr: true, asrError: null, error: null });
+      return ipc<AsrSessionStatus>("start_dual_asr_session", {
+        micDeviceId: micDeviceId ?? null,
+        systemDeviceId: systemDeviceId ?? null,
+      })
+        .then((asrStatus) =>
+          set({
+            asrStatus,
+            startingAsr: false,
+            partial: null,
+            // 新会话：清空上一场残留
+            transcript: [],
+            currentQuestion: null,
+            questionManual: false,
+            questions: [],
+            currentQaId: null,
+            sources: [],
+            recallQueries: [],
+          })
+        )
+        .catch((err) => {
+          console.error("启动双通道转写失败:", err);
+          set({ startingAsr: false, asrError: String(err) });
+        });
     },
 
     setAsrPaused: (paused) => {

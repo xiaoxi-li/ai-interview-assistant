@@ -3,9 +3,12 @@
 //! **P0 决策**：ASR 只走本地通路（本地引擎 + VAD 分段），音频不出本机；
 //! 云端多服务商（讯飞/阿里/腾讯）协议适配整体延后至 P1，配置项与凭证管理保留。
 
+pub mod dual;
 pub mod engine;
 pub mod pipeline;
 pub mod store;
+
+pub use dual::{DualChannelSession, REFERENCE_WINDOW_MS};
 
 pub use engine::{LocalAsrEngine, ReplayEngine, SherpaOnnxEngine, LOCAL_ASR_MODEL_ID};
 pub use pipeline::{AsrPipeline, DEFAULT_PARTIAL_INTERVAL_MS};
@@ -33,6 +36,18 @@ pub enum AsrControl {
     TriggerQuestion,
 }
 
+/// 会话附加信息（构造 [`AsrSession`] 用）
+pub struct AsrSessionOptions {
+    pub source: String,
+    pub speaker: Speaker,
+    pub engine: String,
+    pub started_at: i64,
+    /// 是否双通道（IA-05 说话人区分）
+    pub dual: bool,
+    /// 是否启用回声消除（IA-02）
+    pub aec_enabled: bool,
+}
+
 /// 一次 ASR 会话的运行时句柄
 pub struct AsrSession {
     pub id: String,
@@ -40,6 +55,10 @@ pub struct AsrSession {
     pub speaker: Speaker,
     pub engine: String,
     pub started_at: i64,
+    pub dual: bool,
+    pub aec_enabled: bool,
+    /// 回声抑制量（f32 位模式，由采集泵持续更新）
+    pub erle_bits: std::sync::Arc<std::sync::atomic::AtomicU32>,
     control_tx: Option<Sender<AsrControl>>,
     pump: Option<JoinHandle<()>>,
 }
@@ -47,19 +66,20 @@ pub struct AsrSession {
 impl AsrSession {
     pub fn new(
         id: String,
-        source: String,
-        speaker: Speaker,
-        engine: String,
-        started_at: i64,
+        options: AsrSessionOptions,
+        erle_bits: std::sync::Arc<std::sync::atomic::AtomicU32>,
         control_tx: Sender<AsrControl>,
         pump: JoinHandle<()>,
     ) -> Self {
         Self {
             id,
-            source,
-            speaker,
-            engine,
-            started_at,
+            source: options.source,
+            speaker: options.speaker,
+            engine: options.engine,
+            started_at: options.started_at,
+            dual: options.dual,
+            aec_enabled: options.aec_enabled,
+            erle_bits,
             control_tx: Some(control_tx),
             pump: Some(pump),
         }

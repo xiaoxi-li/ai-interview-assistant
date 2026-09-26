@@ -39,7 +39,7 @@ pub fn create(app: &App) -> Result<(), String> {
     let mut builder = TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
         // 左键单击直接唤出窗口，不弹菜单（更符合面试中快速切换的习惯）
-        .menu_on_left_click(false)
+        .show_menu_on_left_click(false)
         .tooltip("AI 面试助手");
 
     if let Some(icon) = app.default_window_icon() {

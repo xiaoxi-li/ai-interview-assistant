@@ -25,6 +25,9 @@ const runningStatus: AsrSessionStatus = {
   engine: "sherpa-onnx",
   startedAt: 1000,
   paused: false,
+  dual: false,
+  aecEnabled: false,
+  aecErleDb: null,
 };
 
 const idleStatus: AsrSessionStatus = { ...runningStatus, running: false };

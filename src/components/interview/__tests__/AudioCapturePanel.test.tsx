@@ -16,6 +16,8 @@ const devices: AudioDevice[] = [
 const status: CaptureStatus = {
   running: false,
   source: null,
+  micRunning: false,
+  systemRunning: false,
   micDevice: "",
   systemDevice: "",
   loopbackAvailable: true,

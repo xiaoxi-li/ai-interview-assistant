@@ -7,13 +7,11 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-/// 音频采集管理器：麦克风与系统音频各持一路
+/// 音频采集管理器：麦克风与系统音频各持一路，支持**并行采集**（IA-05 双通道）
 #[derive(Default)]
 pub struct CaptureManager {
     pub mic: CpalCapture,
     pub system: CpalCapture,
-    /// 当前正在采集的来源（None 表示未采集）
-    pub running: Option<String>,
 }
 
 impl CaptureManager {
@@ -21,7 +19,41 @@ impl CaptureManager {
     pub fn stop_all(&mut self) {
         let _ = crate::audio::AudioCapture::stop(&mut self.mic);
         let _ = crate::audio::AudioCapture::stop(&mut self.system);
-        self.running = None;
+    }
+
+    /// 指定来源是否正在采集
+    pub fn is_running(&self, source: &str) -> bool {
+        match source {
+            "mic" => self.mic.is_running(),
+            "system" => self.system.is_running(),
+            _ => false,
+        }
+    }
+
+    /// 当前正在采集的来源列表（mic / system）
+    pub fn running_sources(&self) -> Vec<String> {
+        let mut sources = Vec::new();
+        if self.mic.is_running() {
+            sources.push("mic".to_string());
+        }
+        if self.system.is_running() {
+            sources.push("system".to_string());
+        }
+        sources
+    }
+
+    /// 是否有任一来源在采集
+    pub fn any_running(&self) -> bool {
+        self.mic.is_running() || self.system.is_running()
+    }
+
+    /// 按来源取采集句柄的可变引用
+    pub fn capture_mut(&mut self, source: &str) -> Option<&mut CpalCapture> {
+        match source {
+            "mic" => Some(&mut self.mic),
+            "system" => Some(&mut self.system),
+            _ => None,
+        }
     }
 }
 

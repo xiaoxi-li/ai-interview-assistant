@@ -497,8 +497,12 @@ pub fn analyze_vad_wav(
 #[serde(rename_all = "camelCase")]
 pub struct CaptureStatus {
     pub running: bool,
-    /// 当前采集来源：mic / system
+    /// 单路采集时的来源：mic / system（双通道并行时为 null）
     pub source: Option<String>,
+    /// 麦克风通道是否在采集
+    pub mic_running: bool,
+    /// 系统音频通道是否在采集
+    pub system_running: bool,
     pub mic_device: String,
     pub system_device: String,
     /// 是否检测到系统音频回环设备
@@ -507,9 +511,16 @@ pub struct CaptureStatus {
 
 fn capture_status(state: &AppState) -> Result<CaptureStatus, String> {
     let manager = state.capture_lock()?;
+    let sources = manager.running_sources();
     Ok(CaptureStatus {
-        running: manager.running.is_some(),
-        source: manager.running.clone(),
+        running: !sources.is_empty(),
+        source: if sources.len() == 1 {
+            sources.first().cloned()
+        } else {
+            None
+        },
+        mic_running: manager.mic.is_running(),
+        system_running: manager.system.is_running(),
         mic_device: manager.mic.device_name().to_string(),
         system_device: manager.system.device_name().to_string(),
         loopback_available: !crate::audio::loopback_candidates().is_empty(),
@@ -545,19 +556,15 @@ pub fn start_audio_capture(
 
     let (events, source_label) = {
         let mut manager = state.capture_lock()?;
-        // 单路采集：切换来源时先停止现有采集
-        manager.stop_all();
-
-        let capture = match source.as_str() {
-            "mic" => &mut manager.mic,
-            "system" => &mut manager.system,
-            other => return Err(format!("未知的采集来源：{other}")),
-        };
+        // 电平试听针对单一来源：先停止该来源（可能正占用其他设备），不影响另一路
+        let capture = manager
+            .capture_mut(&source)
+            .ok_or_else(|| format!("未知的采集来源：{source}"))?;
+        let _ = crate::audio::AudioCapture::stop(capture);
 
         let device = device_id.unwrap_or_default();
         capture.start(&device)?;
         let events = capture.take_events()?;
-        manager.running = Some(source.clone());
         (events, source)
     };
 
@@ -614,6 +621,12 @@ pub struct AsrSessionStatus {
     pub started_at: Option<i64>,
     /// 采集是否已暂停（IA-12）
     pub paused: bool,
+    /// 是否双通道（IA-05 说话人区分）
+    pub dual: bool,
+    /// 是否启用回声消除（IA-02）
+    pub aec_enabled: bool,
+    /// 回声抑制量（dB）；未启用回声消除时为 null
+    pub aec_erle_db: Option<f32>,
 }
 
 fn asr_status(state: &AppState) -> Result<AsrSessionStatus, String> {
@@ -628,6 +641,13 @@ fn asr_status(state: &AppState) -> Result<AsrSessionStatus, String> {
             engine: Some(session.engine.clone()),
             started_at: Some(session.started_at),
             paused,
+            dual: session.dual,
+            aec_enabled: session.aec_enabled,
+            aec_erle_db: if session.aec_enabled {
+                Some(f32::from_bits(session.erle_bits.load(Ordering::Relaxed)))
+            } else {
+                None
+            },
         },
         None => AsrSessionStatus {
             running: false,
@@ -637,6 +657,9 @@ fn asr_status(state: &AppState) -> Result<AsrSessionStatus, String> {
             engine: None,
             started_at: None,
             paused: false,
+            dual: false,
+            aec_enabled: false,
+            aec_erle_db: None,
         },
     })
 }
@@ -771,7 +794,6 @@ pub fn start_asr_session(
         };
         capture.start(device_id.as_deref().unwrap_or(""))?;
         let audio_rx = capture.take_events()?;
-        manager.running = Some(source.clone());
         audio_rx
     };
 
@@ -908,10 +930,361 @@ pub fn start_asr_session(
         let mut runtime = state.asr_lock()?;
         runtime.session = Some(AsrSession::new(
             session.id,
-            source,
-            speaker,
-            engine_name,
-            session.started_at,
+            crate::asr::AsrSessionOptions {
+                source,
+                speaker,
+                engine: engine_name,
+                started_at: session.started_at,
+                dual: false,
+                aec_enabled: false,
+            },
+            std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0)),
+            control_tx,
+            pump,
+        ));
+    }
+
+    asr_status(&state)
+}
+
+// ==================== 双通道会话（IA-05 说话人区分） ====================
+
+/// 解析实际使用的采集设备名：未指定时自动挑选（系统通道优先回环设备）
+fn resolve_capture_device(requested: &str, prefer_loopback: bool) -> Result<String, String> {
+    let requested = requested.trim();
+    if !requested.is_empty() {
+        return Ok(requested.to_string());
+    }
+
+    let devices = crate::audio::list_devices();
+    let inputs: Vec<&crate::audio::DeviceInfo> = devices
+        .iter()
+        .filter(|device| device.kind == crate::audio::DeviceKind::Input)
+        .collect();
+    let is_loopback = |device: &&crate::audio::DeviceInfo| {
+        crate::audio::is_loopback_device_name(&device.name)
+    };
+
+    if prefer_loopback {
+        if let Some(device) = inputs.iter().find(|device| is_loopback(device)) {
+            return Ok(device.name.clone());
+        }
+        // 缺少回环设备时退化为默认输入设备，并在前端提示
+        return inputs
+            .iter()
+            .find(|device| device.is_default)
+            .or_else(|| inputs.first())
+            .map(|device| device.name.clone())
+            .ok_or_else(|| {
+                "未检测到可用的系统音频来源：Windows 请启用「立体声混音」，macOS 请安装 BlackHole 等回环设备"
+                    .to_string()
+            });
+    }
+
+    inputs
+        .iter()
+        .find(|device| device.is_default && !is_loopback(device))
+        .or_else(|| inputs.iter().find(|device| !is_loopback(device)))
+        .or_else(|| inputs.first())
+        .map(|device| device.name.clone())
+        .ok_or_else(|| "未检测到可用的麦克风设备".to_string())
+}
+
+/// 推送电平事件
+fn emit_level(app: &tauri::AppHandle, source: &str, samples: &[f32], ts: i64) {
+    use tauri::Emitter;
+    let _ = app.emit(
+        "audio://level",
+        serde_json::json!({
+            "source": source,
+            "level": rms_level(samples),
+            "ts": ts,
+            "frames": samples.len(),
+        }),
+    );
+}
+
+/// 双通道采集泵：两路并行转写，麦克风通道先用系统音频作参考做回声消除
+#[allow(clippy::too_many_arguments)]
+fn spawn_dual_pump(
+    app: tauri::AppHandle,
+    conn: std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>,
+    paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    session_id: String,
+    mic_rx: mpsc::Receiver<crate::providers::types::AudioChunk>,
+    system_rx: mpsc::Receiver<crate::providers::types::AudioChunk>,
+    mic_engine: Box<dyn LocalAsrEngine>,
+    system_engine: Box<dyn LocalAsrEngine>,
+    aec_config: Option<crate::audio::AecConfig>,
+    vad_threshold: f32,
+    question_config: QuestionConfig,
+) -> (
+    mpsc::Sender<AsrControl>,
+    thread::JoinHandle<()>,
+    std::sync::Arc<std::sync::atomic::AtomicU32>,
+) {
+    let (control_tx, control_rx) = mpsc::channel::<AsrControl>();
+    let erle_bits = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let erle_handle = erle_bits.clone();
+    let app_handle = app.clone();
+    let conn_handle = conn.clone();
+    let auto_detect = question_config.auto_detect;
+
+    let pump = thread::spawn(move || {
+        let mut session = crate::asr::DualChannelSession::new(
+            mic_engine,
+            system_engine,
+            vad_threshold,
+            aec_config,
+        );
+        let mut detector = QuestionDetector::new(
+            question_config.threshold,
+            question_config.min_chars,
+            question_config.merge_window_ms,
+        );
+
+        let mut stopping = false;
+        let mut mic_closed = false;
+        let mut system_closed = false;
+
+        loop {
+            while let Ok(control) = control_rx.try_recv() {
+                match control {
+                    AsrControl::Stop => stopping = true,
+                    AsrControl::TriggerQuestion => {
+                        if let Some(question) = detector.trigger(now_ms()) {
+                            handle_detected_question(
+                                &app_handle,
+                                &conn_handle,
+                                &session_id,
+                                &question,
+                                true,
+                            );
+                        }
+                    }
+                }
+            }
+            if stopping {
+                break;
+            }
+
+            let paused_now = paused.load(Ordering::SeqCst);
+            let mut idle = true;
+
+            // 1) 系统音频通道（面试官）：作为 AEC 参考并转写
+            loop {
+                match system_rx.try_recv() {
+                    Ok(chunk) => {
+                        idle = false;
+                        if paused_now {
+                            continue;
+                        }
+                        if chunk.ts < 0 {
+                            emit_level(&app_handle, "system", &[], -1);
+                            continue;
+                        }
+                        let samples = pcm16_to_samples(&chunk.data);
+                        emit_level(&app_handle, "system", &samples, chunk.ts);
+                        let events = session.push_system_frame(&samples, chunk.ts);
+                        if !events.is_empty() {
+                            handle_transcript_events(
+                                &app_handle,
+                                &conn_handle,
+                                &session_id,
+                                &events,
+                            );
+                            feed_questions(
+                                &mut detector,
+                                &app_handle,
+                                &conn_handle,
+                                &session_id,
+                                auto_detect,
+                                &events,
+                            );
+                        }
+                    }
+                    Err(mpsc::TryRecvError::Empty) => break,
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        system_closed = true;
+                        break;
+                    }
+                }
+            }
+
+            // 2) 麦克风通道（我）：先回声消除再转写
+            loop {
+                match mic_rx.try_recv() {
+                    Ok(chunk) => {
+                        idle = false;
+                        if paused_now {
+                            continue;
+                        }
+                        if chunk.ts < 0 {
+                            emit_level(&app_handle, "mic", &[], -1);
+                            continue;
+                        }
+                        let samples = pcm16_to_samples(&chunk.data);
+                        emit_level(&app_handle, "mic", &samples, chunk.ts);
+                        let events = session.push_mic_frame(&samples, chunk.ts);
+                        if !events.is_empty() {
+                            handle_transcript_events(
+                                &app_handle,
+                                &conn_handle,
+                                &session_id,
+                                &events,
+                            );
+                        }
+                    }
+                    Err(mpsc::TryRecvError::Empty) => break,
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        mic_closed = true;
+                        break;
+                    }
+                }
+            }
+
+            // 回声抑制量上报（供界面展示）
+            if session.aec_enabled() {
+                if let Some(erle) = session.aec_erle_db() {
+                    erle_handle.store(erle.to_bits(), Ordering::Relaxed);
+                }
+            }
+
+            if mic_closed && system_closed {
+                break;
+            }
+            if idle {
+                thread::sleep(Duration::from_millis(5));
+            }
+        }
+
+        // 冲刷未完成的语音段与问题缓冲
+        let tail = session.flush();
+        if !tail.is_empty() {
+            handle_transcript_events(&app_handle, &conn_handle, &session_id, &tail);
+            feed_questions(
+                &mut detector,
+                &app_handle,
+                &conn_handle,
+                &session_id,
+                auto_detect,
+                &tail,
+            );
+        }
+        if auto_detect {
+            if let Some(question) = detector.flush() {
+                handle_detected_question(&app_handle, &conn_handle, &session_id, &question, false);
+            }
+        }
+    });
+
+    (control_tx, pump, erle_bits)
+}
+
+/// 启动双通道会话：麦克风与系统音频并行采集，分别转写为「我」与「面试官」
+#[tauri::command]
+pub fn start_dual_asr_session(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    mic_device_id: Option<String>,
+    system_device_id: Option<String>,
+) -> Result<AsrSessionStatus, String> {
+    // 1) 读取配置
+    let (asr_config, audio_config, question_config) = {
+        let conn = state.lock()?;
+        (
+            crate::config::asr::load_asr_config(&conn).map_err(|e| e.to_string())?,
+            crate::config::audio::load_audio_config(&conn).map_err(|e| e.to_string())?,
+            crate::config::interview::load_question_config(&conn).map_err(|e| e.to_string())?,
+        )
+    };
+    if asr_config.mode == AsrMode::Cloud && !CLOUD_ASR_IMPLEMENTED {
+        return Err(
+            "云端 ASR 尚未接入（计划于 P1）。请到「设置 → 语音识别」将模式切换为「本地（隐私优先）」后再开始转写。"
+                .into(),
+        );
+    }
+
+    // 2) 两路各建一个引擎实例（避免共享可变状态）
+    let mic_engine = SherpaOnnxEngine::new(&state.models_dir, &asr_config.language)
+        .map_err(|e| e.to_string())?;
+    let engine_name = mic_engine.name().to_string();
+    let system_engine = SherpaOnnxEngine::new(&state.models_dir, &asr_config.language)
+        .map_err(|e| e.to_string())?;
+
+    // 3) 解析设备
+    let mic_requested = mic_device_id
+        .or_else(|| audio_config.mic_device_id.clone())
+        .unwrap_or_default();
+    let system_requested = system_device_id
+        .or_else(|| audio_config.system_device_id.clone())
+        .unwrap_or_default();
+    let mic_device = resolve_capture_device(&mic_requested, false)?;
+    let system_device = resolve_capture_device(&system_requested, true)?;
+
+    // 4) 停止既有会话与采集，启动双路
+    {
+        let mut runtime = state.asr_lock()?;
+        runtime.stop();
+    }
+    state.asr_paused.store(false, Ordering::SeqCst);
+
+    let (mic_rx, system_rx) = {
+        let mut manager = state.capture_lock()?;
+        manager.stop_all();
+        manager.mic.start(&mic_device)?;
+        let mic_rx = manager.mic.take_events()?;
+        manager.system.start(&system_device)?;
+        let system_rx = manager.system.take_events()?;
+        (mic_rx, system_rx)
+    };
+
+    // 5) 会话记录
+    let session = {
+        let conn = state.lock()?;
+        TranscriptRepo::new(&conn)
+            .start_session("面试会话 · 双通道")
+            .map_err(|e| e.to_string())?
+    };
+
+    // 6) 回声消除配置（麦克风通道使用系统音频作为参考）
+    let aec_config = if audio_config.aec_enabled {
+        Some(crate::audio::AecConfig {
+            enabled: true,
+            ..Default::default()
+        })
+    } else {
+        None
+    };
+
+    let (control_tx, pump, erle_bits) = spawn_dual_pump(
+        app,
+        state.conn.clone(),
+        state.asr_paused.clone(),
+        session.id.clone(),
+        mic_rx,
+        system_rx,
+        Box::new(mic_engine),
+        Box::new(system_engine),
+        aec_config.clone(),
+        asr_config.vad_threshold,
+        question_config,
+    );
+
+    {
+        let mut runtime = state.asr_lock()?;
+        runtime.session = Some(AsrSession::new(
+            session.id.clone(),
+            crate::asr::AsrSessionOptions {
+                source: "dual".to_string(),
+                // 问题识别以面试官通道为准
+                speaker: Speaker::Interviewer,
+                engine: engine_name,
+                started_at: session.started_at,
+                dual: true,
+                aec_enabled: aec_config.is_some(),
+            },
+            erle_bits,
             control_tx,
             pump,
         ));

@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Eraser, Mic, Play, Square, Volume2 } from "lucide-react";
+import {
+  AlertCircle,
+  Eraser,
+  Mic,
+  Play,
+  Square,
+  Users,
+  Volume2,
+  Waves,
+} from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useTranscriptEvents } from "../../hooks/useTranscriptEvents";
 import { useInterviewStore, type CaptureSource } from "../../stores/interviewStore";
@@ -10,6 +19,9 @@ const SPEAKER_LABEL: Record<string, string> = {
   interviewer: "面试官",
 };
 
+/** 采集模式：单路（mic/system）或双通道（dual） */
+type CaptureMode = CaptureSource | "dual";
+
 export default function TranscriptPanel() {
   const asrStatus = useInterviewStore((s) => s.asrStatus);
   const engines = useInterviewStore((s) => s.engines);
@@ -19,11 +31,12 @@ export default function TranscriptPanel() {
   const startingAsr = useInterviewStore((s) => s.startingAsr);
   const loadAsrStatus = useInterviewStore((s) => s.loadAsrStatus);
   const startTranscription = useInterviewStore((s) => s.startTranscription);
+  const startDualTranscription = useInterviewStore((s) => s.startDualTranscription);
   const stopTranscription = useInterviewStore((s) => s.stopTranscription);
   const applyTranscriptPush = useInterviewStore((s) => s.applyTranscriptPush);
   const clearTranscript = useInterviewStore((s) => s.clearTranscript);
 
-  const [source, setSource] = useState<CaptureSource>("system");
+  const [mode, setMode] = useState<CaptureMode>("dual");
   const listRef = useRef<HTMLDivElement>(null);
 
   useTranscriptEvents(applyTranscriptPush);
@@ -42,6 +55,20 @@ export default function TranscriptPanel() {
   const engine = engines[0];
   const engineBlocked = Boolean(engine && !engine.ready);
 
+  const start = () => {
+    if (mode === "dual") {
+      startDualTranscription(null, null);
+    } else {
+      startTranscription(mode, null);
+    }
+  };
+
+  const statusText = !running
+    ? "已停止"
+    : asrStatus?.dual
+      ? "双通道转写中"
+      : "转写中";
+
   return (
     <section className="glass flex min-h-0 flex-col rounded-xl p-4">
       <header className="mb-3 flex items-center gap-2">
@@ -53,10 +80,19 @@ export default function TranscriptPanel() {
             running ? "bg-success/15 text-success" : "bg-white/[0.06] text-text-subtle"
           )}
         >
-          {running ? "转写中" : "已停止"}
+          {statusText}
         </span>
         {asrStatus?.engine && (
           <span className="text-[10px] text-text-subtle">{asrStatus.engine}</span>
+        )}
+        {asrStatus?.aecEnabled && (
+          <span
+            className="flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] text-primary-3"
+            title="回声消除已启用：以系统音频为参考消除麦克风中的面试官回声"
+          >
+            <Waves className="h-3 w-3" />
+            回声抑制 {(asrStatus.aecErleDb ?? 0).toFixed(1)}dB
+          </span>
         )}
         <button
           title="清空当前转写显示"
@@ -67,10 +103,11 @@ export default function TranscriptPanel() {
         </button>
       </header>
 
-      {/* 来源选择 */}
+      {/* 采集模式选择 */}
       <div className="mb-3 flex gap-1.5">
         {(
           [
+            { key: "dual" as const, label: "双通道（区分说话人）", icon: Users },
             { key: "system" as const, label: "面试官（系统音频）", icon: Volume2 },
             { key: "mic" as const, label: "我（麦克风）", icon: Mic },
           ]
@@ -78,10 +115,10 @@ export default function TranscriptPanel() {
           <button
             key={key}
             disabled={running}
-            onClick={() => setSource(key)}
+            onClick={() => setMode(key)}
             className={cn(
               "flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-60",
-              source === key
+              mode === key
                 ? "border-primary/40 bg-primary/15 text-primary-3"
                 : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
             )}
@@ -115,7 +152,7 @@ export default function TranscriptPanel() {
           <p className="px-1 py-6 text-center text-[11px] leading-relaxed text-text-subtle">
             暂无转写内容。
             <br />
-            开始转写后，面试官语音将实时显示在此处（音频不出本机）。
+            双通道模式可同时转写「我」与「面试官」（音频不出本机）。
           </p>
         ) : (
           <ul className="flex flex-col gap-1.5">
@@ -149,7 +186,7 @@ export default function TranscriptPanel() {
       </div>
 
       <button
-        onClick={() => (running ? stopTranscription() : startTranscription(source, null))}
+        onClick={() => (running ? stopTranscription() : start())}
         disabled={startingAsr}
         className={cn(
           "mt-3 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-4 py-2 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-50",

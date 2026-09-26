@@ -176,31 +176,29 @@ export async function mockInvoke<T>(
       ] as T;
 
     case "audio_capture_status":
-      return {
-        running: false,
-        source: null,
-        micDevice: "",
-        systemDevice: "",
-        loopbackAvailable: true,
-      } as T;
-
-    case "start_audio_capture":
-      return {
-        running: true,
-        source: String(args?.source ?? "mic"),
-        micDevice: "麦克风 (USB Audio)",
-        systemDevice: "立体声混音 (Realtek)",
-        loopbackAvailable: true,
-      } as T;
-
     case "stop_audio_capture":
       return {
         running: false,
         source: null,
+        micRunning: false,
+        systemRunning: false,
         micDevice: "麦克风 (USB Audio)",
         systemDevice: "立体声混音 (Realtek)",
         loopbackAvailable: true,
       } as T;
+
+    case "start_audio_capture": {
+      const source = String(args?.source ?? "mic");
+      return {
+        running: true,
+        source,
+        micRunning: source === "mic",
+        systemRunning: source === "system",
+        micDevice: "麦克风 (USB Audio)",
+        systemDevice: "立体声混音 (Realtek)",
+        loopbackAvailable: true,
+      } as T;
+    }
 
     // ---------- 本地 ASR（P0 唯一通路） ----------
     case "asr_session_status":
@@ -212,6 +210,23 @@ export async function mockInvoke<T>(
         engine: null,
         startedAt: null,
         paused: false,
+        dual: false,
+        aecEnabled: false,
+        aecErleDb: null,
+      } as T;
+
+    case "start_dual_asr_session":
+      return {
+        running: true,
+        sessionId: "s-mock-dual",
+        source: "dual",
+        speaker: "interviewer",
+        engine: "sherpa-onnx",
+        startedAt: Date.now(),
+        paused: false,
+        dual: true,
+        aecEnabled: true,
+        aecErleDb: 0,
       } as T;
 
     case "set_asr_paused":
@@ -223,6 +238,9 @@ export async function mockInvoke<T>(
         engine: "sherpa-onnx",
         startedAt: Date.now(),
         paused: Boolean(args?.paused),
+        dual: false,
+        aecEnabled: false,
+        aecErleDb: null,
       } as T;
 
     case "list_asr_engines":

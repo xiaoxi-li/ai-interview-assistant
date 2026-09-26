@@ -29,6 +29,9 @@ const runningStatus: AsrSessionStatus = {
   engine: "sherpa-onnx",
   startedAt: 1000,
   paused: false,
+  dual: false,
+  aecEnabled: false,
+  aecErleDb: null,
 };
 
 const question: DetectedQuestion = {

@@ -29,6 +29,9 @@ const idleStatus: AsrSessionStatus = {
   engine: null,
   startedAt: null,
   paused: false,
+  dual: false,
+  aecEnabled: false,
+  aecErleDb: null,
 };
 
 function finalLine(overrides: Partial<TranscriptLine> = {}): TranscriptLine {
@@ -52,6 +55,7 @@ function resetStore(overrides: Partial<ReturnType<typeof useInterviewStore.getSt
     startingAsr: false,
     loadAsrStatus: vi.fn().mockResolvedValue(undefined),
     startTranscription: vi.fn().mockResolvedValue(undefined),
+    startDualTranscription: vi.fn().mockResolvedValue(undefined),
     stopTranscription: vi.fn().mockResolvedValue(undefined),
     applyTranscriptPush: vi.fn(),
     clearTranscript: vi.fn(),
@@ -113,17 +117,41 @@ describe("TranscriptPanel", () => {
     ).toBe(true);
   });
 
-  it("点击开始转写按当前来源触发", () => {
+  it("默认双通道模式，点击开始调用双通道启动", () => {
+    const startDualTranscription = vi.fn().mockResolvedValue(undefined);
+    resetStore({ startDualTranscription });
+    render(<TranscriptPanel />);
+
+    fireEvent.click(screen.getByText("开始转写"));
+    expect(startDualTranscription).toHaveBeenCalledWith(null, null);
+  });
+
+  it("切换到单通道后按来源启动", () => {
     const startTranscription = vi.fn().mockResolvedValue(undefined);
     resetStore({ startTranscription });
     render(<TranscriptPanel />);
 
-    fireEvent.click(screen.getByText("开始转写"));
-    expect(startTranscription).toHaveBeenCalledWith("system", null);
-
     fireEvent.click(screen.getByText("我（麦克风）"));
     fireEvent.click(screen.getByText("开始转写"));
-    expect(startTranscription).toHaveBeenLastCalledWith("mic", null);
+    expect(startTranscription).toHaveBeenCalledWith("mic", null);
+  });
+
+  it("双通道会话展示状态与回声抑制量", () => {
+    resetStore({
+      asrStatus: {
+        ...idleStatus,
+        running: true,
+        source: "dual",
+        dual: true,
+        engine: "sherpa-onnx",
+        aecEnabled: true,
+        aecErleDb: 21.4,
+      },
+    });
+    render(<TranscriptPanel />);
+
+    expect(screen.getByText("双通道转写中")).toBeTruthy();
+    expect(screen.getByText(/回声抑制 21\.4dB/)).toBeTruthy();
   });
 
   it("转写中点击按钮触发停止", () => {

@@ -151,6 +151,7 @@ pub fn run() {
             commands::mini_window_open,
             commands::list_asr_engines,
             commands::start_asr_session,
+            commands::start_dual_asr_session,
             commands::stop_asr_session,
             commands::list_transcript_segments,
             commands::list_transcript_finals,
