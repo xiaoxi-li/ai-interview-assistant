@@ -65,6 +65,22 @@ export async function mockInvoke<T>(
     case "save_ai_config":
       return (args?.config ?? null) as T;
 
+    case "get_storage_paths":
+      return {
+        dbPath: "C:\\Users\\demo\\AppData\\Roaming\\ai-interview\\ai-interview.db",
+        modelsDir: "C:\\Users\\demo\\AppData\\Roaming\\ai-interview\\models",
+      } as T;
+
+    case "get_knowledge_config":
+      return {
+        dbPath: null,
+        modelsDir: null,
+        embeddingModel: "embedding-minilm-zh",
+      } as T;
+
+    case "save_knowledge_config":
+      return (args?.config ?? null) as T;
+
     case "list_models":
       return [
         {

@@ -3,13 +3,13 @@ import { Settings as SettingsIcon } from "lucide-react";
 import AiSettingsSection from "../components/settings/AiSettingsSection";
 import AsrSettingsSection from "../components/settings/AsrSettingsSection";
 import AudioSettingsSection from "../components/settings/AudioSettingsSection";
+import KnowledgeSettingsSection from "../components/settings/KnowledgeSettingsSection";
 import ModelManagerSection from "../components/settings/ModelManagerSection";
 import PrivacySettingsSection from "../components/settings/PrivacySettingsSection";
 import { useModelProgress } from "../hooks/useModelProgress";
 import { useSettingsStore } from "../stores/settingsStore";
 
 const PLACEHOLDER_SECTIONS = [
-  { title: "知识库", desc: "存储路径、向量库路径、默认嵌入模型", task: "ST-06" },
   { title: "界面", desc: "主题、快捷键、开机自启、托盘行为", task: "ST-07" },
 ];
 
@@ -50,6 +50,10 @@ export default function SettingsPage() {
   const downloadModel = useSettingsStore((s) => s.downloadModel);
   const deleteModel = useSettingsStore((s) => s.deleteModel);
   const applyModelProgress = useSettingsStore((s) => s.applyModelProgress);
+  const knowledgeConfig = useSettingsStore((s) => s.knowledgeConfig);
+  const storagePaths = useSettingsStore((s) => s.storagePaths);
+  const loadKnowledgeSettings = useSettingsStore((s) => s.loadKnowledgeSettings);
+  const saveKnowledgeConfig = useSettingsStore((s) => s.saveKnowledgeConfig);
 
   // 订阅模型下载进度事件
   useModelProgress(applyModelProgress);
@@ -62,12 +66,14 @@ export default function SettingsPage() {
     loadAudioSettings();
     loadPrivacySettings();
     loadModels();
+    loadKnowledgeSettings();
   }, [
     loadAiSettings,
     loadAsrSettings,
     loadAudioSettings,
     loadPrivacySettings,
     loadModels,
+    loadKnowledgeSettings,
   ]);
 
   useEffect(() => {
@@ -121,6 +127,15 @@ export default function SettingsPage() {
               devices={audioDevices}
               onRefresh={refreshAudioDevices}
               onSave={saveAudioConfig}
+            />
+          )}
+
+          {knowledgeConfig && (
+            <KnowledgeSettingsSection
+              config={knowledgeConfig}
+              storagePaths={storagePaths}
+              models={models}
+              onSave={saveKnowledgeConfig}
             />
           )}
 

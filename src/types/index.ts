@@ -95,6 +95,19 @@ export interface AIConfig {
   temperature: number;
 }
 
+/** 知识库存储配置（路径变更需重启生效） */
+export interface KnowledgeConfig {
+  dbPath: string | null;
+  modelsDir: string | null;
+  embeddingModel: string;
+}
+
+/** 当前生效的存储路径 */
+export interface StoragePaths {
+  dbPath: string;
+  modelsDir: string;
+}
+
 export type ModelKind = "embedding" | "vad" | "asr";
 
 /** 本地模型清单条目 */

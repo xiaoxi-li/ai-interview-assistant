@@ -8,10 +8,12 @@ import type {
   AudioConfig,
   AudioDevice,
   ConnectionTest,
+  KnowledgeConfig,
   ModelProgress,
   ModelStatus,
   PlatformPreset,
   PrivacyConfig,
+  StoragePaths,
 } from "../types";
 
 /** API Key 配置状态（后端只回传掩码，不泄露完整密钥） */
@@ -59,6 +61,12 @@ interface SettingsState {
   loadAudioSettings: () => Promise<void>;
   refreshAudioDevices: () => Promise<void>;
   saveAudioConfig: (config: AudioConfig) => Promise<void>;
+  /** 知识库配置 */
+  knowledgeConfig: KnowledgeConfig | null;
+  /** 当前生效的存储路径 */
+  storagePaths: StoragePaths | null;
+  loadKnowledgeSettings: () => Promise<void>;
+  saveKnowledgeConfig: (config: KnowledgeConfig) => Promise<void>;
   /** 模型清单与安装状态 */
   models: ModelStatus[];
   /** 下载进度（按模型 ID） */
@@ -106,9 +114,26 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     asrCredentials: {},
     audioConfig: null,
     audioDevices: [],
+    knowledgeConfig: null,
+    storagePaths: null,
     models: [],
     modelProgress: {},
     downloadingId: null,
+
+    loadKnowledgeSettings: () =>
+      Promise.all([
+        ipc<KnowledgeConfig>("get_knowledge_config"),
+        ipc<StoragePaths>("get_storage_paths"),
+      ])
+        .then(([knowledgeConfig, storagePaths]) =>
+          set({ knowledgeConfig, storagePaths })
+        )
+        .catch((err) => fail("加载知识库配置", err)),
+
+    saveKnowledgeConfig: (config) =>
+      ipc<KnowledgeConfig>("save_knowledge_config", { config })
+        .then((saved) => set({ knowledgeConfig: saved }))
+        .catch((err) => fail("保存知识库配置", err)),
     privacyConfig: null,
     clearing: false,
     notice: null,

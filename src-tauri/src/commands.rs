@@ -241,6 +241,43 @@ pub fn restore_backup(
     Ok(summary)
 }
 
+/// 当前生效的存储路径（用于界面展示默认值）
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoragePaths {
+    pub db_path: String,
+    pub models_dir: String,
+}
+
+/// 读取当前存储路径
+#[tauri::command]
+pub fn get_storage_paths(state: State<'_, AppState>) -> StoragePaths {
+    StoragePaths {
+        db_path: state.db_path.display().to_string(),
+        models_dir: state.models_dir.display().to_string(),
+    }
+}
+
+/// 读取知识库配置
+#[tauri::command]
+pub fn get_knowledge_config(
+    state: State<'_, AppState>,
+) -> Result<crate::config::knowledge::KnowledgeConfig, String> {
+    let conn = state.lock()?;
+    crate::config::knowledge::load_knowledge_config(&conn).map_err(|e| e.to_string())
+}
+
+/// 保存知识库配置（路径变更需重启生效）
+#[tauri::command]
+pub fn save_knowledge_config(
+    state: State<'_, AppState>,
+    config: crate::config::knowledge::KnowledgeConfig,
+) -> Result<crate::config::knowledge::KnowledgeConfig, String> {
+    let conn = state.lock()?;
+    crate::config::knowledge::save_knowledge_config(&conn, &config)?;
+    crate::config::knowledge::load_knowledge_config(&conn).map_err(|e| e.to_string())
+}
+
 /// 列出模型清单与安装状态
 #[tauri::command]
 pub fn list_models(state: State<'_, AppState>) -> Result<Vec<crate::models::ModelStatus>, String> {
