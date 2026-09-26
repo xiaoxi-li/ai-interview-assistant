@@ -132,7 +132,7 @@ fn build_input_stream(
                 }
             },
             move |err| {
-                eprintln!("音频流错误：{err}");
+                tracing::warn!("音频流错误：{err}");
                 let _ = error_tx.send(AudioChunk {
                     data: Vec::new(),
                     sample_rate: 0,

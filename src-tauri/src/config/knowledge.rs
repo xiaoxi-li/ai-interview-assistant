@@ -91,7 +91,7 @@ pub fn load_knowledge_config(conn: &Connection) -> rusqlite::Result<KnowledgeCon
     match serde_json::from_str::<KnowledgeConfig>(&raw) {
         Ok(config) => Ok(config),
         Err(err) => {
-            eprintln!("知识库配置解析失败，回退默认值：{err}");
+            tracing::warn!("知识库配置解析失败，回退默认值：{err}");
             Ok(KnowledgeConfig::default())
         }
     }

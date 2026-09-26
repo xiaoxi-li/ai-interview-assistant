@@ -28,6 +28,9 @@ keyring = { version = "3", features = ["windows-native", "apple-native"] }
 ureq = { version = "2", features = ["json"] }
 cpal = "0.15"
 sha2 = "0.10"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-appender = "0.2"
 
 [profile.release]
 panic = "abort"

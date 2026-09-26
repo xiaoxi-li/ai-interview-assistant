@@ -56,7 +56,7 @@ pub fn dispatch(app: &tauri::AppHandle, shortcut: &Shortcut) {
             .find(|(registered, _)| registered == shortcut)
             .map(|(_, action)| action.clone()),
         Err(err) => {
-            eprintln!("快捷键映射锁已中毒：{err}");
+            tracing::warn!("快捷键映射锁已中毒：{err}");
             None
         }
     };

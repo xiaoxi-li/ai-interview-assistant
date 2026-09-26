@@ -157,7 +157,7 @@ pub fn load_asr_config(conn: &Connection) -> rusqlite::Result<AsrConfig> {
     match serde_json::from_str::<AsrConfig>(&raw) {
         Ok(config) => Ok(config),
         Err(err) => {
-            eprintln!("ASR 配置解析失败，回退默认值：{err}");
+            tracing::warn!("ASR 配置解析失败，回退默认值：{err}");
             Ok(AsrConfig::default())
         }
     }

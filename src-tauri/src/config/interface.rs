@@ -129,7 +129,7 @@ pub fn load_interface_config(conn: &Connection) -> rusqlite::Result<InterfaceCon
     match serde_json::from_str::<InterfaceConfig>(&raw) {
         Ok(config) => Ok(config),
         Err(err) => {
-            eprintln!("界面配置解析失败，回退默认值：{err}");
+            tracing::warn!("界面配置解析失败，回退默认值：{err}");
             Ok(InterfaceConfig::default())
         }
     }

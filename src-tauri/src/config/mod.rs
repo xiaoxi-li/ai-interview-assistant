@@ -193,7 +193,7 @@ pub fn load_ai_config(conn: &Connection) -> rusqlite::Result<AiConfig> {
     match serde_json::from_str::<AiConfig>(&raw) {
         Ok(config) => Ok(config),
         Err(err) => {
-            eprintln!("AI 配置解析失败，回退默认值：{err}");
+            tracing::warn!("AI 配置解析失败，回退默认值：{err}");
             Ok(AiConfig::default())
         }
     }

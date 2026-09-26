@@ -47,7 +47,7 @@ pub fn update_note(
     let conn = state.lock()?;
     // 编辑前留存历史版本，便于回滚
     if let Err(err) = VersionsRepo::new(&conn).snapshot(&id) {
-        eprintln!("版本快照失败（note={id}）：{err}");
+        tracing::warn!("版本快照失败（note={id}）：{err}");
     }
 
     let note = NotesRepo::new(&conn)
@@ -133,7 +133,7 @@ pub fn search_hybrid_notes(
 /// 向量索引采用"尽力而为"策略：失败不阻断笔记写入，仅记录告警。
 fn index_note_quietly(conn: &rusqlite::Connection, state: &AppState, note: &NoteDto) {
     if let Err(err) = crate::retrieval::index::reindex_note(conn, state.embedding.as_ref(), note) {
-        eprintln!("向量索引失败（note={}）：{err}", note.id);
+        tracing::warn!("向量索引失败（note={}）：{err}", note.id);
     }
 }
 
@@ -251,7 +251,7 @@ pub fn restore_backup(
             if let Err(err) =
                 crate::retrieval::sync_note(&conn, &note.id, &note.title, &note.content, &note.tags)
             {
-                eprintln!("索引重建失败（note={}）：{err}", note.id);
+                tracing::warn!("索引重建失败（note={}）：{err}", note.id);
             }
             index_note_quietly(&conn, &state, note);
         }
@@ -282,7 +282,7 @@ pub fn save_interface_config(
     };
 
     for failure in crate::hotkeys::apply(&app, &saved.hotkeys) {
-        eprintln!("全局快捷键注册提示：{failure}");
+        tracing::warn!("全局快捷键注册提示：{failure}");
     }
     apply_stealth_window(&app, &saved);
 
@@ -297,10 +297,10 @@ fn apply_stealth_window(app: &tauri::AppHandle, config: &crate::config::interfac
         return;
     };
     if let Err(err) = window.set_always_on_top(config.always_on_top) {
-        eprintln!("设置窗口置顶失败：{err}");
+        tracing::warn!("设置窗口置顶失败：{err}");
     }
     if let Err(err) = window.set_content_protected(config.hide_from_capture) {
-        eprintln!("设置防录屏失败（当前平台可能不支持）：{err}");
+        tracing::warn!("设置防录屏失败（当前平台可能不支持）：{err}");
     }
 }
 
@@ -735,10 +735,10 @@ fn handle_transcript_events(
                     if let Err(err) =
                         TranscriptRepo::new(&guard).append(session_id, *speaker, text, true, now_ms())
                     {
-                        eprintln!("转写落库失败（session={session_id}）：{err}");
+                        tracing::warn!("转写落库失败（session={session_id}）：{err}");
                     }
                 }
-                Err(err) => eprintln!("转写落库跳过（连接锁中毒）：{err}"),
+                Err(err) => tracing::warn!("转写落库跳过（连接锁中毒）：{err}"),
             }
         }
     }
@@ -1312,7 +1312,7 @@ pub fn stop_asr_session(state: State<'_, AppState>) -> Result<AsrSessionStatus, 
     if let Some(id) = session_id {
         let conn = state.lock()?;
         if let Err(err) = TranscriptRepo::new(&conn).end_session(&id) {
-            eprintln!("结束会话失败（session={id}）：{err}");
+            tracing::warn!("结束会话失败（session={id}）：{err}");
         }
     }
 
@@ -1373,10 +1373,10 @@ fn handle_detected_question(
         Ok(guard) => QaRepo::new(&guard)
             .create_question(session_id, &question.text, question.ts)
             .map(|pair| pair.id)
-            .map_err(|err| eprintln!("问题落库失败（session={session_id}）：{err}"))
+            .map_err(|err| tracing::warn!("问题落库失败（session={session_id}）：{err}"))
             .ok(),
         Err(err) => {
-            eprintln!("问题落库跳过（连接锁中毒）：{err}");
+            tracing::warn!("问题落库跳过（连接锁中毒）：{err}");
             None
         }
     };
@@ -1651,7 +1651,7 @@ pub fn recall_for_question(
     // 引用来源落库：便于会话回放与导出（回答由 IA-08 生成）
     let refs = source_refs(&outcome.hits);
     if let Err(err) = repo.set_sources(&pair.id, &refs) {
-        eprintln!("引用来源落库失败（qa={}）：{err}", pair.id);
+        tracing::warn!("引用来源落库失败（qa={}）：{err}", pair.id);
     }
 
     Ok(outcome)
@@ -1719,7 +1719,7 @@ pub fn generate_answer(
 
         let refs = source_refs(&outcome.hits);
         if let Err(err) = QaRepo::new(&conn).set_sources(&pair.id, &refs) {
-            eprintln!("引用来源落库失败（qa={}）：{err}", pair.id);
+            tracing::warn!("引用来源落库失败（qa={}）：{err}", pair.id);
         }
         outcome
     };
@@ -1818,12 +1818,12 @@ pub fn generate_answer(
                     .set_answer(&qa_id, &answer, &refs)
                     .unwrap_or(false),
                 Err(err) => {
-                    eprintln!("回答落库跳过（连接锁中毒）：{err}");
+                    tracing::warn!("回答落库跳过（连接锁中毒）：{err}");
                     false
                 }
             };
             if !persisted {
-                eprintln!("回答落库失败（qa={qa_id}）");
+                tracing::warn!("回答落库失败（qa={qa_id}）");
             }
         }
 
@@ -2185,11 +2185,11 @@ fn resync_notes(conn: &rusqlite::Connection, note_ids: &[String]) {
                 if let Err(err) =
                     crate::retrieval::sync_note(conn, &note.id, &note.title, &note.content, &note.tags)
                 {
-                    eprintln!("索引同步失败（note={}）：{err}", note.id);
+                    tracing::warn!("索引同步失败（note={}）：{err}", note.id);
                 }
             }
             Ok(None) => {}
-            Err(err) => eprintln!("读取笔记失败（note={note_id}）：{err}"),
+            Err(err) => tracing::warn!("读取笔记失败（note={note_id}）：{err}"),
         }
     }
 }

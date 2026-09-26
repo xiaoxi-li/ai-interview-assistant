@@ -65,7 +65,7 @@ pub fn load_audio_config(conn: &Connection) -> rusqlite::Result<AudioConfig> {
     match serde_json::from_str::<AudioConfig>(&raw) {
         Ok(config) => Ok(config),
         Err(err) => {
-            eprintln!("音频配置解析失败，回退默认值：{err}");
+            tracing::warn!("音频配置解析失败，回退默认值：{err}");
             Ok(AudioConfig::default())
         }
     }

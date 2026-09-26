@@ -11,6 +11,7 @@ pub mod config;
 pub mod hotkeys;
 pub mod interview;
 pub mod knowledge;
+pub mod logging;
 pub mod models;
 pub mod providers;
 pub mod retrieval;
@@ -54,6 +55,18 @@ pub fn run() {
             // 数据库存放于系统应用数据目录
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
+
+            // 结构化日志（分级 + 脱敏 + 按天滚动）；初始化失败不阻断启动
+            match logging::init_once(&data_dir) {
+                Ok(dir) => tracing::info!(
+                    log_dir = %dir.display(),
+                    version = env!("CARGO_PKG_VERSION"),
+                    "应用启动"
+                ),
+                // 此处日志系统尚未就绪，直接写标准错误
+                Err(err) => eprintln!("日志初始化失败：{err}"),
+            }
+
             let db_path = data_dir.join("ai-interview.db");
             let models_dir = data_dir.join("models");
             std::fs::create_dir_all(&models_dir)?;
@@ -88,12 +101,12 @@ pub fn run() {
 
             // IA-11：注册全局快捷键（失败仅告警，不阻断启动）
             for failure in hotkeys::apply(app.handle(), &interface_config.hotkeys) {
-                eprintln!("全局快捷键注册提示：{failure}");
+                tracing::warn!("全局快捷键注册提示：{failure}");
             }
 
             // IA-11：系统托盘
             if let Err(err) = tray::create(app) {
-                eprintln!("系统托盘创建失败：{err}");
+                tracing::warn!("系统托盘创建失败：{err}");
             }
 
             Ok(())

@@ -66,7 +66,7 @@ pub fn load_question_config(conn: &Connection) -> rusqlite::Result<QuestionConfi
         Ok(config) if config.validate().is_ok() => Ok(config),
         Ok(_) => Ok(QuestionConfig::default()),
         Err(err) => {
-            eprintln!("问题识别配置解析失败，回退默认值：{err}");
+            tracing::warn!("问题识别配置解析失败，回退默认值：{err}");
             Ok(QuestionConfig::default())
         }
     }

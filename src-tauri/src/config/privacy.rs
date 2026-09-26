@@ -48,7 +48,7 @@ pub fn load_privacy_config(conn: &Connection) -> rusqlite::Result<PrivacyConfig>
     match serde_json::from_str::<PrivacyConfig>(&raw) {
         Ok(config) => Ok(config),
         Err(err) => {
-            eprintln!("隐私配置解析失败，回退默认值：{err}");
+            tracing::warn!("隐私配置解析失败，回退默认值：{err}");
             Ok(PrivacyConfig::default())
         }
     }

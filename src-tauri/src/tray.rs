@@ -52,7 +52,7 @@ pub fn create(app: &App) -> Result<(), String> {
             "mini" => {
                 show_main(app);
                 if let Err(err) = crate::commands::open_mini_window(app.clone()) {
-                    eprintln!("从托盘打开迷你浮窗失败：{err}");
+                    tracing::warn!("从托盘打开迷你浮窗失败：{err}");
                 }
             }
             "hide" => {
@@ -61,7 +61,7 @@ pub fn create(app: &App) -> Result<(), String> {
                 }
             }
             "quit" => app.exit(0),
-            other => eprintln!("未处理的托盘菜单项：{other}"),
+            other => tracing::warn!("未处理的托盘菜单项：{other}"),
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
