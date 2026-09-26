@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { ipc } from "../lib/ipc";
+import type { AIConfig, PlatformPreset } from "../types";
 
 /** API Key 配置状态（后端只回传掩码，不泄露完整密钥） */
 export interface ApiKeyStatus {
@@ -11,7 +12,15 @@ export interface ApiKeyStatus {
 interface SettingsState {
   /** 各平台的密钥配置状态 */
   apiKeys: Record<string, ApiKeyStatus>;
+  /** 当前 AI 配置 */
+  aiConfig: AIConfig | null;
+  /** 平台预设列表 */
+  presets: PlatformPreset[];
   error: string | null;
+  /** 加载 AI 配置与平台预设 */
+  loadAiSettings: () => Promise<void>;
+  /** 保存 AI 配置 */
+  saveAiConfig: (config: AIConfig) => Promise<void>;
   /** 查询指定平台的密钥状态 */
   loadApiKeyStatus: (platform: string) => Promise<void>;
   /** 保存密钥（空串表示清除） */
@@ -33,7 +42,22 @@ export const useSettingsStore = create<SettingsState>((set) => {
 
   return {
     apiKeys: {},
+    aiConfig: null,
+    presets: [],
     error: null,
+
+    loadAiSettings: () =>
+      Promise.all([
+        ipc<AIConfig>("get_ai_config"),
+        ipc<PlatformPreset[]>("list_platform_presets"),
+      ])
+        .then(([aiConfig, presets]) => set({ aiConfig, presets }))
+        .catch((err) => fail("加载 AI 配置", err)),
+
+    saveAiConfig: (config) =>
+      ipc<AIConfig>("save_ai_config", { config })
+        .then((saved) => set({ aiConfig: saved }))
+        .catch((err) => fail("保存 AI 配置", err)),
 
     loadApiKeyStatus: (platform) =>
       ipc<ApiKeyStatus>("get_api_key_status", { platform })

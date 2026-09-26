@@ -240,6 +240,30 @@ pub fn restore_backup(
     Ok(summary)
 }
 
+/// 列出全部 AI 平台预设
+#[tauri::command]
+pub fn list_platform_presets() -> Vec<crate::config::PlatformPreset> {
+    crate::config::all_presets()
+}
+
+/// 读取当前 AI 配置
+#[tauri::command]
+pub fn get_ai_config(state: State<'_, AppState>) -> Result<crate::config::AiConfig, String> {
+    let conn = state.lock()?;
+    crate::config::load_ai_config(&conn).map_err(|e| e.to_string())
+}
+
+/// 保存 AI 配置
+#[tauri::command]
+pub fn save_ai_config(
+    state: State<'_, AppState>,
+    config: crate::config::AiConfig,
+) -> Result<crate::config::AiConfig, String> {
+    let conn = state.lock()?;
+    crate::config::save_ai_config(&conn, &config)?;
+    crate::config::load_ai_config(&conn).map_err(|e| e.to_string())
+}
+
 /// API Key 配置状态（不回传完整密钥）
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]

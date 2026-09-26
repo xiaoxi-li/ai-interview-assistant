@@ -90,10 +90,17 @@ export type AIPlatform = "deepseek" | "qwen" | "glm" | "chatgpt";
 export interface AIConfig {
   platform: AIPlatform;
   baseUrl: string;
-  apiKeyRef: string;
   model: string;
   stream: boolean;
   temperature: number;
+}
+
+/** 平台预设（Base URL 与默认模型） */
+export interface PlatformPreset {
+  platform: AIPlatform;
+  label: string;
+  defaultBaseUrl: string;
+  defaultModel: string;
 }
 
 export type ASRMode = "cloud" | "local";

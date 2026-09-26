@@ -25,6 +25,46 @@ export async function mockInvoke<T>(
     case "list_note_versions":
       return [] as T;
 
+    case "list_platform_presets":
+      return [
+        {
+          platform: "deepseek",
+          label: "DeepSeek",
+          defaultBaseUrl: "https://api.deepseek.com/v1",
+          defaultModel: "deepseek-chat",
+        },
+        {
+          platform: "qwen",
+          label: "通义千问 Qwen",
+          defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+          defaultModel: "qwen-plus",
+        },
+        {
+          platform: "glm",
+          label: "智谱 GLM",
+          defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
+          defaultModel: "glm-4-plus",
+        },
+        {
+          platform: "chatgpt",
+          label: "ChatGPT",
+          defaultBaseUrl: "https://api.openai.com/v1",
+          defaultModel: "gpt-4o-mini",
+        },
+      ] as T;
+
+    case "get_ai_config":
+      return {
+        platform: "deepseek",
+        baseUrl: "https://api.deepseek.com/v1",
+        model: "deepseek-chat",
+        stream: true,
+        temperature: 0.7,
+      } as T;
+
+    case "save_ai_config":
+      return (args?.config ?? null) as T;
+
     case "get_api_key_status":
     case "save_api_key":
     case "delete_api_key": {

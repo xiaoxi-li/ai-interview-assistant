@@ -5,6 +5,7 @@ use tauri::Manager;
 mod commands;
 mod state;
 
+pub mod config;
 pub mod knowledge;
 pub mod providers;
 pub mod retrieval;
@@ -79,6 +80,9 @@ pub fn run() {
             commands::save_api_key,
             commands::get_api_key_status,
             commands::delete_api_key,
+            commands::list_platform_presets,
+            commands::get_ai_config,
+            commands::save_ai_config,
             commands::export_notes_markdown,
             commands::export_backup_json,
             commands::backup_database,
