@@ -21,6 +21,9 @@ export default function SettingsPage() {
   const loadApiKeyStatus = useSettingsStore((s) => s.loadApiKeyStatus);
   const saveApiKey = useSettingsStore((s) => s.saveApiKey);
   const deleteApiKey = useSettingsStore((s) => s.deleteApiKey);
+  const testing = useSettingsStore((s) => s.testing);
+  const testResult = useSettingsStore((s) => s.testResult);
+  const testAiConnection = useSettingsStore((s) => s.testAiConnection);
 
   const platform = aiConfig?.platform;
 
@@ -51,6 +54,9 @@ export default function SettingsPage() {
               onSaveConfig={saveAiConfig}
               onSaveApiKey={saveApiKey}
               onDeleteApiKey={deleteApiKey}
+              onTestConnection={testAiConnection}
+              testing={testing}
+              testResult={testResult}
             />
           ) : (
             <section className="glass rounded-xl p-4 text-[12px] text-text-subtle">

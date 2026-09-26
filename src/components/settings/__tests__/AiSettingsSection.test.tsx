@@ -132,6 +132,45 @@ describe("AiSettingsSection", () => {
     expect(screen.getByText("有未保存的修改")).toBeTruthy();
   });
 
+  it("点击测试连接触发回调", () => {
+    const onTestConnection = vi.fn();
+    setup({ onTestConnection });
+
+    fireEvent.click(screen.getByText("测试连接"));
+
+    expect(onTestConnection).toHaveBeenCalledTimes(1);
+  });
+
+  it("测试中禁用按钮并展示进行中文案", () => {
+    const onTestConnection = vi.fn();
+    setup({ onTestConnection, testing: true });
+
+    const button = screen.getByText("测试中…") as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    fireEvent.click(button);
+    expect(onTestConnection).not.toHaveBeenCalled();
+  });
+
+  it("展示成功结果与耗时", () => {
+    setup({
+      onTestConnection: vi.fn(),
+      testResult: { ok: true, latencyMs: 42, message: "连接成功（HTTP 200）" },
+    });
+
+    expect(screen.getByText("连接成功（HTTP 200）")).toBeTruthy();
+    expect(screen.getByText("42 ms")).toBeTruthy();
+  });
+
+  it("展示失败结果且不显示耗时", () => {
+    setup({
+      onTestConnection: vi.fn(),
+      testResult: { ok: false, latencyMs: 0, message: "服务返回错误：invalid api key" },
+    });
+
+    expect(screen.getByText("服务返回错误：invalid api key")).toBeTruthy();
+    expect(screen.queryByText("0 ms")).toBeNull();
+  });
+
   it("已配置时占位符显示掩码", () => {
     setup({
       apiKeyStatus: { platform: "deepseek", configured: true, masked: "sk-****cdef" },

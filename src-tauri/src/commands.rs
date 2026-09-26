@@ -5,6 +5,7 @@
 use crate::knowledge::export::{ExportSummary, RestoreSummary};
 use crate::knowledge::store::{GroupsRepo, NotesRepo, TagsRepo, VersionsRepo};
 use crate::knowledge::{GroupDto, ImportOutcome, NoteDto, NoteVersionDto, TagDto};
+use crate::providers::AiProvider;
 use crate::retrieval::SearchHit;
 use crate::state::AppState;
 use std::path::PathBuf;
@@ -238,6 +239,24 @@ pub fn restore_backup(
         }
     }
     Ok(summary)
+}
+
+/// 一键测试 AI 服务连通性（读取已保存配置与钥匙链中的 API Key）
+#[tauri::command]
+pub fn test_ai_connection(
+    state: State<'_, AppState>,
+) -> Result<crate::providers::types::ConnectionTest, String> {
+    let config = {
+        let conn = state.lock()?;
+        crate::config::load_ai_config(&conn).map_err(|e| e.to_string())?
+    };
+    // 网络请求不持有数据库锁
+    let api_key = state
+        .secrets
+        .get(&crate::security::api_key_ref(config.platform.as_str()))?;
+
+    let provider = crate::providers::OpenAiCompatProvider::new(config, api_key);
+    provider.test_connection().map_err(|e| e.to_string())
 }
 
 /// 列出全部 AI 平台预设

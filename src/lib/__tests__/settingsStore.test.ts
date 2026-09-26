@@ -10,7 +10,40 @@ const mockedIpc = vi.mocked(ipc);
 describe("settingsStore 密钥管理", () => {
   beforeEach(() => {
     mockedIpc.mockReset();
-    useSettingsStore.setState({ apiKeys: {}, error: null });
+    useSettingsStore.setState({
+      apiKeys: {},
+      error: null,
+      testing: false,
+      testResult: null,
+    });
+  });
+
+  it("连接测试成功后记录结果并复位 loading", async () => {
+    mockedIpc.mockResolvedValueOnce({
+      ok: true,
+      latencyMs: 42,
+      message: "连接成功（HTTP 200）",
+    });
+
+    await useSettingsStore.getState().testAiConnection();
+
+    expect(mockedIpc).toHaveBeenCalledWith("test_ai_connection");
+    expect(useSettingsStore.getState().testing).toBe(false);
+    expect(useSettingsStore.getState().testResult?.ok).toBe(true);
+    expect(useSettingsStore.getState().testResult?.latencyMs).toBe(42);
+  });
+
+  it("连接测试异常时记录失败结果", async () => {
+    mockedIpc.mockRejectedValueOnce(new Error("network down"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await useSettingsStore.getState().testAiConnection();
+
+    const result = useSettingsStore.getState().testResult;
+    expect(result?.ok).toBe(false);
+    expect(result?.message).toContain("network down");
+    expect(useSettingsStore.getState().testing).toBe(false);
+    spy.mockRestore();
   });
 
   it("查询密钥状态并写入 state", async () => {

@@ -65,6 +65,13 @@ export async function mockInvoke<T>(
     case "save_ai_config":
       return (args?.config ?? null) as T;
 
+    case "test_ai_connection":
+      return {
+        ok: true,
+        latencyMs: 42,
+        message: "连接成功（HTTP 200，mock 环境）",
+      } as T;
+
     case "get_api_key_status":
     case "save_api_key":
     case "delete_api_key": {

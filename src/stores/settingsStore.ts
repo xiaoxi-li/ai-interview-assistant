@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { ipc } from "../lib/ipc";
-import type { AIConfig, PlatformPreset } from "../types";
+import type { AIConfig, ConnectionTest, PlatformPreset } from "../types";
 
 /** API Key 配置状态（后端只回传掩码，不泄露完整密钥） */
 export interface ApiKeyStatus {
@@ -21,6 +21,12 @@ interface SettingsState {
   loadAiSettings: () => Promise<void>;
   /** 保存 AI 配置 */
   saveAiConfig: (config: AIConfig) => Promise<void>;
+  /** 连接测试进行中 */
+  testing: boolean;
+  /** 最近一次连接测试结果 */
+  testResult: ConnectionTest | null;
+  /** 一键测试 AI 服务连通性 */
+  testAiConnection: () => Promise<void>;
   /** 查询指定平台的密钥状态 */
   loadApiKeyStatus: (platform: string) => Promise<void>;
   /** 保存密钥（空串表示清除） */
@@ -44,6 +50,8 @@ export const useSettingsStore = create<SettingsState>((set) => {
     apiKeys: {},
     aiConfig: null,
     presets: [],
+    testing: false,
+    testResult: null,
     error: null,
 
     loadAiSettings: () =>
@@ -58,6 +66,19 @@ export const useSettingsStore = create<SettingsState>((set) => {
       ipc<AIConfig>("save_ai_config", { config })
         .then((saved) => set({ aiConfig: saved }))
         .catch((err) => fail("保存 AI 配置", err)),
+
+    testAiConnection: () => {
+      set({ testing: true, testResult: null, error: null });
+      return ipc<ConnectionTest>("test_ai_connection")
+        .then((result) => set({ testing: false, testResult: result }))
+        .catch((err) => {
+          console.error("连接测试失败:", err);
+          set({
+            testing: false,
+            testResult: { ok: false, latencyMs: 0, message: String(err) },
+          });
+        });
+    },
 
     loadApiKeyStatus: (platform) =>
       ipc<ApiKeyStatus>("get_api_key_status", { platform })

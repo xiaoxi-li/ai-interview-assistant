@@ -83,6 +83,7 @@ pub fn run() {
             commands::list_platform_presets,
             commands::get_ai_config,
             commands::save_ai_config,
+            commands::test_ai_connection,
             commands::export_notes_markdown,
             commands::export_backup_json,
             commands::backup_database,

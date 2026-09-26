@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, KeyRound, Save, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  KeyRound,
+  Loader2,
+  Plug,
+  Save,
+  Trash2,
+} from "lucide-react";
 import { cn } from "../../lib/utils";
 import { isAiConfigDirty, validateAiConfig } from "../../lib/aiConfig";
-import type { AIConfig, PlatformPreset } from "../../types";
+import type { AIConfig, ConnectionTest, PlatformPreset } from "../../types";
 import type { ApiKeyStatus } from "../../stores/settingsStore";
 
 const FIELD =
@@ -16,6 +24,10 @@ interface AiSettingsSectionProps {
   onSaveConfig: (config: AIConfig) => void;
   onSaveApiKey: (platform: string, apiKey: string) => void;
   onDeleteApiKey: (platform: string) => void;
+  /** 一键连接测试 */
+  onTestConnection?: () => void;
+  testing?: boolean;
+  testResult?: ConnectionTest | null;
 }
 
 export default function AiSettingsSection({
@@ -25,6 +37,9 @@ export default function AiSettingsSection({
   onSaveConfig,
   onSaveApiKey,
   onDeleteApiKey,
+  onTestConnection,
+  testing = false,
+  testResult = null,
 }: AiSettingsSectionProps) {
   const [draft, setDraft] = useState<AIConfig>(config);
   const [apiKey, setApiKey] = useState("");
@@ -179,6 +194,22 @@ export default function AiSettingsSection({
         </div>
       </div>
 
+      {testResult && (
+        <div
+          className={cn(
+            "mt-2 flex items-center gap-2 rounded-lg border px-3 py-2 text-[11px]",
+            testResult.ok
+              ? "border-success/30 bg-success/10 text-success"
+              : "border-danger/30 bg-danger/10 text-danger"
+          )}
+        >
+          <span className="min-w-0 flex-1">{testResult.message}</span>
+          {testResult.ok && (
+            <span className="shrink-0 opacity-80">{testResult.latencyMs} ms</span>
+          )}
+        </div>
+      )}
+
       <div className="mt-4 flex items-center gap-3">
         {validationError && (
           <span className="flex items-center gap-1.5 text-[11px] text-danger">
@@ -189,10 +220,29 @@ export default function AiSettingsSection({
         {!validationError && dirty && (
           <span className="text-[11px] text-warning">有未保存的修改</span>
         )}
+
+        {onTestConnection && (
+          <button
+            onClick={onTestConnection}
+            disabled={testing || Boolean(validationError)}
+            className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:border-primary/40 hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {testing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Plug className="h-3.5 w-3.5" />
+            )}
+            {testing ? "测试中…" : "测试连接"}
+          </button>
+        )}
+
         <button
           onClick={() => onSaveConfig(draft)}
           disabled={Boolean(validationError)}
-          className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40"
+          className={cn(
+            "flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40",
+            !onTestConnection && "ml-auto"
+          )}
         >
           <Save className="h-3.5 w-3.5" />
           保存配置

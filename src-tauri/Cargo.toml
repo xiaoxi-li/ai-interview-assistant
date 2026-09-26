@@ -23,6 +23,7 @@ sqlite-vec = "0.1"
 thiserror = "1"
 jieba-rs = "0.7"
 keyring = { version = "3", features = ["windows-native", "apple-native"] }
+ureq = { version = "2", features = ["json"] }
 
 [profile.release]
 panic = "abort"

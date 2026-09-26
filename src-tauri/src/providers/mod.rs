@@ -9,10 +9,12 @@
 pub mod ai;
 pub mod asr;
 pub mod embedding;
+pub mod openai;
 pub mod types;
 pub mod vector;
 
 pub use ai::{AiProvider, ChatStream, MockAiProvider};
+pub use openai::OpenAiCompatProvider;
 pub use asr::{AsrProvider, MockAsrProvider};
 pub use embedding::{EmbeddingProvider, MockEmbeddingProvider};
 pub use types::*;

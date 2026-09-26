@@ -95,6 +95,13 @@ export interface AIConfig {
   temperature: number;
 }
 
+/** 连接测试结果 */
+export interface ConnectionTest {
+  ok: boolean;
+  latencyMs: number;
+  message: string;
+}
+
 /** 平台预设（Base URL 与默认模型） */
 export interface PlatformPreset {
   platform: AIPlatform;
