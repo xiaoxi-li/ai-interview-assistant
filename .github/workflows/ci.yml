@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # 前端构建产物目录（Tauri 打包时使用）
+  FRONTEND_DIST: dist
+
+jobs:
+  frontend:
+    name: 前端 · 类型检查 / 单测 / 构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 类型检查与构建
+        run: npm run build
+
+      - name: 单元测试
+        run: npm test
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
+          retention-days: 7
+
+  rust:
+    name: Rust · ${{ matrix.os }}
+    needs: frontend
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Node（Tauri 构建脚本需要前端产物）
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装前端依赖并构建
+        run: npm ci && npm run build
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 缓存 Rust 构建
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: 运行 Rust 测试
+        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets
+
+      - name: 编译检查（含二进制目标）
+        run: cargo build --manifest-path src-tauri/Cargo.toml

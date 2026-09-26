@@ -1,0 +1,64 @@
+name: Release
+
+# 打 tag（v1.2.3）时在 Windows / macOS 上分别打包，并创建草稿 Release。
+# 自动更新（tauri-plugin-updater）需要配置签名密钥；未配置时仍可正常出包，
+# 只是不会生成更新所需的签名产物（见下方 TAURI_SIGNING_* 说明）。
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    name: 打包 · ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            # Apple Silicon 构建；如需 Intel 产物可增加 x86_64-apple-darwin
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装前端依赖
+        run: npm ci
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: 缓存 Rust 构建
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: 构建并发布
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 应用内自动更新所需（在仓库 Secrets 中配置后生效）
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "AI 面试助手 ${{ github.ref_name }}"
+          releaseBody: "本版本变更见提交记录。安装包由双平台 CI 自动构建。"
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }}
