@@ -7,6 +7,7 @@ import InterfaceSettingsSection from "../components/settings/InterfaceSettingsSe
 import KnowledgeSettingsSection from "../components/settings/KnowledgeSettingsSection";
 import ModelManagerSection from "../components/settings/ModelManagerSection";
 import PrivacySettingsSection from "../components/settings/PrivacySettingsSection";
+import UpdateSection from "../components/settings/UpdateSection";
 import { useModelProgress } from "../hooks/useModelProgress";
 import { useT } from "../hooks/useT";
 import { LOCALES, type Locale } from "../lib/i18n";
@@ -197,6 +198,9 @@ export default function SettingsPage() {
               onToggleAutoStart={setAutoStart}
             />
           )}
+
+          {/* 关于与更新（P2） */}
+          <UpdateSection />
 
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {PLACEHOLDER_SECTIONS.map((section) => (

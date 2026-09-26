@@ -186,6 +186,24 @@ export interface SessionDetail {
   qa: QaPair[];
 }
 
+/** 更新检查配置 */
+export interface UpdateConfig {
+  /** 启动时自动检查更新 */
+  autoCheck: boolean;
+  /** 更新元数据地址（Tauri updater 的 latest.json 或等价 JSON） */
+  endpoint: string;
+}
+
+/** 更新检查结果 */
+export interface UpdateCheck {
+  currentVersion: string;
+  latestVersion: string | null;
+  available: boolean;
+  notes: string | null;
+  url: string | null;
+  message: string;
+}
+
 /** 会话导出结果 */
 export interface SessionExportSummary {
   path: string;

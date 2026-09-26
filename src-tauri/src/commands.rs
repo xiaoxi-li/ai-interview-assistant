@@ -1541,6 +1541,50 @@ pub fn analyze_question_text(text: String) -> QuestionScore {
     crate::interview::question::analyze(&text)
 }
 
+// ==================== 更新检查（P2） ====================
+
+/// 当前应用版本
+#[tauri::command]
+pub fn app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// 读取更新配置
+#[tauri::command]
+pub fn get_update_config(
+    state: State<'_, AppState>,
+) -> Result<crate::config::update::UpdateConfig, String> {
+    let conn = state.lock()?;
+    crate::config::update::load_update_config(&conn).map_err(|e| e.to_string())
+}
+
+/// 保存更新配置
+#[tauri::command]
+pub fn save_update_config(
+    state: State<'_, AppState>,
+    config: crate::config::update::UpdateConfig,
+) -> Result<crate::config::update::UpdateConfig, String> {
+    let conn = state.lock()?;
+    crate::config::update::save_update_config(&conn, &config)?;
+    crate::config::update::load_update_config(&conn).map_err(|e| e.to_string())
+}
+
+/// 检查更新（网络请求不持有数据库锁）
+#[tauri::command]
+pub fn check_app_update(
+    state: State<'_, AppState>,
+    endpoint: Option<String>,
+    current_version: Option<String>,
+) -> Result<crate::update::UpdateCheck, String> {
+    let configured = {
+        let conn = state.lock()?;
+        crate::config::update::load_update_config(&conn).map_err(|e| e.to_string())?
+    };
+    let endpoint = endpoint.unwrap_or(configured.endpoint);
+    let current = current_version.unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
+    crate::update::check_for_update(&endpoint, &current)
+}
+
 // ==================== 首次启动向导 ====================
 
 /// 查询是否已完成首次启动向导

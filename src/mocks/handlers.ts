@@ -362,6 +362,26 @@ export async function mockInvoke<T>(
         ts: Date.now(),
       } as T;
 
+    // ---------- 更新检查（P2） ----------
+    case "app_version":
+      return "0.1.0" as T;
+
+    case "get_update_config":
+      return { autoCheck: false, endpoint: "" } as T;
+
+    case "save_update_config":
+      return (args?.config ?? { autoCheck: false, endpoint: "" }) as T;
+
+    case "check_app_update":
+      return {
+        currentVersion: "0.1.0",
+        latestVersion: "0.1.0",
+        available: false,
+        notes: null,
+        url: null,
+        message: "已是最新版本（0.1.0）",
+      } as T;
+
     // ---------- 首次启动向导 ----------
     case "get_onboarding_state":
       // mock 环境默认视为已完成，便于直接浏览各页面

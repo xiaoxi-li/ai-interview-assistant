@@ -18,6 +18,7 @@ pub mod retrieval;
 pub mod security;
 pub mod storage;
 pub mod tray;
+pub mod update;
 
 /// 应用基础信息（用于验证前后端 IPC 通路）
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -198,6 +199,10 @@ pub fn run() {
             commands::backup_database,
             commands::restore_backup,
             commands::set_stealth_window,
+            commands::app_version,
+            commands::get_update_config,
+            commands::save_update_config,
+            commands::check_app_update,
             commands::get_onboarding_state,
             commands::complete_onboarding,
             commands::list_sessions,

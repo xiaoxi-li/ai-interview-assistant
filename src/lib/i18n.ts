@@ -115,6 +115,14 @@ const EN: Record<string, string> = {
   语言: "Language",
   界面语言: "Interface language",
 
+  // 关于与更新
+  关于与更新: "About & updates",
+  "更新地址（latest.json）": "Update endpoint (latest.json)",
+  "留空则关闭更新检查；填写后可由发布流水线生成的 latest.json 提供版本信息。":
+    "Leave empty to disable update checks; a latest.json published by the release pipeline provides version info.",
+  检查更新: "Check for updates",
+  启动时自动检查: "Check automatically on startup",
+
   // 会话历史
   "共 {count} 场": "{count} sessions",
   刷新: "Refresh",

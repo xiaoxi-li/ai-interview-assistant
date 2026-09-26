@@ -9,6 +9,7 @@ pub mod interface;
 pub mod interview;
 pub mod knowledge;
 pub mod privacy;
+pub mod update;
 
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
