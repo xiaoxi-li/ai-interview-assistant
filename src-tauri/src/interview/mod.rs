@@ -14,7 +14,9 @@ pub use session::{
     session_to_markdown, SessionDetailDto, SessionExportSummary, SessionSummaryDto,
 };
 
-pub use answer::{build_answer_messages, render_context, source_refs, SYSTEM_PROMPT};
+pub use answer::{
+    build_answer_messages, offline_answer, render_context, source_refs, SYSTEM_PROMPT,
+};
 
 pub use question::{
     analyze, analyze_with, DetectedQuestion, QuestionDetector, QuestionScore,

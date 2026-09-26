@@ -8,6 +8,7 @@ mod state;
 pub mod asr;
 pub mod audio;
 pub mod config;
+pub mod demo;
 pub mod hotkeys;
 pub mod interview;
 pub mod knowledge;
@@ -178,6 +179,7 @@ pub fn run() {
             commands::analyze_question_text,
             commands::recall_for_question,
             commands::generate_answer,
+            commands::start_demo_session,
             commands::list_audio_devices,
             commands::get_audio_config,
             commands::save_audio_config,

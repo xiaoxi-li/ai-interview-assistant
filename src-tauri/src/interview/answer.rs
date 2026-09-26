@@ -79,6 +79,39 @@ pub fn build_answer_messages(question: &str, sources: &[RecallHit]) -> Vec<ChatM
     ]
 }
 
+/// 离线回答：无 AI Key（演示模式 / 断网）时，用召回片段拼装一段可直接口述的回答。
+///
+/// 明确标注「离线演示回答」，避免被误认为是模型生成内容。
+pub fn offline_answer(question: &str, hits: &[RecallHit]) -> String {
+    let question = question.trim();
+
+    if hits.is_empty() {
+        return format!(
+            "（离线演示回答）关于「{question}」：知识库中没有召回到相关笔记。\
+             建议先在「知识库」中补充相关材料，或到「设置 → AI 平台」配置模型服务后重新生成。"
+        );
+    }
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "（离线演示回答）关于「{question}」，我按知识库里的材料整理如下：\n\n"
+    ));
+
+    for (index, hit) in hits.iter().enumerate() {
+        let title = if hit.title.trim().is_empty() {
+            "未命名笔记"
+        } else {
+            hit.title.trim()
+        };
+        let body = hit.snippet.trim();
+        let body = if body.is_empty() { title } else { body };
+        out.push_str(&format!("{}. {title}：{body}\n", index + 1));
+    }
+
+    out.push_str("\n以上就是我的回答，需要展开其中某一点可以继续追问。");
+    out
+}
+
 /// 引用来源（去重后落库到 qa_pairs.sources_json，IA-09 据此跳转定位笔记）
 pub fn source_refs(sources: &[RecallHit]) -> Vec<crate::interview::store::SourceRef> {
     let mut refs: Vec<crate::interview::store::SourceRef> = Vec::new();

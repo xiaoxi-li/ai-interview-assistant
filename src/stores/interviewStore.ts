@@ -4,6 +4,7 @@ import type {
   AnswerAck,
   AnswerPush,
   AnswerStatus,
+  DemoAck,
   AsrEngineInfo,
   AsrSessionStatus,
   AudioDevice,
@@ -117,6 +118,13 @@ interface InterviewState {
 
   /** 从落库记录恢复当前问题与回答（迷你浮窗 / 重开后使用） */
   hydrateFromPair: (pair: QaPair) => void;
+
+  /** 一键全链路演示（无需设备/模型/Key） */
+  loadDemoStatus: () => Promise<void>;
+  startDemoSession: (speed?: number) => Promise<void>;
+  demoNotesSeeded: number;
+  demoOfflineAnswer: boolean;
+  demoRunning: boolean;
 }
 
 export const useInterviewStore = create<InterviewState>((set, get) => {
@@ -154,6 +162,10 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
     answerError: null,
     answerQaId: null,
     answerModel: null,
+
+    demoNotesSeeded: 0,
+    demoOfflineAnswer: false,
+    demoRunning: false,
 
     loadCaptureStatus: () =>
       Promise.all([
@@ -451,6 +463,56 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
         answerQaId: null,
         answerModel: null,
       }),
+
+    loadDemoStatus: () => {
+      return ipc<AsrSessionStatus>("asr_session_status")
+        .then((asrStatus) => set({ demoRunning: asrStatus.source === "demo" }))
+        .catch((err) => console.error("读取演示状态失败:", err));
+    },
+
+    startDemoSession: (speed) => {
+      set({ startingAsr: true, asrError: null, error: null });
+      return ipc<DemoAck>("start_demo_session", { speed: speed ?? 1 })
+        .then((ack) => {
+          set({
+            startingAsr: false,
+            partial: null,
+            // 演示即新会话：清空上一场残留
+            transcript: [],
+            currentQuestion: null,
+            questionManual: false,
+            questions: [],
+            currentQaId: null,
+            sources: [],
+            persistedSources: [],
+            recallQueries: [],
+            answerText: "",
+            answerStatus: "idle",
+            answerError: null,
+            answerQaId: null,
+            answerModel: null,
+            demoNotesSeeded: ack.notesSeeded,
+            demoOfflineAnswer: ack.offlineAnswer,
+            demoRunning: true,
+            asrStatus: {
+              running: true,
+              sessionId: ack.sessionId,
+              source: "demo",
+              speaker: "interviewer",
+              engine: "demo-replay",
+              startedAt: Date.now(),
+              paused: false,
+              dual: false,
+              aecEnabled: false,
+              aecErleDb: null,
+            },
+          });
+        })
+        .catch((err) => {
+          console.error("启动演示失败:", err);
+          set({ startingAsr: false, asrError: String(err), demoRunning: false });
+        });
+    },
 
     hydrateFromPair: (pair) =>
       set({

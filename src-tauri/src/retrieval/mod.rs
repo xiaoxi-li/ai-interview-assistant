@@ -43,7 +43,15 @@ pub fn search_hybrid(
     let recall = top_k.max(1) * 2;
 
     let fts_hits = fts::search_notes(conn, query, recall)?;
-    let vector_hits = index::search_notes(conn, provider, query, recall)?;
+    // 向量通道「尽力而为」：Embedding 不可用（模型缺失/服务异常）时退化为纯关键词检索，
+    // 不让整条召回链路失败（演示模式与离线场景同样受益）。
+    let vector_hits = match index::search_notes(conn, provider, query, recall) {
+        Ok(hits) => hits,
+        Err(err) => {
+            tracing::warn!("向量检索不可用，已退化为关键词检索：{err}");
+            Vec::new()
+        }
+    };
 
     let fts_ranking: Vec<String> = fts_hits.iter().map(|h| h.note_id.clone()).collect();
     let vector_ranking: Vec<String> = vector_hits.iter().map(|h| h.note_id.clone()).collect();

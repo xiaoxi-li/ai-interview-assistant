@@ -337,6 +337,15 @@ export async function mockInvoke<T>(
     case "close_mini_window":
       return null as T;
 
+    case "start_demo_session":
+      return {
+        sessionId: "s-demo-1",
+        notesSeeded: 4,
+        questionTurns: 3,
+        offlineAnswer: true,
+        estimatedMs: 5400,
+      } as T;
+
     case "generate_answer":
       return {
         qaId: "q-mock-1",

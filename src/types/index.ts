@@ -104,8 +104,8 @@ export interface TranscriptPush {
 export interface AsrSessionStatus {
   running: boolean;
   sessionId: string | null;
-  /** dual 表示双通道（说话人区分）会话 */
-  source: "mic" | "system" | "dual" | null;
+  /** dual = 双通道（说话人区分）；demo = 一键演示会话 */
+  source: "mic" | "system" | "dual" | "demo" | null;
   speaker: Speaker | null;
   engine: string | null;
   startedAt: number | null;
@@ -184,6 +184,19 @@ export interface SessionDetail {
   };
   segments: TranscriptSegment[];
   qa: QaPair[];
+}
+
+/** 一键全链路演示的受理结果 */
+export interface DemoAck {
+  sessionId: string;
+  /** 本次新播种的演示笔记数（已存在则不重复创建） */
+  notesSeeded: number;
+  /** 演示中的提问轮数 */
+  questionTurns: number;
+  /** 是否走离线回答（未配置 AI Key） */
+  offlineAnswer: boolean;
+  /** 预计时长（毫秒） */
+  estimatedMs: number;
 }
 
 /** 更新检查配置 */

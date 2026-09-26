@@ -115,6 +115,21 @@ const EN: Record<string, string> = {
   语言: "Language",
   界面语言: "Interface language",
 
+  // 一键演示
+  "一键演示 · 完整链路": "One-click demo · full pipeline",
+  "无需麦克风、模型或 API Key，用脚本化输入跑通真实链路":
+    "No microphone, model or API key needed — scripted input drives the real pipeline",
+  开始演示: "Start demo",
+  "实时转写（面试官 / 我）": "Live transcript (interviewer / me)",
+  "问题识别（规则打分 + 合段）": "Question detection (rules + merging)",
+  "知识库召回（BM25 + 向量融合）": "Knowledge recall (BM25 + vector fusion)",
+  "AI 流式回答 + 引用来源": "Streaming answer + sources",
+  "演示会自动写入 4 篇示例笔记用于召回；结束后可在「会话历史」中回放与导出。":
+    "The demo seeds 4 sample notes for recall; replay and export them later in Sessions.",
+  "正在准备演示数据…": "Preparing demo data…",
+  "未配置 AI Key，将使用离线拼装回答。":
+    "No AI key configured — an offline composed answer will be used.",
+
   // 关于与更新
   关于与更新: "About & updates",
   "更新地址（latest.json）": "Update endpoint (latest.json)",

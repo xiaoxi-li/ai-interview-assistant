@@ -1440,6 +1440,361 @@ pub fn list_questions(
         .map_err(|e| e.to_string())
 }
 
+// ==================== 一键全链路演示 ====================
+
+/// 演示受理结果
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DemoAck {
+    pub session_id: String,
+    /// 本次新播种的演示笔记数（已存在则不重复创建）
+    pub notes_seeded: usize,
+    /// 演示中的提问轮数
+    pub question_turns: usize,
+    /// 是否走离线回答（未配置 AI Key 时为 true）
+    pub offline_answer: bool,
+    /// 预计时长（毫秒，按 1x 速度）
+    pub estimated_ms: u64,
+}
+
+/// 演示回答：优先用真实模型流式生成，失败或无 Key 时回落离线拼装。
+///
+/// 统一以 `interview://answer`（start/token/done）推送，前端无需区分来源。
+fn demo_answer_step(
+    app: &tauri::AppHandle,
+    conn: &std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>,
+    session_id: &str,
+    qa_id: &str,
+    question: &str,
+    hits: &[crate::interview::RecallHit],
+    ai: Option<(crate::config::AiConfig, String)>,
+    speed: f32,
+) -> String {
+    use tauri::Emitter;
+
+    let emit = |kind: &str, extra: serde_json::Value| {
+        let mut payload = serde_json::json!({
+            "sessionId": session_id,
+            "qaId": qa_id,
+            "kind": kind,
+        });
+        if let (Some(target), Some(extra)) = (payload.as_object_mut(), extra.as_object()) {
+            for (key, value) in extra {
+                target.insert(key.clone(), value.clone());
+            }
+        }
+        let _ = app.emit("interview://answer", payload);
+    };
+
+    let wait = |ms: u64| {
+        thread::sleep(Duration::from_millis(((ms as f32) / speed).max(0.0) as u64));
+    };
+
+    // 1) 真实模型优先
+    if let Some((config, api_key)) = ai {
+        let provider =
+            crate::providers::OpenAiCompatProvider::new(config.clone(), Some(api_key));
+        let request = ChatRequest {
+            model: config.model.clone(),
+            messages: build_answer_messages(question, hits),
+            temperature: config.temperature,
+        };
+
+        match provider.stream_chat(request) {
+            Ok(stream) => {
+                emit(
+                    "start",
+                    serde_json::json!({ "sources": hits, "model": provider.name() }),
+                );
+                let mut answer = String::new();
+                let mut failure: Option<String> = None;
+                for delta in stream.iter() {
+                    match delta {
+                        ChatDelta::Token { text } => {
+                            answer.push_str(&text);
+                            emit("token", serde_json::json!({ "text": text }));
+                        }
+                        ChatDelta::Error { message } => {
+                            failure = Some(message);
+                            break;
+                        }
+                        ChatDelta::Done { .. } => break,
+                        ChatDelta::Start => {}
+                    }
+                }
+
+                if failure.is_none() && !answer.trim().is_empty() {
+                    persist_answer(conn, qa_id, &answer, hits);
+                    emit("done", serde_json::json!({ "answer": answer }));
+                    return answer;
+                }
+                tracing::warn!("演示模式真实模型回答失败，回落离线回答");
+            }
+            Err(err) => tracing::warn!("演示模式模型不可用，回落离线回答：{err}"),
+        }
+    }
+
+    // 2) 离线拼装（打字机效果）
+    let answer = crate::interview::offline_answer(question, hits);
+    emit(
+        "start",
+        serde_json::json!({ "sources": hits, "model": "offline-demo" }),
+    );
+    for chunk in crate::demo::chunk_for_stream(&answer, 6) {
+        emit("token", serde_json::json!({ "text": chunk }));
+        wait(28);
+    }
+    persist_answer(conn, qa_id, &answer, hits);
+    emit("done", serde_json::json!({ "answer": answer }));
+    answer
+}
+
+/// 落库回答与引用来源（演示与正式链路共用同一张表）
+fn persist_answer(
+    conn: &std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>,
+    qa_id: &str,
+    answer: &str,
+    hits: &[crate::interview::RecallHit],
+) {
+    match conn.lock() {
+        Ok(guard) => {
+            let refs = source_refs(hits);
+            if let Err(err) = QaRepo::new(&guard).set_answer(qa_id, answer, &refs) {
+                tracing::warn!("演示回答落库失败（qa={qa_id}）：{err}");
+            }
+        }
+        Err(err) => tracing::warn!("演示回答落库跳过（连接锁中毒）：{err}"),
+    }
+}
+
+/// 启动一键全链路演示：脚本化输入驱动**真实**链路
+/// （转写 → 问题识别 → 知识库召回 → 回答生成 → 落库），无需设备/模型/Key。
+#[tauri::command]
+pub fn start_demo_session(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    speed: Option<f32>,
+) -> Result<DemoAck, String> {
+    let speed = speed.unwrap_or(1.0).clamp(0.25, 8.0);
+
+    // 1) 停止既有会话与采集
+    {
+        let mut runtime = state.asr_lock()?;
+        runtime.stop();
+    }
+    state.asr_paused.store(false, Ordering::SeqCst);
+    {
+        let mut manager = state.capture_lock()?;
+        manager.stop_all();
+    }
+
+    // 2) 幂等播种演示笔记（含 FTS 与向量索引）
+    let notes_seeded = {
+        let conn = state.lock()?;
+        crate::demo::seed_demo_notes(&conn, state.embedding.as_ref())?.len()
+    };
+
+    // 3) 读取问题识别配置，并判断是否可用真实模型
+    let (question_config, offline_answer, ai) = {
+        let conn = state.lock()?;
+        let question_config = crate::config::interview::load_question_config(&conn)
+            .map_err(|e| e.to_string())?;
+        let ai_config = crate::config::load_ai_config(&conn).map_err(|e| e.to_string())?;
+
+        let api_key = if ai_config.base_url.trim().is_empty() {
+            None
+        } else {
+            state
+                .secrets
+                .get(&crate::security::api_key_ref(ai_config.platform.as_str()))?
+                .filter(|key| !key.trim().is_empty())
+        };
+
+        match api_key {
+            Some(key) => (question_config, false, Some((ai_config, key))),
+            None => (question_config, true, None),
+        }
+    };
+
+    // 4) 会话记录
+    let session = {
+        let conn = state.lock()?;
+        TranscriptRepo::new(&conn)
+            .start_session("演示会话 · 全链路")
+            .map_err(|e| e.to_string())?
+    };
+
+    let (control_tx, control_rx) = mpsc::channel::<AsrControl>();
+    let app_handle = app.clone();
+    let conn_handle = state.conn.clone();
+    let embedding = state.embedding.clone();
+    let session_id = session.id.clone();
+    let turns = crate::demo::demo_turns();
+    let question_turns = turns
+        .iter()
+        .filter(|turn| turn.speaker == Speaker::Interviewer)
+        .count();
+    let estimated_ms = turns.len() as u64 * 900;
+
+    let pump = thread::spawn(move || {
+        use tauri::Emitter;
+
+        let mut detector = QuestionDetector::new(
+            question_config.threshold,
+            question_config.min_chars,
+            question_config.merge_window_ms,
+        );
+        let wait = |ms: u64| {
+            thread::sleep(Duration::from_millis(((ms as f32) / speed).max(0.0) as u64));
+        };
+        let should_stop = |rx: &mpsc::Receiver<AsrControl>| {
+            let mut stop = false;
+            while let Ok(control) = rx.try_recv() {
+                if control == AsrControl::Stop {
+                    stop = true;
+                }
+            }
+            stop
+        };
+
+        let mut answered = 0usize;
+
+        for turn in turns {
+            if should_stop(&control_rx) {
+                break;
+            }
+
+            // 转写：partial（模拟流式中间结果）→ final（落库）
+            if !turn.partial.is_empty() {
+                handle_transcript_events(
+                    &app_handle,
+                    &conn_handle,
+                    &session_id,
+                    &[TranscriptEvent::Partial {
+                        speaker: turn.speaker,
+                        text: turn.partial.to_string(),
+                    }],
+                );
+                wait(520);
+                if should_stop(&control_rx) {
+                    break;
+                }
+            }
+
+            handle_transcript_events(
+                &app_handle,
+                &conn_handle,
+                &session_id,
+                &[TranscriptEvent::Final {
+                    speaker: turn.speaker,
+                    text: turn.text.to_string(),
+                }],
+            );
+            wait(360);
+            if should_stop(&control_rx) {
+                break;
+            }
+
+            if turn.speaker != Speaker::Interviewer {
+                continue;
+            }
+
+            // 问题识别（真实检测器）
+            let Some(question) = detector.push(turn.text, now_ms()) else {
+                continue;
+            };
+            handle_detected_question(&app_handle, &conn_handle, &session_id, &question, false);
+            wait(420);
+            if should_stop(&control_rx) {
+                break;
+            }
+
+            // 知识库召回（真实混合检索）+ 引用来源落库
+            let (qa_id, hits) = match conn_handle.lock() {
+                Ok(guard) => {
+                    let repo = QaRepo::new(&guard);
+                    let qa_id = repo.latest(&session_id).ok().flatten().map(|pair| pair.id);
+                    let hits = match crate::interview::recall::recall_for_question(
+                        &guard,
+                        embedding.as_ref(),
+                        &question.text,
+                        crate::interview::DEFAULT_TOP_K,
+                    ) {
+                        Ok(outcome) => {
+                            if let Some(id) = &qa_id {
+                                let refs = source_refs(&outcome.hits);
+                                if let Err(err) = repo.set_sources(id, &refs) {
+                                    tracing::warn!("演示引用来源落库失败：{err}");
+                                }
+                            }
+                            outcome.hits
+                        }
+                        Err(err) => {
+                            tracing::warn!("演示召回失败：{err}");
+                            Vec::new()
+                        }
+                    };
+                    (qa_id, hits)
+                }
+                Err(err) => {
+                    tracing::warn!("演示召回跳过（连接锁中毒）：{err}");
+                    (None, Vec::new())
+                }
+            };
+
+            let Some(qa_id) = qa_id else { continue };
+
+            demo_answer_step(
+                &app_handle,
+                &conn_handle,
+                &session_id,
+                &qa_id,
+                &question.text,
+                &hits,
+                ai.clone(),
+                speed,
+            );
+            answered += 1;
+            wait(500);
+        }
+
+        let _ = app_handle.emit(
+            "demo://done",
+            serde_json::json!({
+                "sessionId": session_id,
+                "answered": answered,
+                "offlineAnswer": offline_answer,
+            }),
+        );
+    });
+
+    {
+        let mut runtime = state.asr_lock()?;
+        runtime.session = Some(AsrSession::new(
+            session.id.clone(),
+            crate::asr::AsrSessionOptions {
+                source: "demo".to_string(),
+                speaker: Speaker::Interviewer,
+                engine: "demo-replay".to_string(),
+                started_at: session.started_at,
+                dual: false,
+                aec_enabled: false,
+            },
+            std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0)),
+            control_tx,
+            pump,
+        ));
+    }
+
+    Ok(DemoAck {
+        session_id: session.id,
+        notes_seeded,
+        question_turns,
+        offline_answer,
+        estimated_ms,
+    })
+}
+
 // ==================== 迷你模式（IA-13） ====================
 
 /// 迷你浮窗标签（前端据此渲染迷你视图）

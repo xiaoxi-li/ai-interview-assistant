@@ -3,6 +3,7 @@ import AudioCapturePanel from "../components/interview/AudioCapturePanel";
 import TranscriptPanel from "../components/interview/TranscriptPanel";
 import QuestionPanel from "../components/interview/QuestionPanel";
 import AnswerPanel from "../components/interview/AnswerPanel";
+import DemoCard from "../components/interview/DemoCard";
 import ShortcutBar from "../components/interview/ShortcutBar";
 import { useT } from "../hooks/useT";
 import { useInterviewStore } from "../stores/interviewStore";
@@ -43,6 +44,8 @@ export default function InterviewPage() {
         </div>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto">
+          {/* 未开始时提供「零准备」演示入口 */}
+          {!running && <DemoCard />}
           <ShortcutBar />
           <TranscriptPanel />
           <QuestionPanel />
