@@ -2,6 +2,7 @@ import {
   BookOpen,
   History,
   Mic,
+  Minimize2,
   Minus,
   Settings as SettingsIcon,
   Square,
@@ -9,11 +10,13 @@ import {
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { cn, isTauri } from "./lib/utils";
+import { isMiniWindow, openMiniWindow } from "./lib/window";
 import { useAppStore, type PageKey } from "./stores/appStore";
 import KnowledgePage from "./pages/KnowledgePage";
 import InterviewPage from "./pages/InterviewPage";
 import SessionsPage from "./pages/SessionsPage";
 import SettingsPage from "./pages/SettingsPage";
+import MiniView from "./components/interview/MiniView";
 
 const NAV_ITEMS: { key: PageKey; label: string; icon: typeof BookOpen }[] = [
   { key: "knowledge", label: "知识库", icon: BookOpen },
@@ -41,6 +44,11 @@ export default function App() {
   const currentPage = useAppStore((s) => s.currentPage);
   const setCurrentPage = useAppStore((s) => s.setCurrentPage);
 
+  // 迷你浮窗：仅渲染精简视图
+  if (isMiniWindow()) {
+    return <MiniView />;
+  }
+
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-background text-text">
       {/* 自定义标题栏 */}
@@ -61,6 +69,13 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-0.5">
+          <button
+            title="迷你模式（仅显示当前问题与 AI 回答）"
+            onClick={() => openMiniWindow().catch((err) => console.error(err))}
+            className="flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-primary/20 hover:text-primary-3"
+          >
+            <Minimize2 className="h-3.5 w-3.5" />
+          </button>
           <button
             title="最小化"
             onClick={() => controlWindow("minimize")}

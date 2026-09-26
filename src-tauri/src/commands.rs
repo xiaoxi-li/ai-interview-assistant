@@ -1003,6 +1003,61 @@ pub fn list_questions(
         .map_err(|e| e.to_string())
 }
 
+// ==================== 迷你模式（IA-13） ====================
+
+/// 迷你浮窗标签（前端据此渲染迷你视图）
+pub const MINI_WINDOW_LABEL: &str = "mini";
+
+/// 打开迷你浮窗：独立无边框置顶小窗，仅展示当前问题与 AI 回答
+#[tauri::command]
+pub fn open_mini_window(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+
+    // 已存在则聚焦复用（懒创建：关闭即销毁）
+    if let Some(window) = app.get_webview_window(MINI_WINDOW_LABEL) {
+        let _ = window.show();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(
+        &app,
+        MINI_WINDOW_LABEL,
+        WebviewUrl::App("index.html".into()),
+    )
+    .title("AI 面试助手 · 迷你")
+    .inner_size(420.0, 340.0)
+    .min_inner_size(320.0, 200.0)
+    .decorations(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .resizable(true)
+    .build()
+    .map_err(|e| format!("创建迷你浮窗失败：{e}"))?;
+
+    Ok(())
+}
+
+/// 关闭迷你浮窗（关闭即销毁，释放 WebView 内存）
+#[tauri::command]
+pub fn close_mini_window(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+
+    if let Some(window) = app.get_webview_window(MINI_WINDOW_LABEL) {
+        window.close().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    // 兼容从迷你窗自身调用：直接关闭当前窗口
+    Ok(())
+}
+
+/// 迷你浮窗是否已打开
+#[tauri::command]
+pub fn mini_window_open(app: tauri::AppHandle) -> bool {
+    use tauri::Manager;
+    app.get_webview_window(MINI_WINDOW_LABEL).is_some()
+}
+
 /// 读取单条问答记录（含已生成的回答与引用来源）
 #[tauri::command]
 pub fn get_question(state: State<'_, AppState>, id: String) -> Result<QaPairDto, String> {

@@ -106,6 +106,9 @@ interface InterviewState {
   ) => Promise<void>;
   applyAnswerPush: (push: AnswerPush) => void;
   resetAnswer: () => void;
+
+  /** 从落库记录恢复当前问题与回答（迷你浮窗 / 重开后使用） */
+  hydrateFromPair: (pair: QaPair) => void;
 }
 
 export const useInterviewStore = create<InterviewState>((set, get) => {
@@ -408,6 +411,21 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
         answerError: null,
         answerQaId: null,
         answerModel: null,
+      }),
+
+    hydrateFromPair: (pair) =>
+      set({
+        currentQaId: pair.id,
+        currentQuestion: {
+          text: pair.question,
+          score: 0,
+          signals: [],
+          ts: pair.ts,
+        },
+        answerQaId: pair.answer ? pair.id : null,
+        answerText: pair.answer,
+        answerStatus: pair.answer ? "done" : "idle",
+        answerError: null,
       }),
   };
 });
