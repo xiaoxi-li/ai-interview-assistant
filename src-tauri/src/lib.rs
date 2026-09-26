@@ -99,6 +99,7 @@ pub fn run() {
             commands::get_asr_credential_status,
             commands::save_asr_credential,
             commands::delete_asr_credentials,
+            commands::analyze_vad_wav,
             commands::list_loopback_devices,
             commands::audio_capture_status,
             commands::start_audio_capture,

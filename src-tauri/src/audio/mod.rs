@@ -6,6 +6,7 @@
 pub mod capture;
 pub mod devices;
 pub mod mic;
+pub mod vad;
 pub mod wav;
 
 pub use capture::{
@@ -13,6 +14,10 @@ pub use capture::{
 };
 pub use devices::{list_by_kind, list_devices, DeviceInfo, DeviceKind};
 pub use mic::{find_loopback_device, is_loopback_device_name, loopback_candidates, CpalCapture};
+pub use vad::{
+    analyze as analyze_vad_samples, EnergyVad, VadConfig, VadReport, VadSegment, VadSegmenter,
+    VoiceActivityDetector,
+};
 
 use crate::providers::types::AudioChunk;
 

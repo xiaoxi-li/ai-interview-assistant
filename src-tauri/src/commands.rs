@@ -397,6 +397,19 @@ pub fn clear_local_data(
     crate::knowledge::clear_all_data(&conn).map_err(|e| e.to_string())
 }
 
+/// 对本地 WAV 文件执行 VAD 分析（自检/诊断用，音频不出本机）
+#[tauri::command]
+pub fn analyze_vad_wav(
+    path: String,
+    threshold: Option<f32>,
+) -> Result<crate::audio::VadReport, String> {
+    let samples = crate::audio::wav::read_wav_as_16k_mono(std::path::Path::new(&path))?;
+    Ok(crate::audio::analyze_vad_samples(
+        &samples,
+        threshold.unwrap_or(0.5),
+    ))
+}
+
 /// 音频采集状态
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
