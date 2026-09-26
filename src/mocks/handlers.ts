@@ -287,6 +287,31 @@ export async function mockInvoke<T>(
         signals: ["祈使式提问「介绍一下」"],
       } as T;
 
+    case "generate_answer":
+      return {
+        qaId: "q-mock-1",
+        question: "介绍一下你最近负责的项目",
+        reused: false,
+        sources: [
+          {
+            noteId: "note-mock-1",
+            title: "项目架构设计",
+            snippet: "负责桌面应用的架构设计与性能优化…",
+            score: 0.0328,
+          },
+        ],
+      } as T;
+
+    case "get_question":
+      return {
+        id: String(args?.id ?? "q-mock-1"),
+        sessionId: "s-mock-system",
+        question: "介绍一下你最近负责的项目",
+        answer: "我最近负责桌面端应用的架构设计，主要负责模块拆分与性能优化。",
+        sources: ["项目架构设计"],
+        ts: Date.now(),
+      } as T;
+
     case "recall_for_question":
       return {
         question: "介绍一下你最近负责的项目",

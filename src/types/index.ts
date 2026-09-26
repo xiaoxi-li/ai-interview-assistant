@@ -179,6 +179,31 @@ export interface QuestionConfig {
   threshold: number;
   minChars: number;
   mergeWindowMs: number;
+  /** 识别到问题后是否自动生成回答 */
+  autoAnswer: boolean;
+}
+
+/** 回答流事件（`interview://answer`） */
+export interface AnswerPush {
+  sessionId: string;
+  qaId: string;
+  kind: "start" | "token" | "done" | "error";
+  /** token 增量 */
+  text?: string;
+  /** 完整回答（done / error 时） */
+  answer?: string;
+  message?: string;
+  model?: string;
+  sources?: RecallHit[];
+}
+
+/** 回答生成受理结果 */
+export interface AnswerAck {
+  qaId: string;
+  question: string;
+  /** 复用已有回答（未重复消耗额度） */
+  reused: boolean;
+  sources: RecallHit[];
 }
 
 /** 单段文本的问题判定结果（预览/调试） */

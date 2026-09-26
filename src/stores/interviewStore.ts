@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import { ipc } from "../lib/ipc";
 import type {
+  AnswerAck,
+  AnswerPush,
+  AnswerStatus,
   AsrEngineInfo,
   AsrSessionStatus,
   AudioDevice,
@@ -87,6 +90,20 @@ interface InterviewState {
 
   recallSources: (sessionId: string, questionId?: string | null) => Promise<void>;
   resetSources: () => void;
+
+  /** AI 回答（IA-08） */
+  answerText: string;
+  answerStatus: AnswerStatus;
+  answerError: string | null;
+  answerQaId: string | null;
+  answerModel: string | null;
+  generateAnswer: (
+    sessionId: string,
+    questionId?: string | null,
+    regenerate?: boolean
+  ) => Promise<void>;
+  applyAnswerPush: (push: AnswerPush) => void;
+  resetAnswer: () => void;
 }
 
 export const useInterviewStore = create<InterviewState>((set, get) => {
@@ -117,6 +134,12 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
     sources: [],
     sourcesLoading: false,
     recallQueries: [],
+
+    answerText: "",
+    answerStatus: "idle",
+    answerError: null,
+    answerQaId: null,
+    answerModel: null,
 
     loadCaptureStatus: () =>
       Promise.all([
@@ -222,10 +245,14 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
       set((state) => ({
         currentQuestion: question,
         questionManual: manual,
-        // 新问题出现即清空上一题的召回结果
+        // 新问题出现即清空上一题的召回结果与回答
         currentQaId: qaId,
         sources: [],
         recallQueries: [],
+        answerText: "",
+        answerStatus: "idle",
+        answerError: null,
+        answerQaId: null,
         questions: qaId
           ? [
               ...state.questions,
@@ -298,5 +325,78 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
     },
 
     resetSources: () => set({ sources: [], recallQueries: [] }),
+
+    generateAnswer: (sessionId, questionId, regenerate) => {
+      set({ answerStatus: "thinking", answerError: null, answerText: "" });
+      return ipc<AnswerAck>("generate_answer", {
+        sessionId,
+        questionId: questionId ?? null,
+        regenerate: regenerate ?? false,
+      })
+        .then((ack) => {
+          if (!ack.reused) {
+            set({ answerQaId: ack.qaId });
+            return;
+          }
+          // 已有回答：直接取回，不重复消耗额度
+          return ipc<QaPair>("get_question", { id: ack.qaId }).then((pair) =>
+            set({
+              answerQaId: pair.id,
+              answerText: pair.answer,
+              answerStatus: "done",
+            })
+          );
+        })
+        .catch((err) => {
+          console.error("生成回答失败:", err);
+          set({ answerStatus: "error", answerError: String(err) });
+        });
+    },
+
+    applyAnswerPush: (push) => {
+      const { kind, qaId, text, answer, message, model } = push;
+
+      if (kind === "start") {
+        set({
+          answerQaId: qaId,
+          answerText: "",
+          answerStatus: "streaming",
+          answerError: null,
+          answerModel: model ?? null,
+        });
+        return;
+      }
+
+      if (kind === "token") {
+        set((state) => ({ answerText: state.answerText + (text ?? "") }));
+        return;
+      }
+
+      if (kind === "done") {
+        set((state) => ({
+          answerQaId: qaId,
+          answerText: answer ?? state.answerText,
+          answerStatus: "done",
+          answerError: null,
+        }));
+        return;
+      }
+
+      set((state) => ({
+        answerQaId: qaId,
+        answerText: answer ?? state.answerText,
+        answerStatus: "error",
+        answerError: message ?? "生成回答失败",
+      }));
+    },
+
+    resetAnswer: () =>
+      set({
+        answerText: "",
+        answerStatus: "idle",
+        answerError: null,
+        answerQaId: null,
+        answerModel: null,
+      }),
   };
 });

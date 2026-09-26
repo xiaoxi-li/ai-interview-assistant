@@ -20,6 +20,14 @@ pub struct QuestionConfig {
     pub min_chars: usize,
     /// 跨段聚合时间窗（毫秒）
     pub merge_window_ms: i64,
+    /// 识别到问题后是否自动生成回答（IA-08）
+    #[serde(default = "default_true")]
+    pub auto_answer: bool,
+}
+
+/// 新增字段的默认值（兼容旧配置文件）
+fn default_true() -> bool {
+    true
 }
 
 impl Default for QuestionConfig {
@@ -29,6 +37,7 @@ impl Default for QuestionConfig {
             threshold: DEFAULT_THRESHOLD,
             min_chars: DEFAULT_MIN_CHARS,
             merge_window_ms: DEFAULT_MERGE_WINDOW_MS,
+            auto_answer: true,
         }
     }
 }
@@ -91,9 +100,25 @@ mod tests {
             threshold: 0.7,
             min_chars: 6,
             merge_window_ms: 5_000,
+            auto_answer: false,
         };
         save_question_config(db.conn(), &config).expect("save");
         assert_eq!(load_question_config(db.conn()).expect("load"), config);
+    }
+
+    #[test]
+    fn legacy_config_without_auto_answer_defaults_to_true() {
+        let db = Db::open_in_memory().expect("db");
+        // 旧版本写入的 JSON 不含 autoAnswer 字段
+        save_setting(
+            db.conn(),
+            SETTING_QUESTION_CONFIG,
+            r#"{"autoDetect":true,"threshold":0.5,"minChars":4,"mergeWindowMs":3000}"#,
+        )
+        .expect("save legacy");
+
+        let config = load_question_config(db.conn()).expect("load");
+        assert!(config.auto_answer, "旧配置应默认开启自动回答");
     }
 
     #[test]

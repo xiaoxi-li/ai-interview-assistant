@@ -41,6 +41,8 @@ pub struct AppState {
     pub capture: Mutex<CaptureManager>,
     /// ASR 运行时（同一时刻最多一个本地 ASR 会话）
     pub asr: Mutex<crate::asr::AsrRuntime>,
+    /// 回答生成的「代数」：递增即取消上一轮流式生成（IA-08）
+    pub answer_generation: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl AppState {
@@ -59,6 +61,7 @@ impl AppState {
             secrets,
             capture: Mutex::new(CaptureManager::default()),
             asr: Mutex::new(crate::asr::AsrRuntime::default()),
+            answer_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 

@@ -11,17 +11,19 @@ use crate::audio::vad::VadConfig;
 use crate::audio::{AudioCapture, FRAME_SAMPLES};
 use crate::config::asr::CLOUD_ASR_IMPLEMENTED;
 use crate::config::interview::QuestionConfig;
+use crate::interview::answer::{build_answer_messages, source_titles};
 use crate::interview::question::{QuestionDetector, QuestionScore};
 use crate::interview::store::{QaPairDto, QaRepo};
 use crate::interview::DetectedQuestion;
 use crate::knowledge::export::{ExportSummary, RestoreSummary};
 use crate::knowledge::store::{now_ms, GroupsRepo, NotesRepo, TagsRepo, VersionsRepo};
 use crate::knowledge::{GroupDto, ImportOutcome, NoteDto, NoteVersionDto, TagDto};
-use crate::providers::types::{AsrMode, Speaker, TranscriptEvent};
+use crate::providers::types::{AsrMode, ChatDelta, ChatRequest, Speaker, TranscriptEvent};
 use crate::providers::AiProvider;
 use crate::retrieval::SearchHit;
 use crate::state::AppState;
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread;
 use std::time::Duration;
@@ -976,6 +978,16 @@ pub fn list_questions(
         .map_err(|e| e.to_string())
 }
 
+/// 读取单条问答记录（含已生成的回答与引用来源）
+#[tauri::command]
+pub fn get_question(state: State<'_, AppState>, id: String) -> Result<QaPairDto, String> {
+    let conn = state.lock()?;
+    QaRepo::new(&conn)
+        .get(&id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("问答记录不存在：{id}"))
+}
+
 /// 读取最近识别出的问题
 #[tauri::command]
 pub fn latest_question(
@@ -1052,6 +1064,193 @@ pub fn recall_for_question(
     }
 
     Ok(outcome)
+}
+
+// ==================== AI 回答生成（IA-08） ====================
+
+/// 回答生成受理结果
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnswerAck {
+    pub qa_id: String,
+    pub question: String,
+    /// 已有回答且未要求重新生成时为 true（不重复消耗额度）
+    pub reused: bool,
+    /// 本次注入提示词的知识库片段
+    pub sources: Vec<crate::interview::RecallHit>,
+}
+
+/// 结合知识库召回结果流式生成回答（token 通过 `interview://answer` 推送）
+#[tauri::command]
+pub fn generate_answer(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+    question_id: Option<String>,
+    top_k: Option<usize>,
+    regenerate: Option<bool>,
+) -> Result<AnswerAck, String> {
+    // 1) 定位问题
+    let pair = {
+        let conn = state.lock()?;
+        let repo = QaRepo::new(&conn);
+        match question_id {
+            Some(id) => repo
+                .get(&id)
+                .map_err(|e| e.to_string())?
+                .ok_or_else(|| format!("问题不存在：{id}"))?,
+            None => repo
+                .latest(&session_id)
+                .map_err(|e| e.to_string())?
+                .ok_or_else(|| "该会话还没有识别出问题".to_string())?,
+        }
+    };
+
+    if !regenerate.unwrap_or(false) && !pair.answer.trim().is_empty() {
+        return Ok(AnswerAck {
+            qa_id: pair.id,
+            question: pair.question,
+            reused: true,
+            sources: Vec::new(),
+        });
+    }
+
+    // 2) 召回知识库片段，并更新引用来源
+    let outcome = {
+        let conn = state.lock()?;
+        let outcome = crate::interview::recall::recall_for_question(
+            &conn,
+            state.embedding.as_ref(),
+            &pair.question,
+            top_k.unwrap_or(crate::interview::DEFAULT_TOP_K),
+        )
+        .map_err(|e| e.to_string())?;
+
+        let titles = source_titles(&outcome.hits);
+        if let Err(err) = QaRepo::new(&conn).set_sources(&pair.id, &titles) {
+            eprintln!("引用来源落库失败（qa={}）：{err}", pair.id);
+        }
+        outcome
+    };
+
+    // 3) 读取 AI 配置与密钥（网络请求不持有数据库锁）
+    let config = {
+        let conn = state.lock()?;
+        crate::config::load_ai_config(&conn).map_err(|e| e.to_string())?
+    };
+    if config.base_url.trim().is_empty() {
+        return Err("尚未配置 AI 平台，请到「设置 → AI 平台」完成配置。".into());
+    }
+    let api_key = state
+        .secrets
+        .get(&crate::security::api_key_ref(config.platform.as_str()))?;
+    if api_key.as_deref().map(str::trim).unwrap_or("").is_empty() {
+        return Err(format!(
+            "尚未配置「{}」的 API Key，请到「设置 → AI 平台」保存后重试。",
+            config.platform.as_str()
+        ));
+    }
+
+    let provider = crate::providers::OpenAiCompatProvider::new(config.clone(), api_key);
+    let request = ChatRequest {
+        model: config.model.clone(),
+        messages: build_answer_messages(&pair.question, &outcome.hits),
+        temperature: config.temperature,
+    };
+
+    // 4) 递增代数以取消上一轮生成
+    let generation = state.answer_generation.fetch_add(1, Ordering::SeqCst) + 1;
+
+    let app_handle = app.clone();
+    let conn_handle = state.conn.clone();
+    let generation_handle = state.answer_generation.clone();
+    let qa_id = pair.id.clone();
+    let sources = outcome.hits.clone();
+
+    thread::spawn(move || {
+        use tauri::Emitter;
+
+        let emit = |kind: &str, extra: serde_json::Value| {
+            let mut payload = serde_json::json!({
+                "sessionId": session_id,
+                "qaId": qa_id,
+                "kind": kind,
+            });
+            if let (Some(target), Some(extra)) = (payload.as_object_mut(), extra.as_object()) {
+                for (key, value) in extra {
+                    target.insert(key.clone(), value.clone());
+                }
+            }
+            let _ = app_handle.emit("interview://answer", payload);
+        };
+
+        let stream = match provider.stream_chat(request) {
+            Ok(stream) => stream,
+            Err(err) => {
+                emit("error", serde_json::json!({ "message": err.to_string() }));
+                return;
+            }
+        };
+
+        emit(
+            "start",
+            serde_json::json!({ "sources": sources, "model": provider.name() }),
+        );
+
+        let mut answer = String::new();
+        let mut failure: Option<String> = None;
+
+        for delta in stream.iter() {
+            // 已被新一轮生成取代：静默退出，避免旧回答覆盖新回答
+            if generation_handle.load(Ordering::SeqCst) != generation {
+                return;
+            }
+            match delta {
+                ChatDelta::Token { text } => {
+                    answer.push_str(&text);
+                    emit("token", serde_json::json!({ "text": text }));
+                }
+                ChatDelta::Error { message } => {
+                    failure = Some(message);
+                    break;
+                }
+                ChatDelta::Done { .. } => break,
+                ChatDelta::Start => {}
+            }
+        }
+
+        // 落库：回答 + 引用来源标题
+        if !answer.trim().is_empty() {
+            let titles = source_titles(&sources);
+            let persisted = match conn_handle.lock() {
+                Ok(guard) => QaRepo::new(&guard)
+                    .set_answer(&qa_id, &answer, &titles)
+                    .unwrap_or(false),
+                Err(err) => {
+                    eprintln!("回答落库跳过（连接锁中毒）：{err}");
+                    false
+                }
+            };
+            if !persisted {
+                eprintln!("回答落库失败（qa={qa_id}）");
+            }
+        }
+
+        match failure {
+            Some(message) => emit(
+                "error",
+                serde_json::json!({ "message": message, "answer": answer }),
+            ),
+            None => emit("done", serde_json::json!({ "answer": answer })),
+        }
+    });
+
+    Ok(AnswerAck {
+        qa_id: pair.id,
+        question: pair.question,
+        reused: false,
+        sources: outcome.hits,
+    })
 }
 
 /// 枚举音频设备（输入=麦克风，输出=系统音频来源）
