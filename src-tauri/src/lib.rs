@@ -8,6 +8,7 @@ mod state;
 pub mod knowledge;
 pub mod providers;
 pub mod retrieval;
+pub mod security;
 pub mod storage;
 
 /// 应用基础信息（用于验证前后端 IPC 通路）
@@ -37,10 +38,13 @@ pub fn run() {
             // P0 使用确定性 Mock 嵌入；真实本地 ONNX 模型在模型管理中台接入后替换
             let embedding: Arc<dyn providers::EmbeddingProvider> =
                 Arc::new(providers::MockEmbeddingProvider::default());
+            let secrets: Arc<dyn security::SecretStore> =
+                Arc::new(security::KeyringStore::new(security::SERVICE_NAME));
             app.manage(state::AppState::new(
                 db.into_shared_conn(),
                 db_path,
                 embedding,
+                secrets,
             ));
             Ok(())
         })
@@ -72,6 +76,9 @@ pub fn run() {
             commands::set_note_tags,
             commands::list_note_versions,
             commands::restore_note_version,
+            commands::save_api_key,
+            commands::get_api_key_status,
+            commands::delete_api_key,
             commands::export_notes_markdown,
             commands::export_backup_json,
             commands::backup_database,

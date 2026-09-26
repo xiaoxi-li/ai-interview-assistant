@@ -1,6 +1,7 @@
 //! 应用共享状态。
 
 use crate::providers::EmbeddingProvider;
+use crate::security::SecretStore;
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -13,6 +14,8 @@ pub struct AppState {
     pub db_path: PathBuf,
     /// 嵌入 Provider：P0 使用确定性 Mock，接入本地 ONNX 模型（ST-06/模型中台）后替换
     pub embedding: Arc<dyn EmbeddingProvider>,
+    /// 密钥存储：系统钥匙链（测试环境可注入内存实现）
+    pub secrets: Arc<dyn SecretStore>,
 }
 
 impl AppState {
@@ -20,11 +23,13 @@ impl AppState {
         conn: Arc<Mutex<Connection>>,
         db_path: PathBuf,
         embedding: Arc<dyn EmbeddingProvider>,
+        secrets: Arc<dyn SecretStore>,
     ) -> Self {
         Self {
             conn,
             db_path,
             embedding,
+            secrets,
         }
     }
 

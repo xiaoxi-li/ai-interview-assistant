@@ -25,6 +25,19 @@ export async function mockInvoke<T>(
     case "list_note_versions":
       return [] as T;
 
+    case "get_api_key_status":
+    case "save_api_key":
+    case "delete_api_key": {
+      const platform = String(args?.platform ?? "unknown");
+      const provided = String(args?.apiKey ?? "");
+      const configured = command === "delete_api_key" ? false : provided.length > 0;
+      return {
+        platform,
+        configured,
+        masked: configured ? `${provided.slice(0, 3)}****${provided.slice(-4)}` : "",
+      } as T;
+    }
+
     case "set_note_tags": {
       const id = String(args?.id ?? "");
       const tags = (args?.tags as string[]) ?? [];

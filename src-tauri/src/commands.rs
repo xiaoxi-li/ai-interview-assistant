@@ -240,6 +240,62 @@ pub fn restore_backup(
     Ok(summary)
 }
 
+/// API Key 配置状态（不回传完整密钥）
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiKeyStatus {
+    pub platform: String,
+    pub configured: bool,
+    /// 掩码后的密钥，未配置时为空串
+    pub masked: String,
+}
+
+fn api_key_status(secrets: &dyn crate::security::SecretStore, platform: &str) -> Result<ApiKeyStatus, String> {
+    let reference = crate::security::api_key_ref(platform);
+    let masked = secrets.masked(&reference)?;
+    Ok(ApiKeyStatus {
+        platform: platform.to_string(),
+        configured: masked.is_some(),
+        masked: masked.unwrap_or_default(),
+    })
+}
+
+/// 保存 API Key 到系统钥匙链（传空串表示删除）
+#[tauri::command]
+pub fn save_api_key(
+    state: State<'_, AppState>,
+    platform: String,
+    api_key: String,
+) -> Result<ApiKeyStatus, String> {
+    let reference = crate::security::api_key_ref(&platform);
+    let trimmed = api_key.trim();
+    if trimmed.is_empty() {
+        state.secrets.delete(&reference)?;
+    } else {
+        state.secrets.set(&reference, trimmed)?;
+    }
+    api_key_status(state.secrets.as_ref(), &platform)
+}
+
+/// 查询 API Key 配置状态
+#[tauri::command]
+pub fn get_api_key_status(
+    state: State<'_, AppState>,
+    platform: String,
+) -> Result<ApiKeyStatus, String> {
+    api_key_status(state.secrets.as_ref(), &platform)
+}
+
+/// 删除 API Key
+#[tauri::command]
+pub fn delete_api_key(
+    state: State<'_, AppState>,
+    platform: String,
+) -> Result<ApiKeyStatus, String> {
+    state.secrets.delete(&crate::security::api_key_ref(&platform))?;
+    api_key_status(state.secrets.as_ref(), &platform)
+}
+
 /// 列出全部标签
 #[tauri::command]
 pub fn list_tags(state: State<'_, AppState>) -> Result<Vec<TagDto>, String> {
