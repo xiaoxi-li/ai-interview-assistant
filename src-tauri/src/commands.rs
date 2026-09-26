@@ -1541,6 +1541,27 @@ pub fn analyze_question_text(text: String) -> QuestionScore {
     crate::interview::question::analyze(&text)
 }
 
+// ==================== 首次启动向导 ====================
+
+/// 查询是否已完成首次启动向导
+#[tauri::command]
+pub fn get_onboarding_state(state: State<'_, AppState>) -> Result<bool, String> {
+    let conn = state.lock()?;
+    crate::config::load_onboarded(&conn).map_err(|e| e.to_string())
+}
+
+/// 标记首次启动向导完成（`completed = false` 可重置，便于重新体验向导）
+#[tauri::command]
+pub fn complete_onboarding(
+    state: State<'_, AppState>,
+    completed: Option<bool>,
+) -> Result<bool, String> {
+    let completed = completed.unwrap_or(true);
+    let conn = state.lock()?;
+    crate::config::save_onboarded(&conn, completed)?;
+    crate::config::load_onboarded(&conn).map_err(|e| e.to_string())
+}
+
 // ==================== 会话记录（IA-10） ====================
 
 /// 列出历史会话（按开始时间倒序）

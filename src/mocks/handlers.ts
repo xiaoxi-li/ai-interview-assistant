@@ -362,6 +362,14 @@ export async function mockInvoke<T>(
         ts: Date.now(),
       } as T;
 
+    // ---------- 首次启动向导 ----------
+    case "get_onboarding_state":
+      // mock 环境默认视为已完成，便于直接浏览各页面
+      return true as T;
+
+    case "complete_onboarding":
+      return true as T;
+
     // ---------- 会话记录（IA-10） ----------
     case "list_sessions":
       return [

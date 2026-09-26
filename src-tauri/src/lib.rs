@@ -185,6 +185,8 @@ pub fn run() {
             commands::backup_database,
             commands::restore_backup,
             commands::set_stealth_window,
+            commands::get_onboarding_state,
+            commands::complete_onboarding,
             commands::list_sessions,
             commands::get_session_detail,
             commands::delete_session,

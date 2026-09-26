@@ -16,6 +16,28 @@ use serde::{Deserialize, Serialize};
 /// settings 表中 AI 配置的键名
 pub const SETTING_AI_CONFIG: &str = "ai.config";
 
+/// settings 表中「已完成首次启动向导」的键名
+pub const SETTING_ONBOARDED: &str = "app.onboarded";
+
+/// 是否已完成首次启动向导（缺失时视为未完成）
+pub fn load_onboarded(conn: &Connection) -> rusqlite::Result<bool> {
+    let Some(raw) = load_setting(conn, SETTING_ONBOARDED)? else {
+        return Ok(false);
+    };
+    let normalized = raw.trim().to_ascii_lowercase();
+    Ok(matches!(normalized.as_str(), "true" | "1" | "yes" | "done"))
+}
+
+/// 记录首次启动向导完成状态
+pub fn save_onboarded(conn: &Connection, onboarded: bool) -> Result<(), String> {
+    save_setting(
+        conn,
+        SETTING_ONBOARDED,
+        if onboarded { "true" } else { "false" },
+    )
+    .map_err(|e| e.to_string())
+}
+
 /// 支持的 AI 平台
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -192,6 +214,36 @@ mod tests {
     fn with_db<T>(f: impl FnOnce(&Connection) -> T) -> T {
         let db = Db::open_in_memory().expect("db");
         f(db.conn())
+    }
+
+    #[test]
+    fn onboarding_defaults_to_not_completed() {
+        with_db(|conn| {
+            assert!(!load_onboarded(conn).expect("load"));
+        });
+    }
+
+    #[test]
+    fn onboarding_round_trips() {
+        with_db(|conn| {
+            save_onboarded(conn, true).expect("save");
+            assert!(load_onboarded(conn).expect("load"));
+
+            save_onboarded(conn, false).expect("save false");
+            assert!(!load_onboarded(conn).expect("load"));
+        });
+    }
+
+    #[test]
+    fn onboarding_accepts_tolerant_values_and_rejects_noise() {
+        with_db(|conn| {
+            for value in ["TRUE", "1", " yes ", "done"] {
+                save_setting(conn, SETTING_ONBOARDED, value).expect("save raw");
+                assert!(load_onboarded(conn).expect("load"), "{value} 应视为已完成");
+            }
+            save_setting(conn, SETTING_ONBOARDED, "later").expect("save raw");
+            assert!(!load_onboarded(conn).expect("load"));
+        });
     }
 
     #[test]

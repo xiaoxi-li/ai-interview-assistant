@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import {
   BookOpen,
   History,
@@ -16,6 +17,7 @@ import KnowledgePage from "./pages/KnowledgePage";
 import InterviewPage from "./pages/InterviewPage";
 import SessionsPage from "./pages/SessionsPage";
 import SettingsPage from "./pages/SettingsPage";
+import OnboardingPage from "./pages/OnboardingPage";
 import MiniView from "./components/interview/MiniView";
 
 const NAV_ITEMS: { key: PageKey; label: string; icon: typeof BookOpen }[] = [
@@ -43,10 +45,30 @@ function controlWindow(action: WindowAction) {
 export default function App() {
   const currentPage = useAppStore((s) => s.currentPage);
   const setCurrentPage = useAppStore((s) => s.setCurrentPage);
+  const onboarded = useAppStore((s) => s.onboarded);
+  const onboardingLoaded = useAppStore((s) => s.onboardingLoaded);
+  const loadOnboarding = useAppStore((s) => s.loadOnboarding);
+
+  useEffect(() => {
+    loadOnboarding();
+  }, [loadOnboarding]);
 
   // 迷你浮窗：仅渲染精简视图
   if (isMiniWindow()) {
     return <MiniView />;
+  }
+
+  // 首次启动：向导状态读取完成后若未完成则进入向导
+  if (!onboardingLoaded) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-background text-[12px] text-text-subtle">
+        正在启动…
+      </div>
+    );
+  }
+
+  if (!onboarded) {
+    return <OnboardingPage />;
   }
 
   return (
