@@ -195,6 +195,7 @@ pub fn run() {
             commands::save_knowledge_config,
             commands::list_models,
             commands::download_model,
+            commands::check_model_mirror,
             commands::delete_model,
             commands::export_notes_markdown,
             commands::export_backup_json,

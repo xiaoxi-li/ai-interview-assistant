@@ -417,8 +417,22 @@ pub async fn download_model(
 
     let spec = crate::models::find_spec(&id)
         .ok_or_else(|| format!("未知模型：{id}"))?;
+
+    // 解析镜像源；未配置时给出可操作的错误（避免「点了没反应」）
+    let base = {
+        let conn = state.lock()?;
+        let config =
+            crate::config::knowledge::load_knowledge_config(&conn).map_err(|e| e.to_string())?;
+        crate::models::resolve_mirror(config.model_mirror.as_deref())
+    };
+    if base.trim().is_empty() {
+        return Err(
+            "模型镜像源未配置。请到「设置 → 知识库」填写镜像源地址，或设置环境变量 AIA_MODEL_MIRROR 后重试。"
+                .into(),
+        );
+    }
+
     let models_dir = state.models_dir.clone();
-    let base = crate::models::mirror_base();
     let model_id = spec.id.clone();
 
     let joined = tauri::async_runtime::spawn_blocking(move || {
@@ -437,6 +451,68 @@ pub async fn download_model(
     .map_err(|e| format!("下载任务异常：{e}"))?;
 
     joined.map(|path| path.display().to_string())
+}
+
+/// 模型镜像源连通性检查结果
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MirrorCheckResult {
+    /// 实际生效的镜像根地址（可能为空）
+    pub mirror: String,
+    pub configured: bool,
+    pub probes: Vec<ModelMirrorProbeDto>,
+}
+
+/// 单个模型文件的镜像探测结果
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelMirrorProbeDto {
+    pub id: String,
+    pub name: String,
+    pub ok: bool,
+    pub message: String,
+    pub content_length: Option<u64>,
+    pub supports_range: bool,
+}
+
+/// 检查模型镜像源连通性：逐个模型做 HEAD 探测（不下载正文）
+#[tauri::command]
+pub async fn check_model_mirror(
+    state: State<'_, AppState>,
+) -> Result<MirrorCheckResult, String> {
+    let base = {
+        let conn = state.lock()?;
+        let config =
+            crate::config::knowledge::load_knowledge_config(&conn).map_err(|e| e.to_string())?;
+        crate::models::resolve_mirror(config.model_mirror.as_deref())
+    };
+    let configured = !base.trim().is_empty();
+    let base_for_probe = base.clone();
+
+    let probes = tauri::async_runtime::spawn_blocking(move || {
+        crate::models::catalog()
+            .into_iter()
+            .map(|spec| {
+                let probe = crate::models::probe_url(&base_for_probe, &spec.path);
+                ModelMirrorProbeDto {
+                    id: spec.id,
+                    name: spec.name,
+                    ok: probe.ok,
+                    message: probe.message,
+                    content_length: probe.content_length,
+                    supports_range: probe.supports_range,
+                }
+            })
+            .collect::<Vec<_>>()
+    })
+    .await
+    .map_err(|e| format!("探测任务异常：{e}"))?;
+
+    Ok(MirrorCheckResult {
+        mirror: base,
+        configured,
+        probes,
+    })
 }
 
 /// 删除已安装模型

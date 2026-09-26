@@ -35,6 +35,7 @@ const config: KnowledgeConfig = {
   dbPath: null,
   modelsDir: null,
   embeddingModel: "embedding-minilm-zh",
+  modelMirror: null,
 };
 
 function setup(overrides: Partial<Parameters<typeof KnowledgeSettingsSection>[0]> = {}) {
@@ -90,6 +91,7 @@ describe("KnowledgeSettingsSection", () => {
       dbPath: "D:/data/ai.db",
       modelsDir: null,
       embeddingModel: "embedding-bge-small",
+      modelMirror: null,
     });
   });
 

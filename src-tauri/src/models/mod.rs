@@ -53,11 +53,88 @@ pub struct ModelStatus {
     pub partial_bytes: u64,
 }
 
-/// 镜像根地址（可通过环境变量覆盖，便于内网/离线部署）
+/// 镜像根地址（仅读取环境变量，便于内网/离线部署）
 pub fn mirror_base() -> String {
-    std::env::var("AIA_MODEL_MIRROR").unwrap_or_else(|_| {
-        "https://models.example.invalid/ai-interview".to_string()
-    })
+    std::env::var("AIA_MODEL_MIRROR").unwrap_or_default()
+}
+
+/// 解析镜像根地址：配置值优先，其次环境变量 `AIA_MODEL_MIRROR`，否则为空（未配置）。
+///
+/// 空串表示「未配置镜像源」，下载前需据此给出可操作的错误提示，而非静默失败。
+pub fn resolve_mirror(configured: Option<&str>) -> String {
+    if let Some(url) = configured {
+        let trimmed = url.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    std::env::var("AIA_MODEL_MIRROR").unwrap_or_default()
+}
+
+/// 镜像连通性探测结果（HEAD 请求，不下载正文）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MirrorProbe {
+    /// 是否可达（2xx）
+    pub ok: bool,
+    /// HTTP 状态码
+    pub status: Option<u16>,
+    /// 响应体大小（Content-Length）
+    pub content_length: Option<u64>,
+    /// 是否支持断点续传（Accept-Ranges: bytes）
+    pub supports_range: bool,
+    /// 可读说明（失败原因等）
+    pub message: String,
+}
+
+/// 用 HEAD 请求探测某个模型文件是否可访问（不下载正文，避免误拉取大文件）。
+pub fn probe_url(base_url: &str, path: &str) -> MirrorProbe {
+    if base_url.trim().is_empty() {
+        return MirrorProbe {
+            ok: false,
+            status: None,
+            content_length: None,
+            supports_range: false,
+            message: "镜像源未配置".to_string(),
+        };
+    }
+
+    let url = format!("{}/{}", base_url.trim_end_matches('/'), path.trim_start_matches('/'));
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(15))
+        .build();
+
+    match agent.head(&url).call() {
+        Ok(resp) => {
+            let status = resp.status();
+            let content_length = resp
+                .header("Content-Length")
+                .and_then(|v| v.parse::<u64>().ok());
+            let supports_range = resp
+                .header("Accept-Ranges")
+                .map(|v| v.to_ascii_lowercase().contains("bytes"))
+                .unwrap_or(false);
+            let ok = (200..300).contains(&status);
+            MirrorProbe {
+                ok,
+                status: Some(status),
+                content_length,
+                supports_range,
+                message: if ok {
+                    "可达".to_string()
+                } else {
+                    format!("HTTP {status}")
+                },
+            }
+        }
+        Err(err) => MirrorProbe {
+            ok: false,
+            status: None,
+            content_length: None,
+            supports_range: false,
+            message: format!("不可达：{err}"),
+        },
+    }
 }
 
 /// 内置模型清单
@@ -505,6 +582,57 @@ mod tests {
         assert_eq!(asr_status.partial_bytes, 5);
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn probe_url_reports_unconfigured_mirror() {
+        let probe = probe_url("", "embedding/minilm-zh.onnx");
+        assert!(!probe.ok);
+        assert!(probe.message.contains("未配置"), "{}", probe.message);
+        assert_eq!(probe.status, None);
+    }
+
+    #[test]
+    fn probe_url_reports_unreachable_host() {
+        // 127.0.0.1:1 通常无监听，应报告不可达而非 panic
+        let probe = probe_url("http://127.0.0.1:1", "vad/silero_vad.onnx");
+        assert!(!probe.ok);
+        assert!(!probe.message.is_empty());
+    }
+
+    #[test]
+    fn probe_url_detects_ok_and_range_support() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let handle = thread::spawn(move || {
+            for stream in listener.incoming().take(1) {
+                let Ok(mut stream) = stream else { continue };
+                let mut buffer = [0u8; 1024];
+                let _ = stream.read(&mut buffer);
+                let header = "HTTP/1.1 200 OK\r\nContent-Length: 2048\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.flush();
+            }
+        });
+
+        let probe = probe_url(&format!("http://{addr}"), "x/y.onnx");
+        assert!(probe.ok, "应为可达：{}", probe.message);
+        assert_eq!(probe.status, Some(200));
+        assert_eq!(probe.content_length, Some(2048));
+        assert!(probe.supports_range);
+
+        handle.join().ok();
+    }
+
+    #[test]
+    fn resolve_mirror_prefers_configured_over_env() {
+        // 配置值优先于环境变量
+        let resolved = resolve_mirror(Some("https://cfg.example.com/ai"));
+        assert_eq!(resolved, "https://cfg.example.com/ai");
+
+        // 空白配置视为未配置，回退环境变量
+        let resolved = resolve_mirror(Some("   "));
+        assert_eq!(resolved, std::env::var("AIA_MODEL_MIRROR").unwrap_or_default());
     }
 
     #[test]

@@ -25,6 +25,9 @@ pub struct KnowledgeConfig {
     pub models_dir: Option<String>,
     /// 嵌入模型 ID
     pub embedding_model: String,
+    /// 模型镜像源根地址（None 表示未配置，需在设置中配置或使用环境变量 `AIA_MODEL_MIRROR`）
+    #[serde(default)]
+    pub model_mirror: Option<String>,
 }
 
 impl Default for KnowledgeConfig {
@@ -33,6 +36,7 @@ impl Default for KnowledgeConfig {
             db_path: None,
             models_dir: None,
             embedding_model: DEFAULT_EMBEDDING_MODEL.to_string(),
+            model_mirror: None,
         }
     }
 }
@@ -47,6 +51,12 @@ impl KnowledgeConfig {
         }
         if !embedding_available(&self.embedding_model) {
             return Err(format!("未知的嵌入模型：{}", self.embedding_model));
+        }
+        if let Some(mirror) = &self.model_mirror {
+            let trimmed = mirror.trim();
+            if !(trimmed.starts_with("http://") || trimmed.starts_with("https://")) {
+                return Err("模型镜像源需以 http:// 或 https:// 开头".into());
+            }
         }
         Ok(())
     }
@@ -130,6 +140,7 @@ mod tests {
                 db_path: Some("D:/data/ai-interview.db".into()),
                 models_dir: Some("D:/data/models".into()),
                 embedding_model: DEFAULT_EMBEDDING_MODEL.into(),
+                model_mirror: Some("https://models.example.com/ai".into()),
             };
             save_knowledge_config(conn, &config).expect("save");
             assert_eq!(load_knowledge_config(conn).expect("load"), config);
@@ -174,6 +185,31 @@ mod tests {
         let mut config = KnowledgeConfig::default();
         config.embedding_model = "not-a-model".into();
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_non_http_model_mirror() {
+        let mut config = KnowledgeConfig::default();
+        config.model_mirror = Some("ftp://models.example.com/ai".into());
+        assert!(config.validate().is_err(), "非 http(s) 镜像源应被拒绝");
+
+        config.model_mirror = Some("https://models.example.com/ai".into());
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn legacy_config_without_model_mirror_defaults_to_none() {
+        with_db(|conn| {
+            save_setting(
+                conn,
+                SETTING_KNOWLEDGE_CONFIG,
+                r#"{"dbPath":null,"modelsDir":null,"embeddingModel":"embedding-minilm-zh"}"#,
+            )
+            .expect("save legacy");
+
+            let config = load_knowledge_config(conn).expect("load");
+            assert_eq!(config.model_mirror, None, "旧配置应默认未配置镜像源");
+        });
     }
 
     #[test]

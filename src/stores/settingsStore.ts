@@ -10,6 +10,7 @@ import type {
   ConnectionTest,
   InterfaceConfig,
   KnowledgeConfig,
+  MirrorCheckResult,
   ModelProgress,
   ModelStatus,
   PlatformPreset,
@@ -86,10 +87,18 @@ interface SettingsState {
   modelProgress: Record<string, ModelProgress>;
   /** 正在下载的模型 ID */
   downloadingId: string | null;
+  /** 各模型最近一次下载失败信息（内联展示 + 重试） */
+  modelErrors: Record<string, string>;
+  /** 镜像源连通性检查结果 */
+  mirrorCheck: MirrorCheckResult | null;
+  /** 连通性检查进行中 */
+  mirrorChecking: boolean;
   loadModels: () => Promise<void>;
   downloadModel: (id: string) => Promise<void>;
   deleteModel: (id: string) => Promise<void>;
   applyModelProgress: (progress: ModelProgress) => void;
+  clearModelError: (id: string) => void;
+  checkModelMirror: () => Promise<void>;
   /** 隐私配置 */
   privacyConfig: PrivacyConfig | null;
   /** 清除本地数据中 */
@@ -159,6 +168,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     models: [],
     modelProgress: {},
     downloadingId: null,
+    modelErrors: {},
+    mirrorCheck: null,
+    mirrorChecking: false,
 
     loadKnowledgeSettings: () =>
       Promise.all([
@@ -193,6 +205,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       set((state) => ({
         downloadingId: id,
         error: null,
+        // 清空该模型旧错误，重置进度（断点续传会由后端重新上报 offset）
+        modelErrors: { ...state.modelErrors, [id]: "" },
         modelProgress: {
           ...state.modelProgress,
           [id]: { id, downloaded: 0, total: null },
@@ -200,12 +214,45 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       }));
       return ipc<string>("download_model", { id })
         .then(() => {
-          set({ downloadingId: null, notice: "模型下载完成" });
+          set((state) => {
+            const modelErrors = { ...state.modelErrors };
+            delete modelErrors[id];
+            return {
+              downloadingId: null,
+              modelErrors,
+              notice: "模型下载完成",
+            };
+          });
           return get().loadModels();
         })
         .catch((err) => {
-          set({ downloadingId: null });
-          fail("下载模型", err);
+          // 失败保留进度与缓存，内联展示错误供重试，而非「闪烁消失」
+          const message = String(err);
+          console.error("下载模型失败:", err);
+          set((state) => ({
+            downloadingId: null,
+            modelErrors: { ...state.modelErrors, [id]: message },
+          }));
+        });
+    },
+
+    clearModelError: (id) =>
+      set((state) => {
+        const modelErrors = { ...state.modelErrors };
+        delete modelErrors[id];
+        return { modelErrors };
+      }),
+
+    checkModelMirror: () => {
+      set({ mirrorChecking: true });
+      return ipc<MirrorCheckResult>("check_model_mirror")
+        .then((mirrorCheck) => set({ mirrorCheck, mirrorChecking: false }))
+        .catch((err) => {
+          console.error("检查镜像源失败:", err);
+          set({
+            mirrorChecking: false,
+            mirrorCheck: { mirror: "", configured: false, probes: [] },
+          });
         });
     },
 

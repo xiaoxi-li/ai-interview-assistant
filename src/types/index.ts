@@ -319,6 +319,25 @@ export interface KnowledgeConfig {
   dbPath: string | null;
   modelsDir: string | null;
   embeddingModel: string;
+  /** 模型镜像源根地址（null 表示未配置） */
+  modelMirror: string | null;
+}
+
+/** 模型镜像源连通性检查结果 */
+export interface MirrorCheckResult {
+  mirror: string;
+  configured: boolean;
+  probes: ModelMirrorProbe[];
+}
+
+/** 单个模型文件的镜像探测结果 */
+export interface ModelMirrorProbe {
+  id: string;
+  name: string;
+  ok: boolean;
+  message: string;
+  contentLength: number | null;
+  supportsRange: boolean;
 }
 
 /** 当前生效的存储路径 */

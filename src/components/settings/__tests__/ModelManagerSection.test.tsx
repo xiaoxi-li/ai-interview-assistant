@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import ModelManagerSection from "../ModelManagerSection";
-import type { ModelProgress, ModelStatus } from "../../../types";
+import type { MirrorCheckResult, ModelProgress, ModelStatus } from "../../../types";
 
 function makeModel(overrides: Partial<ModelStatus> = {}): ModelStatus {
   return {
@@ -21,10 +21,18 @@ function makeModel(overrides: Partial<ModelStatus> = {}): ModelStatus {
   };
 }
 
+type ExtraProps = Partial<
+  Omit<
+    Parameters<typeof ModelManagerSection>[0],
+    "models" | "progress" | "downloadingId" | "onDownload" | "onDelete"
+  >
+>;
+
 function setup(
   models: ModelStatus[] = [makeModel()],
   progress: Record<string, ModelProgress> = {},
-  downloadingId: string | null = null
+  downloadingId: string | null = null,
+  extra: ExtraProps = {}
 ) {
   const handlers = { onDownload: vi.fn(), onDelete: vi.fn() };
   render(
@@ -33,6 +41,7 @@ function setup(
       progress={progress}
       downloadingId={downloadingId}
       {...handlers}
+      {...extra}
     />
   );
   return handlers;
@@ -102,5 +111,64 @@ describe("ModelManagerSection", () => {
       "embedding-minilm-zh"
     );
     expect(screen.getByText("正在连接镜像源…")).toBeTruthy();
+  });
+
+  it("未配置镜像源时显示未配置徽标", () => {
+    setup([makeModel()], {}, null, { mirror: "" });
+    expect(screen.getByText("未配置")).toBeTruthy();
+    expect(screen.getByPlaceholderText("https://your-mirror.example.com/ai-interview")).toBeTruthy();
+  });
+
+  it("已配置镜像源时显示已配置徽标", () => {
+    setup([makeModel()], {}, null, { mirror: "https://mirror.example.com/ai" });
+    expect(screen.getByText("已配置")).toBeTruthy();
+  });
+
+  it("保存镜像源触发回调并去空格", () => {
+    const onSaveMirror = vi.fn();
+    setup([makeModel()], {}, null, { onSaveMirror });
+
+    const input = screen.getByPlaceholderText(
+      "https://your-mirror.example.com/ai-interview"
+    ) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "  https://m.example.com/ai  " } });
+    fireEvent.click(screen.getByText("保存"));
+
+    expect(onSaveMirror).toHaveBeenCalledWith("https://m.example.com/ai");
+  });
+
+  it("测试连通性触发回调", () => {
+    const onCheckMirror = vi.fn();
+    setup([makeModel()], {}, null, { onCheckMirror });
+    fireEvent.click(screen.getByText("测试连通性"));
+    expect(onCheckMirror).toHaveBeenCalledTimes(1);
+  });
+
+  it("展示镜像源探测结果（含失败原因）", () => {
+    const mirrorCheck: MirrorCheckResult = {
+      mirror: "https://mirror.example.com/ai",
+      configured: true,
+      probes: [
+        {
+          id: "embedding-minilm-zh",
+          name: "中文嵌入模型（MiniLM）",
+          ok: false,
+          message: "不可达：连接被拒绝",
+          contentLength: null,
+          supportsRange: false,
+        },
+      ],
+    };
+    setup([makeModel()], {}, null, { mirrorCheck });
+    expect(screen.getByText(/不可达：连接被拒绝/)).toBeTruthy();
+  });
+
+  it("下载失败时内联展示错误（不再静默消失）", () => {
+    setup([makeModel()], {}, null, {
+      errors: { "embedding-minilm-zh": "模型镜像源未配置。请到「设置 → 知识库」填写镜像源地址。" },
+    });
+    expect(
+      screen.getByText(/模型镜像源未配置。请到「设置 → 知识库」填写镜像源地址。/)
+    ).toBeTruthy();
   });
 });

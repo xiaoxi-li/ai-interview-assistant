@@ -99,10 +99,27 @@ export async function mockInvoke<T>(
         dbPath: null,
         modelsDir: null,
         embeddingModel: "embedding-minilm-zh",
+        modelMirror: null,
       } as T;
 
     case "save_knowledge_config":
       return (args?.config ?? null) as T;
+
+    case "check_model_mirror":
+      return {
+        mirror: "",
+        configured: false,
+        probes: [
+          {
+            id: "embedding-minilm-zh",
+            name: "中文嵌入模型（MiniLM）",
+            ok: false,
+            message: "镜像源未配置",
+            contentLength: null,
+            supportsRange: false,
+          },
+        ],
+      } as T;
 
     case "list_models":
       return [
