@@ -268,6 +268,20 @@ mod tests {
     }
 
     #[test]
+    fn validate_accepts_temperature_boundaries() {
+        let mut config = AiConfig::default();
+
+        config.temperature = 0.0;
+        assert!(config.validate().is_ok(), "温度下边界应合法");
+
+        config.temperature = 2.0;
+        assert!(config.validate().is_ok(), "温度上边界应合法");
+
+        config.temperature = 2.0 + f32::EPSILON * 10.0;
+        assert!(config.validate().is_err(), "超出上边界应拒绝");
+    }
+
+    #[test]
     fn save_ai_config_rejects_invalid() {
         with_db(|conn| {
             let mut config = AiConfig::default();

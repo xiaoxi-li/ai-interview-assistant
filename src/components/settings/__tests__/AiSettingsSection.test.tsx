@@ -115,6 +115,23 @@ describe("AiSettingsSection", () => {
     expect(h.onDeleteApiKey).toHaveBeenCalledWith("deepseek");
   });
 
+  it("配置非法时展示校验错误并禁用保存", () => {
+    setup();
+    fireEvent.change(screen.getByLabelText("模型名"), { target: { value: "  " } });
+
+    expect(screen.getByText("模型名不能为空")).toBeTruthy();
+    const saveButton = screen.getByText("保存配置") as HTMLButtonElement;
+    expect(saveButton.disabled).toBe(true);
+  });
+
+  it("修改后未保存时提示未保存状态", () => {
+    setup();
+    fireEvent.change(screen.getByLabelText("模型名"), {
+      target: { value: "deepseek-reasoner" },
+    });
+    expect(screen.getByText("有未保存的修改")).toBeTruthy();
+  });
+
   it("已配置时占位符显示掩码", () => {
     setup({
       apiKeyStatus: { platform: "deepseek", configured: true, masked: "sk-****cdef" },

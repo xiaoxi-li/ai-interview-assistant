@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { Check, KeyRound, Save, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, Check, KeyRound, Save, Trash2 } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { isAiConfigDirty, validateAiConfig } from "../../lib/aiConfig";
 import type { AIConfig, PlatformPreset } from "../../types";
 import type { ApiKeyStatus } from "../../stores/settingsStore";
 
@@ -27,6 +28,9 @@ export default function AiSettingsSection({
 }: AiSettingsSectionProps) {
   const [draft, setDraft] = useState<AIConfig>(config);
   const [apiKey, setApiKey] = useState("");
+
+  const validationError = useMemo(() => validateAiConfig(draft), [draft]);
+  const dirty = isAiConfigDirty(draft, config);
 
   // 外部配置变化（如首次加载）时同步草稿
   useEffect(() => {
@@ -175,10 +179,20 @@ export default function AiSettingsSection({
         </div>
       </div>
 
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex items-center gap-3">
+        {validationError && (
+          <span className="flex items-center gap-1.5 text-[11px] text-danger">
+            <AlertCircle className="h-3 w-3" />
+            {validationError}
+          </span>
+        )}
+        {!validationError && dirty && (
+          <span className="text-[11px] text-warning">有未保存的修改</span>
+        )}
         <button
           onClick={() => onSaveConfig(draft)}
-          className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25"
+          disabled={Boolean(validationError)}
+          className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Save className="h-3.5 w-3.5" />
           保存配置
