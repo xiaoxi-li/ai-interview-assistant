@@ -3,8 +3,8 @@
 //! 约定：所有命令返回 `Result<T, String>`，错误直接以字符串形式透传给前端。
 
 use crate::knowledge::export::{ExportSummary, RestoreSummary};
-use crate::knowledge::store::{GroupsRepo, NotesRepo, TagsRepo};
-use crate::knowledge::{GroupDto, ImportOutcome, NoteDto, TagDto};
+use crate::knowledge::store::{GroupsRepo, NotesRepo, TagsRepo, VersionsRepo};
+use crate::knowledge::{GroupDto, ImportOutcome, NoteDto, NoteVersionDto, TagDto};
 use crate::retrieval::SearchHit;
 use crate::state::AppState;
 use std::path::PathBuf;
@@ -26,10 +26,46 @@ pub fn update_note(
     content: String,
 ) -> Result<NoteDto, String> {
     let conn = state.lock()?;
+    // 编辑前留存历史版本，便于回滚
+    if let Err(err) = VersionsRepo::new(&conn).snapshot(&id) {
+        eprintln!("版本快照失败（note={id}）：{err}");
+    }
+
     let note = NotesRepo::new(&conn)
         .update(&id, &title, &content)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("笔记不存在：{id}"))?;
+    index_note_quietly(&conn, &state, &note);
+    Ok(note)
+}
+
+/// 列出笔记的历史版本（新→旧）
+#[tauri::command]
+pub fn list_note_versions(
+    state: State<'_, AppState>,
+    id: String,
+    limit: Option<usize>,
+) -> Result<Vec<NoteVersionDto>, String> {
+    let conn = state.lock()?;
+    VersionsRepo::new(&conn)
+        .list(&id, limit.unwrap_or(50))
+        .map_err(|e| e.to_string())
+}
+
+/// 回滚笔记到指定历史版本
+#[tauri::command]
+pub fn restore_note_version(
+    state: State<'_, AppState>,
+    version_id: String,
+) -> Result<NoteDto, String> {
+    let conn = state.lock()?;
+    let note = VersionsRepo::new(&conn)
+        .restore(&version_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("版本不存在：{version_id}"))?;
+
+    crate::retrieval::sync_note(&conn, &note.id, &note.title, &note.content, &note.tags)
+        .map_err(|e| e.to_string())?;
     index_note_quietly(&conn, &state, &note);
     Ok(note)
 }

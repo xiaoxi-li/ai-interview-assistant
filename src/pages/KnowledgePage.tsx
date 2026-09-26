@@ -19,6 +19,7 @@ import {
 import GroupTree from "../components/knowledge/GroupTree";
 import NoteList from "../components/knowledge/NoteList";
 import MarkdownEditor from "../components/knowledge/MarkdownEditor";
+import VersionPanel from "../components/knowledge/VersionPanel";
 import { useFileDrop } from "../hooks/useFileDrop";
 import { useNoteDraft } from "../hooks/useNoteDraft";
 import { pickDirectory, pickJsonFile, pickMarkdownFiles, pickSavePath } from "../lib/dialog";
@@ -71,6 +72,11 @@ export default function KnowledgePage() {
   const selectedTag = useKnowledgeStore((s) => s.selectedTag);
   const setSelectedTag = useKnowledgeStore((s) => s.setSelectedTag);
   const setNoteTags = useKnowledgeStore((s) => s.setNoteTags);
+  const versions = useKnowledgeStore((s) => s.versions);
+  const historyOpen = useKnowledgeStore((s) => s.historyOpen);
+  const toggleHistory = useKnowledgeStore((s) => s.toggleHistory);
+  const loadVersions = useKnowledgeStore((s) => s.loadVersions);
+  const restoreVersion = useKnowledgeStore((s) => s.restoreVersion);
   const notice = useKnowledgeStore((s) => s.notice);
   const clearNotice = useKnowledgeStore((s) => s.clearNotice);
   const exportMarkdown = useKnowledgeStore((s) => s.exportMarkdown);
@@ -87,6 +93,13 @@ export default function KnowledgePage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 切换笔记时刷新版本历史（面板展开状态下）
+  useEffect(() => {
+    if (historyOpen && selectedId) {
+      loadVersions(selectedId);
+    }
+  }, [historyOpen, selectedId, loadVersions]);
 
   // 关键词变化后防抖触发全文检索
   useEffect(() => {
@@ -429,7 +442,8 @@ export default function KnowledgePage() {
         </aside>
 
         {/* 主区 */}
-        <section className="min-w-0 flex-1">
+        <section className="flex min-w-0 flex-1">
+          <div className="min-w-0 flex-1">
           {isTrash ? (
             <div className="flex h-full items-center justify-center">
               <div className="glass flex max-w-md flex-col items-center gap-3 rounded-xl px-10 py-12 text-center">
@@ -455,6 +469,8 @@ export default function KnowledgePage() {
               onTitleChange={draft.setTitle}
               onContentChange={draft.setContent}
               onViewModeChange={setViewMode}
+              historyOpen={historyOpen}
+              onToggleHistory={() => toggleHistory()}
               onAddTag={(tag) => setNoteTags(selected.id, [...selected.tags, tag])}
               onRemoveTag={(tag) =>
                 setNoteTags(
@@ -475,6 +491,15 @@ export default function KnowledgePage() {
                 </p>
               </div>
             </div>
+          )}
+          </div>
+
+          {historyOpen && !isTrash && selected && (
+            <VersionPanel
+              versions={versions}
+              onRestore={restoreVersion}
+              onClose={() => toggleHistory(false)}
+            />
           )}
         </section>
       </div>

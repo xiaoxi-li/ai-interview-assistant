@@ -1,4 +1,4 @@
-import { Check, Code2, Columns2, Eye, Loader2 } from "lucide-react";
+import { Check, Code2, Columns2, Eye, History, Loader2 } from "lucide-react";
 import { cn, formatTime } from "../../lib/utils";
 import type { ViewMode } from "../../types";
 
@@ -15,6 +15,9 @@ interface EditorToolbarProps {
   savedAt: number | null;
   onTitleChange: (value: string) => void;
   onViewModeChange: (mode: ViewMode) => void;
+  /** 版本历史面板是否展开 */
+  historyOpen?: boolean;
+  onToggleHistory?: () => void;
 }
 
 export default function EditorToolbar({
@@ -24,6 +27,8 @@ export default function EditorToolbar({
   savedAt,
   onTitleChange,
   onViewModeChange,
+  historyOpen = false,
+  onToggleHistory,
 }: EditorToolbarProps) {
   return (
     <div className="flex h-11 shrink-0 items-center gap-3 border-b border-white/5 px-4">
@@ -47,6 +52,21 @@ export default function EditorToolbar({
           </>
         ) : null}
       </span>
+
+      {onToggleHistory && (
+        <button
+          title="版本历史"
+          onClick={onToggleHistory}
+          className={cn(
+            "flex cursor-pointer items-center rounded-md border border-white/10 p-1.5 transition-colors",
+            historyOpen
+              ? "bg-primary/20 text-primary-3"
+              : "bg-background-3/60 text-text-subtle hover:text-text"
+          )}
+        >
+          <History className="h-3.5 w-3.5" />
+        </button>
+      )}
 
       <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-background-3/60 p-0.5">
         {MODES.map(({ key, label, icon: Icon }) => (

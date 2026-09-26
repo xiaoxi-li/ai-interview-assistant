@@ -41,6 +41,19 @@ pub struct TagDto {
     pub color: String,
 }
 
+/// 笔记历史版本
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteVersionDto {
+    pub id: String,
+    pub note_id: String,
+    pub title: String,
+    pub content: String,
+    /// 递增版本号（越大越新）
+    pub version: i64,
+    pub created_at: i64,
+}
+
 /// 导入结果
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

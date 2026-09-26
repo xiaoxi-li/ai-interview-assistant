@@ -22,6 +22,9 @@ export async function mockInvoke<T>(
         { id: "t3", name: "行为面试", color: "#4F6BED" },
       ] as T;
 
+    case "list_note_versions":
+      return [] as T;
+
     case "set_note_tags": {
       const id = String(args?.id ?? "");
       const tags = (args?.tags as string[]) ?? [];

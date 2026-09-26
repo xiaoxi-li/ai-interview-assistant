@@ -21,6 +21,9 @@ interface MarkdownEditorProps {
   onViewModeChange: (mode: ViewMode) => void;
   onAddTag?: (tag: string) => void;
   onRemoveTag?: (tag: string) => void;
+  /** 版本历史开关 */
+  historyOpen?: boolean;
+  onToggleHistory?: () => void;
 }
 
 /**
@@ -41,6 +44,8 @@ export default function MarkdownEditor({
   onViewModeChange,
   onAddTag,
   onRemoveTag,
+  historyOpen,
+  onToggleHistory,
 }: MarkdownEditorProps) {
   const showSource = viewMode !== "preview";
   const showPreview = viewMode !== "source";
@@ -54,6 +59,8 @@ export default function MarkdownEditor({
         savedAt={savedAt}
         onTitleChange={onTitleChange}
         onViewModeChange={onViewModeChange}
+        historyOpen={historyOpen}
+        onToggleHistory={onToggleHistory}
       />
 
       {onAddTag && onRemoveTag && (

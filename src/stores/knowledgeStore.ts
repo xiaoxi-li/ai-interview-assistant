@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { ipc } from "../lib/ipc";
-import type { Group, Note, SearchHit, Tag } from "../types";
+import type { Group, Note, NoteVersion, SearchHit, Tag } from "../types";
 
 interface ImportOutcome {
   imported: number;
@@ -65,6 +65,13 @@ interface KnowledgeState {
   backupDatabase: (dest: string) => Promise<void>;
   /** 从 JSON 备份恢复 */
   restoreBackup: (source: string) => Promise<void>;
+  /** 当前笔记的历史版本 */
+  versions: NoteVersion[];
+  /** 版本历史面板是否展开 */
+  historyOpen: boolean;
+  loadVersions: (noteId: string) => Promise<void>;
+  toggleHistory: (open?: boolean) => void;
+  restoreVersion: (versionId: string) => Promise<void>;
   /** 操作提示（成功/失败信息） */
   notice: string | null;
   clearNotice: () => void;
@@ -107,6 +114,8 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => {
     keyword: "",
     hits: [],
     searchMode: "keyword",
+    versions: [],
+    historyOpen: false,
     notice: null,
 
     search: (keyword) => {
@@ -317,6 +326,41 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => {
         })
         .catch((err) => {
           console.error("恢复备份失败:", err);
+          set({ error: String(err) });
+        });
+    },
+
+    loadVersions: (noteId) => {
+      return ipc<NoteVersion[]>("list_note_versions", { id: noteId, limit: 50 })
+        .then((versions) => set({ versions }))
+        .catch((err) => {
+          console.error("加载版本历史失败:", err);
+          set({ versions: [], error: String(err) });
+        });
+    },
+
+    toggleHistory: (open) => {
+      const next = open ?? !get().historyOpen;
+      set({ historyOpen: next });
+      const selectedId = get().selectedId;
+      if (next && selectedId) {
+        get().loadVersions(selectedId);
+      }
+    },
+
+    restoreVersion: (versionId) => {
+      set({ error: null });
+      return ipc<Note>("restore_note_version", { versionId })
+        .then((note) => {
+          set((state) => ({
+            notes: state.notes.map((n) => (n.id === note.id ? note : n)),
+            savedAt: Date.now(),
+            notice: "已回滚到所选版本（回滚前内容已自动留存）",
+          }));
+          return get().loadVersions(note.id);
+        })
+        .catch((err) => {
+          console.error("回滚版本失败:", err);
           set({ error: String(err) });
         });
     },

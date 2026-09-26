@@ -70,6 +70,8 @@ pub fn run() {
             commands::rename_tag,
             commands::delete_tag,
             commands::set_note_tags,
+            commands::list_note_versions,
+            commands::restore_note_version,
             commands::export_notes_markdown,
             commands::export_backup_json,
             commands::backup_database,

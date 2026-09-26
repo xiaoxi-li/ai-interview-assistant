@@ -16,6 +16,17 @@ export interface Group {
   order: number;
 }
 
+/** 笔记历史版本 */
+export interface NoteVersion {
+  id: string;
+  noteId: string;
+  title: string;
+  content: string;
+  /** 递增版本号（越大越新） */
+  version: number;
+  createdAt: number;
+}
+
 export interface Tag {
   id: string;
   name: string;

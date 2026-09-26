@@ -1,6 +1,6 @@
 //! 知识库数据访问：笔记与群组仓储。
 
-use crate::knowledge::{GroupDto, NoteDto, TagDto};
+use crate::knowledge::{GroupDto, NoteDto, NoteVersionDto, TagDto};
 use rusqlite::{params, Connection, OptionalExtension, Result};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -390,6 +390,106 @@ impl<'a> GroupsRepo<'a> {
 
 /// 默认标签颜色（与前端主色一致）
 pub const DEFAULT_TAG_COLOR: &str = "#4F6BED";
+
+/// 每篇笔记保留的历史版本上限
+pub const MAX_NOTE_VERSIONS: usize = 20;
+
+/// 版本历史仓储
+pub struct VersionsRepo<'a> {
+    conn: &'a Connection,
+}
+
+const VERSION_COLUMNS: &str = "id, note_id, title, content, version, created_at";
+
+fn map_version(row: &rusqlite::Row<'_>) -> Result<NoteVersionDto> {
+    Ok(NoteVersionDto {
+        id: row.get(0)?,
+        note_id: row.get(1)?,
+        title: row.get(2)?,
+        content: row.get(3)?,
+        version: row.get(4)?,
+        created_at: row.get(5)?,
+    })
+}
+
+impl<'a> VersionsRepo<'a> {
+    pub fn new(conn: &'a Connection) -> Self {
+        Self { conn }
+    }
+
+    /// 为笔记当前内容建立快照（版本号递增），并裁剪超限的旧版本
+    pub fn snapshot(&self, note_id: &str) -> Result<Option<NoteVersionDto>> {
+        let Some(note) = NotesRepo::new(self.conn).get(note_id)? else {
+            return Ok(None);
+        };
+
+        let next_version: i64 = self.conn.query_row(
+            "SELECT COALESCE(MAX(version), 0) + 1 FROM note_versions WHERE note_id = ?1",
+            params![note_id],
+            |row| row.get(0),
+        )?;
+        let created_at = now_ms();
+        let id = new_id("v");
+        self.conn.execute(
+            "INSERT INTO note_versions (id, note_id, content, title, version, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, note_id, note.content, note.title, next_version, created_at],
+        )?;
+        self.prune(note_id, MAX_NOTE_VERSIONS)?;
+
+        Ok(Some(NoteVersionDto {
+            id,
+            note_id: note_id.to_string(),
+            title: note.title,
+            content: note.content,
+            version: next_version,
+            created_at,
+        }))
+    }
+
+    /// 列出笔记的历史版本（新→旧）
+    pub fn list(&self, note_id: &str, limit: usize) -> Result<Vec<NoteVersionDto>> {
+        let sql = format!(
+            "SELECT {VERSION_COLUMNS} FROM note_versions WHERE note_id = ?1
+             ORDER BY version DESC LIMIT ?2"
+        );
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map(params![note_id, limit as i64], map_version)?;
+        let mut versions = Vec::new();
+        for row in rows {
+            versions.push(row?);
+        }
+        Ok(versions)
+    }
+
+    pub fn get(&self, version_id: &str) -> Result<Option<NoteVersionDto>> {
+        let sql = format!("SELECT {VERSION_COLUMNS} FROM note_versions WHERE id = ?1");
+        self.conn
+            .query_row(&sql, params![version_id], map_version)
+            .optional()
+    }
+
+    /// 仅保留最近 `keep` 个版本，返回清理数量
+    pub fn prune(&self, note_id: &str, keep: usize) -> Result<usize> {
+        let removed = self.conn.execute(
+            "DELETE FROM note_versions WHERE note_id = ?1 AND id NOT IN (
+                 SELECT id FROM note_versions WHERE note_id = ?1
+                 ORDER BY version DESC LIMIT ?2)",
+            params![note_id, keep as i64],
+        )?;
+        Ok(removed)
+    }
+
+    /// 回滚到指定版本（回滚前会先为当前内容建立快照）
+    pub fn restore(&self, version_id: &str) -> Result<Option<NoteDto>> {
+        let Some(version) = self.get(version_id)? else {
+            return Ok(None);
+        };
+        // 保留回滚前状态，避免误操作不可逆
+        self.snapshot(&version.note_id)?;
+        NotesRepo::new(self.conn).update(&version.note_id, &version.title, &version.content)
+    }
+}
 
 /// 标签仓储
 pub struct TagsRepo<'a> {
@@ -901,6 +1001,115 @@ mod tests {
             assert!(tags.delete(&tag.id).expect("delete tag"));
             assert!(tags.list().expect("list").is_empty());
             assert!(tags.note_ids_with_tag("架构").expect("by tag").is_empty());
+        });
+    }
+
+    #[test]
+    fn snapshot_captures_current_content_with_incrementing_version() {
+        with_db(|conn| {
+            let notes = NotesRepo::new(conn);
+            let versions = VersionsRepo::new(conn);
+            let note = notes.create("标题 v1", "内容 v1", None).expect("create");
+
+            let first = versions.snapshot(&note.id).expect("snap").expect("exists");
+            assert_eq!(first.version, 1);
+            assert_eq!(first.title, "标题 v1");
+
+            notes.update(&note.id, "标题 v2", "内容 v2").expect("update");
+            let second = versions.snapshot(&note.id).expect("snap").expect("exists");
+            assert_eq!(second.version, 2);
+            assert_eq!(second.content, "内容 v2");
+        });
+    }
+
+    #[test]
+    fn snapshot_returns_none_for_unknown_note() {
+        with_db(|conn| {
+            assert!(VersionsRepo::new(conn).snapshot("nope").expect("snap").is_none());
+        });
+    }
+
+    #[test]
+    fn list_versions_returns_newest_first() {
+        with_db(|conn| {
+            let notes = NotesRepo::new(conn);
+            let versions = VersionsRepo::new(conn);
+            let note = notes.create("A", "1", None).expect("create");
+
+            for text in ["2", "3"] {
+                notes.update(&note.id, "A", text).expect("update");
+                versions.snapshot(&note.id).expect("snap");
+            }
+
+            let list = versions.list(&note.id, 10).expect("list");
+            assert_eq!(list.len(), 2);
+            assert!(list[0].version > list[1].version, "应按版本号降序");
+        });
+    }
+
+    #[test]
+    fn prune_keeps_only_latest_versions() {
+        with_db(|conn| {
+            let notes = NotesRepo::new(conn);
+            let versions = VersionsRepo::new(conn);
+            let note = notes.create("A", "0", None).expect("create");
+
+            for i in 1..=5 {
+                notes.update(&note.id, "A", &format!("内容 {i}")).expect("update");
+                versions.snapshot(&note.id).expect("snap");
+            }
+            assert_eq!(versions.list(&note.id, 100).expect("list").len(), 5);
+
+            let removed = versions.prune(&note.id, 2).expect("prune");
+            assert_eq!(removed, 3);
+            let kept = versions.list(&note.id, 100).expect("list");
+            assert_eq!(kept.len(), 2);
+            assert_eq!(kept[0].version, 5, "应保留最新版本");
+        });
+    }
+
+    #[test]
+    fn restore_applies_version_and_snapshots_current_state() {
+        with_db(|conn| {
+            let notes = NotesRepo::new(conn);
+            let versions = VersionsRepo::new(conn);
+            let note = notes.create("标题", "第一版", None).expect("create");
+            let v1 = versions.snapshot(&note.id).expect("snap").expect("exists");
+
+            notes.update(&note.id, "标题", "第二版").expect("update");
+            let restored = versions
+                .restore(&v1.id)
+                .expect("restore")
+                .expect("note exists");
+
+            assert_eq!(restored.content, "第一版");
+            // 回滚后应新增一条快照（保留"第二版"）
+            let list = versions.list(&note.id, 10).expect("list");
+            assert!(list.iter().any(|v| v.content == "第二版"), "应保留回滚前内容");
+        });
+    }
+
+    #[test]
+    fn restore_unknown_version_returns_none() {
+        with_db(|conn| {
+            assert!(VersionsRepo::new(conn).restore("missing").expect("restore").is_none());
+        });
+    }
+
+    #[test]
+    fn max_versions_limit_is_enforced_by_snapshot() {
+        with_db(|conn| {
+            let notes = NotesRepo::new(conn);
+            let versions = VersionsRepo::new(conn);
+            let note = notes.create("A", "0", None).expect("create");
+
+            for i in 1..=(MAX_NOTE_VERSIONS + 5) {
+                notes.update(&note.id, "A", &format!("内容 {i}")).expect("update");
+                versions.snapshot(&note.id).expect("snap");
+            }
+
+            let list = versions.list(&note.id, 1000).expect("list");
+            assert_eq!(list.len(), MAX_NOTE_VERSIONS, "应自动裁剪到上限");
         });
     }
 }
