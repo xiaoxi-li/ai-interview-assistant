@@ -109,6 +109,16 @@ impl<'a> QaRepo<'a> {
         Ok(affected > 0)
     }
 
+    /// 仅更新引用来源（IA-07 召回结果落库，回答留待 IA-08 生成）
+    pub fn set_sources(&self, id: &str, sources: &[String]) -> rusqlite::Result<bool> {
+        let sources_json = serde_json::to_string(sources).unwrap_or_else(|_| "[]".to_string());
+        let affected = self.conn.execute(
+            "UPDATE qa_pairs SET sources_json = ?2 WHERE id = ?1",
+            params![id, sources_json],
+        )?;
+        Ok(affected > 0)
+    }
+
     pub fn count(&self, session_id: &str) -> rusqlite::Result<usize> {
         let count: i64 = self.conn.query_row(
             "SELECT count(*) FROM qa_pairs WHERE session_id = ?1",
@@ -193,6 +203,30 @@ mod tests {
         let stored = repo.get(&pair.id).expect("get").expect("some");
         assert_eq!(stored.answer, "这是回答");
         assert_eq!(stored.sources, vec!["笔记A".to_string(), "笔记B".to_string()]);
+    }
+
+    #[test]
+    fn set_sources_only_touches_sources() {
+        let db = Db::open_in_memory().expect("db");
+        let session = session_id(&db);
+        let repo = QaRepo::new(db.conn());
+
+        let pair = repo.create_question(&session, "问题", 1_000).expect("create");
+        repo.set_answer(&pair.id, "已有回答", &[]).expect("answer");
+        assert!(repo
+            .set_sources(&pair.id, &["笔记X".into()])
+            .expect("set sources"));
+
+        let stored = repo.get(&pair.id).expect("get").expect("some");
+        assert_eq!(stored.sources, vec!["笔记X".to_string()]);
+        assert_eq!(stored.answer, "已有回答", "更新来源不应清空回答");
+    }
+
+    #[test]
+    fn set_sources_unknown_id_returns_false() {
+        let db = Db::open_in_memory().expect("db");
+        let repo = QaRepo::new(db.conn());
+        assert!(!repo.set_sources("missing", &[]).expect("set"));
     }
 
     #[test]

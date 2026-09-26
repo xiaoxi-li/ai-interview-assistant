@@ -157,6 +157,22 @@ export interface QaPair {
   ts: number;
 }
 
+/** 知识库召回片段（IA-07） */
+export interface RecallHit {
+  noteId: string;
+  title: string;
+  snippet: string;
+  score: number;
+}
+
+/** 一次召回的过程与结果 */
+export interface RecallOutcome {
+  question: string;
+  /** 实际使用的检索查询（完整问句 + 关键词问句） */
+  queries: string[];
+  hits: RecallHit[];
+}
+
 /** 问题识别配置 */
 export interface QuestionConfig {
   autoDetect: boolean;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { HelpCircle, RefreshCw } from "lucide-react";
+import { BookOpen, HelpCircle, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useQuestionEvents } from "../../hooks/useQuestionEvents";
 import { useInterviewStore } from "../../stores/interviewStore";
@@ -16,9 +16,14 @@ export default function QuestionPanel() {
   const currentQuestion = useInterviewStore((s) => s.currentQuestion);
   const questionManual = useInterviewStore((s) => s.questionManual);
   const questions = useInterviewStore((s) => s.questions);
+  const currentQaId = useInterviewStore((s) => s.currentQaId);
+  const sources = useInterviewStore((s) => s.sources);
+  const sourcesLoading = useInterviewStore((s) => s.sourcesLoading);
+  const recallQueries = useInterviewStore((s) => s.recallQueries);
   const applyQuestionPush = useInterviewStore((s) => s.applyQuestionPush);
   const triggerQuestion = useInterviewStore((s) => s.triggerQuestion);
   const loadQuestions = useInterviewStore((s) => s.loadQuestions);
+  const recallSources = useInterviewStore((s) => s.recallSources);
 
   const sessionId = asrStatus?.sessionId ?? null;
 
@@ -31,6 +36,13 @@ export default function QuestionPanel() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // 识别到新问题后自动召回知识库片段（IA-07）
+  useEffect(() => {
+    if (sessionId && currentQaId) {
+      recallSources(sessionId, currentQaId);
+    }
+  }, [sessionId, currentQaId, recallSources]);
 
   return (
     <section className="glass flex flex-col rounded-xl p-4">
@@ -53,31 +65,79 @@ export default function QuestionPanel() {
       </header>
 
       {currentQuestion ? (
-        <div className="rounded-lg border border-primary/25 bg-primary/[0.07] p-3">
-          <p className="text-[13px] font-medium leading-relaxed text-text">
-            {currentQuestion.text}
-          </p>
+        <>
+          <div className="rounded-lg border border-primary/25 bg-primary/[0.07] p-3">
+            <p className="text-[13px] font-medium leading-relaxed text-text">
+              {currentQuestion.text}
+            </p>
 
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span
-              className={cn(
-                "rounded px-1.5 py-0.5 text-[10px]",
-                scoreTone(currentQuestion.score)
-              )}
-              title="判定得分（阈值 0.5，越高越确定）"
-            >
-              置信度 {currentQuestion.score.toFixed(2)}
-            </span>
-            {currentQuestion.signals.map((signal) => (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span
-                key={signal}
-                className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-text-muted"
+                className={cn(
+                  "rounded px-1.5 py-0.5 text-[10px]",
+                  scoreTone(currentQuestion.score)
+                )}
+                title="判定得分（阈值 0.5，越高越确定）"
               >
-                {signal}
+                置信度 {currentQuestion.score.toFixed(2)}
               </span>
-            ))}
+              {currentQuestion.signals.map((signal) => (
+                <span
+                  key={signal}
+                  className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-text-muted"
+                >
+                  {signal}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
+
+          {/* 知识库召回片段 */}
+          <div className="mt-3">
+            <div className="mb-1.5 flex items-center gap-1.5">
+              <BookOpen className="h-3.5 w-3.5 text-text-subtle" />
+              <span className="text-[11px] font-medium text-text-muted">知识库参考</span>
+              {sourcesLoading && (
+                <Loader2 className="h-3 w-3 animate-spin text-text-subtle" />
+              )}
+              {!sourcesLoading && (
+                <span className="ml-auto text-[10px] text-text-subtle">
+                  {sources.length} 条片段
+                </span>
+              )}
+            </div>
+
+            {sources.length > 0 ? (
+              <ul className="flex flex-col gap-1.5">
+                {sources.map((hit) => (
+                  <li
+                    key={hit.noteId}
+                    className="rounded-lg border border-white/[0.06] bg-background-3/30 px-2.5 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-[11px] font-medium text-text">
+                        {hit.title}
+                      </span>
+                      <span className="ml-auto shrink-0 text-[10px] text-text-subtle">
+                        {hit.score.toFixed(3)}
+                      </span>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-muted">
+                      {hit.snippet}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              !sourcesLoading && (
+                <p className="rounded-lg border border-white/[0.06] bg-background-3/30 px-2.5 py-3 text-[11px] leading-relaxed text-text-subtle">
+                  知识库中未召回到相关内容
+                  {recallQueries.length > 0 && `（查询：${recallQueries.join(" / ")}）`}
+                </p>
+              )
+            )}
+          </div>
+        </>
       ) : (
         <p className="rounded-lg border border-white/[0.06] bg-background-3/30 px-3 py-6 text-center text-[11px] leading-relaxed text-text-subtle">
           {asrStatus?.running

@@ -9,6 +9,8 @@ import type {
   QaPair,
   QuestionConfig,
   QuestionPush,
+  RecallHit,
+  RecallOutcome,
   Speaker,
   TranscriptPush,
 } from "../types";
@@ -24,6 +26,9 @@ export interface TranscriptLine {
   isFinal: boolean;
   ts: number;
 }
+
+/** 面试默认召回条数（与后端 DEFAULT_TOP_K 保持一致） */
+export const DEFAULT_RECALL_TOP_K = 3;
 
 interface InterviewState {
   status: CaptureStatus | null;
@@ -54,6 +59,13 @@ interface InterviewState {
   questions: QaPair[];
   /** 问题识别配置 */
   questionConfig: QuestionConfig | null;
+  /** 当前问题对应的问答记录 ID（召回/回答的落库锚点） */
+  currentQaId: string | null;
+  /** 当前问题的知识库召回片段（IA-07） */
+  sources: RecallHit[];
+  sourcesLoading: boolean;
+  /** 最近一次召回使用的查询（便于排查召回质量） */
+  recallQueries: string[];
 
   loadCaptureStatus: () => Promise<void>;
   startCapture: (source: CaptureSource, deviceId?: string | null) => Promise<void>;
@@ -72,6 +84,9 @@ interface InterviewState {
   loadQuestionConfig: () => Promise<void>;
   saveQuestionConfig: (config: QuestionConfig) => Promise<void>;
   resetQuestions: () => void;
+
+  recallSources: (sessionId: string, questionId?: string | null) => Promise<void>;
+  resetSources: () => void;
 }
 
 export const useInterviewStore = create<InterviewState>((set, get) => {
@@ -98,6 +113,10 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
     questionManual: false,
     questions: [],
     questionConfig: null,
+    currentQaId: null,
+    sources: [],
+    sourcesLoading: false,
+    recallQueries: [],
 
     loadCaptureStatus: () =>
       Promise.all([
@@ -155,6 +174,9 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
             currentQuestion: null,
             questionManual: false,
             questions: [],
+            currentQaId: null,
+            sources: [],
+            recallQueries: [],
           })
         )
         .catch((err) => {
@@ -200,6 +222,10 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
       set((state) => ({
         currentQuestion: question,
         questionManual: manual,
+        // 新问题出现即清空上一题的召回结果
+        currentQaId: qaId,
+        sources: [],
+        recallQueries: [],
         questions: qaId
           ? [
               ...state.questions,
@@ -242,6 +268,35 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
     },
 
     resetQuestions: () =>
-      set({ currentQuestion: null, questionManual: false, questions: [] }),
+      set({
+        currentQuestion: null,
+        questionManual: false,
+        questions: [],
+        currentQaId: null,
+        sources: [],
+        recallQueries: [],
+      }),
+
+    recallSources: (sessionId, questionId) => {
+      set({ sourcesLoading: true });
+      return ipc<RecallOutcome>("recall_for_question", {
+        sessionId,
+        questionId: questionId ?? null,
+        topK: DEFAULT_RECALL_TOP_K,
+      })
+        .then((outcome) =>
+          set({
+            sources: outcome.hits,
+            recallQueries: outcome.queries,
+            sourcesLoading: false,
+          })
+        )
+        .catch((err) => {
+          console.error("知识库召回失败:", err);
+          set({ sourcesLoading: false, sources: [], recallQueries: [] });
+        });
+    },
+
+    resetSources: () => set({ sources: [], recallQueries: [] }),
   };
 });

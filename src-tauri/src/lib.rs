@@ -118,6 +118,7 @@ pub fn run() {
             commands::get_question_config,
             commands::save_question_config,
             commands::analyze_question_text,
+            commands::recall_for_question,
             commands::list_audio_devices,
             commands::get_audio_config,
             commands::save_audio_config,

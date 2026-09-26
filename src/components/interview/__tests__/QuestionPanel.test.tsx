@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import QuestionPanel from "../QuestionPanel";
 import { useInterviewStore } from "../../../stores/interviewStore";
-import type { AsrSessionStatus, DetectedQuestion, QaPair } from "../../../types";
+import type {
+  AsrSessionStatus,
+  DetectedQuestion,
+  QaPair,
+  RecallHit,
+} from "../../../types";
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(() => {}),
@@ -26,6 +31,13 @@ const question: DetectedQuestion = {
   ts: Date.now(),
 };
 
+const hit: RecallHit = {
+  noteId: "note-1",
+  title: "项目架构设计",
+  snippet: "负责桌面应用的架构设计与性能优化",
+  score: 0.0328,
+};
+
 function qaPair(overrides: Partial<QaPair> = {}): QaPair {
   return {
     id: "q1",
@@ -44,8 +56,13 @@ function resetStore(overrides: Partial<ReturnType<typeof useInterviewStore.getSt
     currentQuestion: null,
     questionManual: false,
     questions: [],
+    currentQaId: null,
+    sources: [],
+    sourcesLoading: false,
+    recallQueries: [],
     triggerQuestion: vi.fn().mockResolvedValue(undefined),
     loadQuestions: vi.fn().mockResolvedValue(undefined),
+    recallSources: vi.fn().mockResolvedValue(undefined),
     applyQuestionPush: vi.fn(),
     ...overrides,
   });
@@ -124,5 +141,40 @@ describe("QuestionPanel", () => {
 
     expect(screen.getByText("第一个问题")).toBeTruthy();
     expect(screen.getByText("第二个问题")).toBeTruthy();
+  });
+
+  it("识别到新问题时自动召回知识库片段", async () => {
+    const recallSources = vi.fn().mockResolvedValue(undefined);
+    resetStore({ currentQuestion: question, currentQaId: "q1", recallSources });
+    render(<QuestionPanel />);
+
+    await waitFor(() => expect(recallSources).toHaveBeenCalledWith("s-1", "q1"));
+  });
+
+  it("展示召回的知识库片段", () => {
+    resetStore({
+      currentQuestion: question,
+      currentQaId: "q1",
+      sources: [hit],
+    });
+    render(<QuestionPanel />);
+
+    expect(screen.getByText("知识库参考")).toBeTruthy();
+    expect(screen.getByText("项目架构设计")).toBeTruthy();
+    expect(screen.getByText("负责桌面应用的架构设计与性能优化")).toBeTruthy();
+    expect(screen.getByText("1 条片段")).toBeTruthy();
+  });
+
+  it("无召回结果时展示查询词便于排查", () => {
+    resetStore({
+      currentQuestion: question,
+      currentQaId: "q1",
+      sources: [],
+      recallQueries: ["介绍一下你最近负责的项目", "最近 负责 项目"],
+    });
+    render(<QuestionPanel />);
+
+    expect(screen.getByText(/知识库中未召回到相关内容/)).toBeTruthy();
+    expect(screen.getByText(/查询：介绍一下你最近负责的项目/)).toBeTruthy();
   });
 });

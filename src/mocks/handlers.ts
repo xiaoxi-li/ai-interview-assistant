@@ -287,6 +287,20 @@ export async function mockInvoke<T>(
         signals: ["祈使式提问「介绍一下」"],
       } as T;
 
+    case "recall_for_question":
+      return {
+        question: "介绍一下你最近负责的项目",
+        queries: ["介绍一下你最近负责的项目", "最近 负责 项目"],
+        hits: [
+          {
+            noteId: "note-mock-1",
+            title: "项目架构设计",
+            snippet: "负责桌面应用的架构设计与性能优化…",
+            score: 0.0328,
+          },
+        ],
+      } as T;
+
     case "list_audio_devices":
       return [
         { id: "麦克风 (USB Audio)", name: "麦克风 (USB Audio)", kind: "input", isDefault: true },

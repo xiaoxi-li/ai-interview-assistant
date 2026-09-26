@@ -1012,6 +1012,48 @@ pub fn analyze_question_text(text: String) -> QuestionScore {
     crate::interview::question::analyze(&text)
 }
 
+// ==================== 知识库召回（IA-07） ====================
+
+/// 按问题召回知识库片段，并把引用来源写回问答记录
+#[tauri::command]
+pub fn recall_for_question(
+    state: State<'_, AppState>,
+    session_id: String,
+    question_id: Option<String>,
+    top_k: Option<usize>,
+) -> Result<crate::interview::RecallOutcome, String> {
+    let conn = state.lock()?;
+    let repo = QaRepo::new(&conn);
+
+    // 未指定问题 ID 时使用该会话最近识别出的问题
+    let pair = match question_id {
+        Some(id) => repo
+            .get(&id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("问题不存在：{id}"))?,
+        None => repo
+            .latest(&session_id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "该会话还没有识别出问题".to_string())?,
+    };
+
+    let outcome = crate::interview::recall::recall_for_question(
+        &conn,
+        state.embedding.as_ref(),
+        &pair.question,
+        top_k.unwrap_or(crate::interview::DEFAULT_TOP_K),
+    )
+    .map_err(|e| e.to_string())?;
+
+    // 引用来源落库：便于会话回放与导出（回答由 IA-08 生成）
+    let titles: Vec<String> = outcome.hits.iter().map(|hit| hit.title.clone()).collect();
+    if let Err(err) = repo.set_sources(&pair.id, &titles) {
+        eprintln!("引用来源落库失败（qa={}）：{err}", pair.id);
+    }
+
+    Ok(outcome)
+}
+
 /// 枚举音频设备（输入=麦克风，输出=系统音频来源）
 #[tauri::command]
 pub fn list_audio_devices() -> Vec<crate::audio::DeviceInfo> {
