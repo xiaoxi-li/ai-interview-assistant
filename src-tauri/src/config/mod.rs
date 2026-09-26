@@ -3,6 +3,8 @@
 //! 配置以 JSON 形式存放于 `settings` 表，避免为每个字段新增列；
 //! 敏感字段（API Key）不落库，由 [`crate::security`] 存入系统钥匙链。
 
+pub mod asr;
+
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 

@@ -243,7 +243,51 @@ mod tests {
         }
     }
 
-    /// 启动一个极简 HTTP 服务：接收 1 个请求后返回固定响应并退出。
+    /// 查找 HTTP 头部结束位置（\r\n\r\n）
+    fn header_end(buf: &[u8]) -> Option<usize> {
+        buf.windows(4).position(|w| w == b"\r\n\r\n").map(|i| i + 4)
+    }
+
+    /// 解析 Content-Length
+    fn content_length(head: &str) -> usize {
+        head.lines()
+            .find(|line| line.to_ascii_lowercase().starts_with("content-length:"))
+            .and_then(|line| line.split(':').nth(1))
+            .and_then(|value| value.trim().parse().ok())
+            .unwrap_or(0)
+    }
+
+    /// 完整读取一个 HTTP 请求（头部 + Content-Length 指定的 body）。
+    /// 若只读头部就响应并关闭连接，客户端在写 body 时会遇到连接重置。
+    fn read_full_request(stream: &mut std::net::TcpStream) -> String {
+        let mut buffer: Vec<u8> = Vec::new();
+        let mut chunk = [0u8; 1024];
+
+        loop {
+            let read = stream.read(&mut chunk).unwrap_or(0);
+            if read == 0 {
+                break;
+            }
+            buffer.extend_from_slice(&chunk[..read]);
+
+            if let Some(end) = header_end(&buffer) {
+                let head = String::from_utf8_lossy(&buffer[..end]).to_string();
+                let mut remaining = content_length(&head).saturating_sub(buffer.len() - end);
+                while remaining > 0 {
+                    let read = stream.read(&mut chunk).unwrap_or(0);
+                    if read == 0 {
+                        break;
+                    }
+                    buffer.extend_from_slice(&chunk[..read]);
+                    remaining = remaining.saturating_sub(read);
+                }
+                break;
+            }
+        }
+        String::from_utf8_lossy(&buffer).to_string()
+    }
+
+    /// 启动一个极简 HTTP 服务：完整接收 1 个请求后返回固定响应并退出。
     /// 注意：处理请求数必须与调用方实际请求数一致，否则线程会阻塞在 accept 上导致测试挂起。
     fn spawn_server(handler: fn(&str) -> String) -> (String, thread::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -251,9 +295,8 @@ mod tests {
         let handle = thread::spawn(move || {
             for stream in listener.incoming().take(1) {
                 let Ok(mut stream) = stream else { continue };
-                let mut buffer = [0u8; 4096];
-                let read = stream.read(&mut buffer).unwrap_or(0);
-                let request_text = String::from_utf8_lossy(&buffer[..read]).to_string();
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+                let request_text = read_full_request(&mut stream);
                 let response = handler(&request_text);
                 let _ = stream.write_all(response.as_bytes());
                 let _ = stream.flush();

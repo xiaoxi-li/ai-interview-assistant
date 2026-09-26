@@ -1,6 +1,13 @@
 import { create } from "zustand";
 import { ipc } from "../lib/ipc";
-import type { AIConfig, ConnectionTest, PlatformPreset } from "../types";
+import type {
+  AIConfig,
+  ASRConfig,
+  AsrCredentialStatus,
+  AsrProviderPreset,
+  ConnectionTest,
+  PlatformPreset,
+} from "../types";
 
 /** API Key 配置状态（后端只回传掩码，不泄露完整密钥） */
 export interface ApiKeyStatus {
@@ -27,6 +34,17 @@ interface SettingsState {
   testResult: ConnectionTest | null;
   /** 一键测试 AI 服务连通性 */
   testAiConnection: () => Promise<void>;
+  /** ASR 配置 */
+  asrConfig: ASRConfig | null;
+  /** 云端 ASR 服务商预设 */
+  asrProviders: AsrProviderPreset[];
+  /** 各服务商凭证状态（按 provider 键） */
+  asrCredentials: Record<string, AsrCredentialStatus>;
+  loadAsrSettings: () => Promise<void>;
+  saveAsrConfig: (config: ASRConfig) => Promise<void>;
+  loadAsrCredentialStatus: (provider: string) => Promise<void>;
+  saveAsrCredential: (provider: string, field: string, value: string) => Promise<void>;
+  deleteAsrCredentials: (provider: string) => Promise<void>;
   /** 查询指定平台的密钥状态 */
   loadApiKeyStatus: (platform: string) => Promise<void>;
   /** 保存密钥（空串表示清除） */
@@ -52,7 +70,64 @@ export const useSettingsStore = create<SettingsState>((set) => {
     presets: [],
     testing: false,
     testResult: null,
+    asrConfig: null,
+    asrProviders: [],
+    asrCredentials: {},
     error: null,
+
+    loadAsrSettings: () =>
+      Promise.all([
+        ipc<ASRConfig>("get_asr_config"),
+        ipc<AsrProviderPreset[]>("list_asr_providers"),
+      ])
+        .then(([asrConfig, asrProviders]) => {
+          set({ asrConfig, asrProviders });
+          return ipc<AsrCredentialStatus>("get_asr_credential_status", {
+            provider: asrConfig.cloudProvider,
+          })
+            .then((status) =>
+              set((state) => ({
+                asrCredentials: {
+                  ...state.asrCredentials,
+                  [status.provider]: status,
+                },
+              }))
+            )
+            .catch((err) => fail("查询 ASR 凭证状态", err));
+        })
+        .catch((err) => fail("加载 ASR 配置", err)),
+
+    saveAsrConfig: (config) =>
+      ipc<ASRConfig>("save_asr_config", { config })
+        .then((saved) => set({ asrConfig: saved }))
+        .catch((err) => fail("保存 ASR 配置", err)),
+
+    loadAsrCredentialStatus: (provider) =>
+      ipc<AsrCredentialStatus>("get_asr_credential_status", { provider })
+        .then((status) =>
+          set((state) => ({
+            asrCredentials: { ...state.asrCredentials, [status.provider]: status },
+          }))
+        )
+        .catch((err) => fail("查询 ASR 凭证状态", err)),
+
+    saveAsrCredential: (provider, field, value) =>
+      ipc<AsrCredentialStatus>("save_asr_credential", { provider, field, value })
+        .then((status) =>
+          set((state) => ({
+            asrCredentials: { ...state.asrCredentials, [status.provider]: status },
+          }))
+        )
+        .catch((err) => fail("保存 ASR 凭证", err)),
+
+    deleteAsrCredentials: (provider) =>
+      ipc<AsrCredentialStatus>("delete_asr_credentials", { provider })
+        .then((status) =>
+          set((state) => ({
+            asrCredentials: { ...state.asrCredentials, [status.provider]: status },
+          }))
+        )
+        .catch((err) => fail("清除 ASR 凭证", err)),
 
     loadAiSettings: () =>
       Promise.all([

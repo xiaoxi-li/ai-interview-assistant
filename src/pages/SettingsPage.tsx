@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import { Settings as SettingsIcon } from "lucide-react";
 import AiSettingsSection from "../components/settings/AiSettingsSection";
+import AsrSettingsSection from "../components/settings/AsrSettingsSection";
 import { useSettingsStore } from "../stores/settingsStore";
 
 const PLACEHOLDER_SECTIONS = [
-  { title: "语音识别（ASR）", desc: "云端/本地模式、服务商凭证、模型、语言、VAD 阈值", task: "ST-04" },
   { title: "音频设备", desc: "麦克风与系统音频输出设备选择", task: "ST-05" },
   { title: "模型管理", desc: "嵌入 / VAD / 本地 ASR 模型的下载、更新与删除", task: "ST-10" },
   { title: "知识库", desc: "存储路径、向量库路径、默认嵌入模型", task: "ST-06" },
@@ -24,12 +24,21 @@ export default function SettingsPage() {
   const testing = useSettingsStore((s) => s.testing);
   const testResult = useSettingsStore((s) => s.testResult);
   const testAiConnection = useSettingsStore((s) => s.testAiConnection);
+  const asrConfig = useSettingsStore((s) => s.asrConfig);
+  const asrProviders = useSettingsStore((s) => s.asrProviders);
+  const asrCredentials = useSettingsStore((s) => s.asrCredentials);
+  const loadAsrSettings = useSettingsStore((s) => s.loadAsrSettings);
+  const saveAsrConfig = useSettingsStore((s) => s.saveAsrConfig);
+  const loadAsrCredentialStatus = useSettingsStore((s) => s.loadAsrCredentialStatus);
+  const saveAsrCredential = useSettingsStore((s) => s.saveAsrCredential);
+  const deleteAsrCredentials = useSettingsStore((s) => s.deleteAsrCredentials);
 
   const platform = aiConfig?.platform;
 
   useEffect(() => {
     loadAiSettings();
-  }, [loadAiSettings]);
+    loadAsrSettings();
+  }, [loadAiSettings, loadAsrSettings]);
 
   useEffect(() => {
     if (platform) {
@@ -62,6 +71,18 @@ export default function SettingsPage() {
             <section className="glass rounded-xl p-4 text-[12px] text-text-subtle">
               正在加载 AI 配置…
             </section>
+          )}
+
+          {asrConfig && (
+            <AsrSettingsSection
+              config={asrConfig}
+              providers={asrProviders}
+              credentialStatus={asrCredentials[asrConfig.cloudProvider]}
+              onSaveConfig={saveAsrConfig}
+              onSaveCredential={saveAsrCredential}
+              onDeleteCredentials={deleteAsrCredentials}
+              onProviderChange={loadAsrCredentialStatus}
+            />
           )}
 
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">

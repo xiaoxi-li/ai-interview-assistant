@@ -65,6 +65,63 @@ export async function mockInvoke<T>(
     case "save_ai_config":
       return (args?.config ?? null) as T;
 
+    case "list_asr_providers":
+      return [
+        {
+          provider: "xfyun",
+          label: "讯飞开放平台",
+          defaultModel: "iat",
+          credentialFields: ["app_id", "api_key", "api_secret"],
+        },
+        {
+          provider: "aliyun",
+          label: "阿里云智能语音",
+          defaultModel: "gummy-realtime-v1",
+          credentialFields: ["api_key"],
+        },
+        {
+          provider: "tencent",
+          label: "腾讯云语音识别",
+          defaultModel: "16k_zh",
+          credentialFields: ["secret_id", "secret_key"],
+        },
+      ] as T;
+
+    case "get_asr_config":
+      return {
+        mode: "cloud",
+        cloudProvider: "xfyun",
+        model: "iat",
+        language: "zh-CN",
+        vadThreshold: 0.5,
+        localModel: "sherpa-onnx-paraformer-zh",
+      } as T;
+
+    case "save_asr_config":
+      return (args?.config ?? null) as T;
+
+    case "get_asr_credential_status":
+    case "save_asr_credential":
+    case "delete_asr_credentials": {
+      const provider = String(args?.provider ?? "xfyun");
+      const clearing = command === "delete_asr_credentials";
+      const fields =
+        provider === "xfyun"
+          ? ["app_id", "api_key", "api_secret"]
+          : provider === "tencent"
+            ? ["secret_id", "secret_key"]
+            : ["api_key"];
+      return {
+        provider,
+        complete: !clearing,
+        fields: fields.map((field) => ({
+          field,
+          configured: !clearing,
+          masked: clearing ? "" : "ab****yz",
+        })),
+      } as T;
+    }
+
     case "test_ai_connection":
       return {
         ok: true,

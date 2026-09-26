@@ -241,6 +241,150 @@ pub fn restore_backup(
     Ok(summary)
 }
 
+/// ASR 服务商预设（供设置页渲染）
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AsrProviderPreset {
+    pub provider: String,
+    pub label: String,
+    pub default_model: String,
+    pub credential_fields: Vec<String>,
+}
+
+/// 单个凭证字段的状态（不回传明文）
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CredentialFieldStatus {
+    pub field: String,
+    pub configured: bool,
+    pub masked: String,
+}
+
+/// 服务商凭证整体状态
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AsrCredentialStatus {
+    pub provider: String,
+    /// 是否所有必需字段均已配置
+    pub complete: bool,
+    pub fields: Vec<CredentialFieldStatus>,
+}
+
+fn credential_status(
+    secrets: &dyn crate::security::SecretStore,
+    provider: crate::config::asr::CloudAsrProvider,
+) -> Result<AsrCredentialStatus, String> {
+    let mut fields = Vec::new();
+    let mut complete = true;
+    for field in provider.credential_fields() {
+        let reference = crate::security::asr_credential_ref(provider.as_str(), field);
+        let masked = secrets.masked(&reference)?;
+        if masked.is_none() {
+            complete = false;
+        }
+        fields.push(CredentialFieldStatus {
+            field: field.to_string(),
+            configured: masked.is_some(),
+            masked: masked.unwrap_or_default(),
+        });
+    }
+    Ok(AsrCredentialStatus {
+        provider: provider.as_str().to_string(),
+        complete,
+        fields,
+    })
+}
+
+fn parse_provider(
+    provider: &str,
+) -> Result<crate::config::asr::CloudAsrProvider, String> {
+    crate::config::asr::CloudAsrProvider::parse(provider)
+        .ok_or_else(|| format!("未知的 ASR 服务商：{provider}"))
+}
+
+/// 列出全部云端 ASR 服务商预设
+#[tauri::command]
+pub fn list_asr_providers() -> Vec<AsrProviderPreset> {
+    crate::config::asr::all_cloud_providers()
+        .into_iter()
+        .map(|provider| AsrProviderPreset {
+            provider: provider.as_str().to_string(),
+            label: provider.label().to_string(),
+            default_model: provider.default_model().to_string(),
+            credential_fields: provider
+                .credential_fields()
+                .iter()
+                .map(|f| f.to_string())
+                .collect(),
+        })
+        .collect()
+}
+
+/// 读取 ASR 配置
+#[tauri::command]
+pub fn get_asr_config(state: State<'_, AppState>) -> Result<crate::config::asr::AsrConfig, String> {
+    let conn = state.lock()?;
+    crate::config::asr::load_asr_config(&conn).map_err(|e| e.to_string())
+}
+
+/// 保存 ASR 配置
+#[tauri::command]
+pub fn save_asr_config(
+    state: State<'_, AppState>,
+    config: crate::config::asr::AsrConfig,
+) -> Result<crate::config::asr::AsrConfig, String> {
+    let conn = state.lock()?;
+    crate::config::asr::save_asr_config(&conn, &config)?;
+    crate::config::asr::load_asr_config(&conn).map_err(|e| e.to_string())
+}
+
+/// 查询服务商凭证配置状态
+#[tauri::command]
+pub fn get_asr_credential_status(
+    state: State<'_, AppState>,
+    provider: String,
+) -> Result<AsrCredentialStatus, String> {
+    let provider = parse_provider(&provider)?;
+    credential_status(state.secrets.as_ref(), provider)
+}
+
+/// 保存单个凭证字段（空值表示删除该字段）
+#[tauri::command]
+pub fn save_asr_credential(
+    state: State<'_, AppState>,
+    provider: String,
+    field: String,
+    value: String,
+) -> Result<AsrCredentialStatus, String> {
+    let provider = parse_provider(&provider)?;
+    if !provider.credential_fields().contains(&field.as_str()) {
+        return Err(format!("服务商 {} 不支持凭证字段 {field}", provider.as_str()));
+    }
+    let reference = crate::security::asr_credential_ref(provider.as_str(), &field);
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        state.secrets.delete(&reference)?;
+    } else {
+        state.secrets.set(&reference, trimmed)?;
+    }
+    credential_status(state.secrets.as_ref(), provider)
+}
+
+/// 清空服务商全部凭证
+#[tauri::command]
+pub fn delete_asr_credentials(
+    state: State<'_, AppState>,
+    provider: String,
+) -> Result<AsrCredentialStatus, String> {
+    let provider = parse_provider(&provider)?;
+    for field in provider.credential_fields() {
+        state
+            .secrets
+            .delete(&crate::security::asr_credential_ref(provider.as_str(), field))?;
+    }
+    credential_status(state.secrets.as_ref(), provider)
+}
+
 /// 一键测试 AI 服务连通性（读取已保存配置与钥匙链中的 API Key）
 #[tauri::command]
 pub fn test_ai_connection(

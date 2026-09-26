@@ -111,12 +111,40 @@ export interface PlatformPreset {
 }
 
 export type ASRMode = "cloud" | "local";
+export type CloudAsrProvider = "xfyun" | "aliyun" | "tencent";
 
 export interface ASRConfig {
   mode: ASRMode;
+  cloudProvider: CloudAsrProvider;
+  /** 云端模型名 */
   model: string;
   language: string;
+  /** VAD 阈值 0 ~ 1 */
   vadThreshold: number;
+  /** 本地模型名（sherpa-onnx） */
+  localModel: string;
+}
+
+/** 云端 ASR 服务商预设 */
+export interface AsrProviderPreset {
+  provider: CloudAsrProvider;
+  label: string;
+  defaultModel: string;
+  credentialFields: string[];
+}
+
+/** 单个凭证字段状态 */
+export interface CredentialFieldStatus {
+  field: string;
+  configured: boolean;
+  masked: string;
+}
+
+/** 服务商凭证整体状态 */
+export interface AsrCredentialStatus {
+  provider: string;
+  complete: boolean;
+  fields: CredentialFieldStatus[];
 }
 
 export interface AudioConfig {
