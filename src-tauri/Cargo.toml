@@ -25,6 +25,7 @@ jieba-rs = "0.7"
 keyring = { version = "3", features = ["windows-native", "apple-native"] }
 ureq = { version = "2", features = ["json"] }
 cpal = "0.15"
+sha2 = "0.10"
 
 [profile.release]
 panic = "abort"

@@ -8,6 +8,7 @@ mod state;
 pub mod audio;
 pub mod config;
 pub mod knowledge;
+pub mod models;
 pub mod providers;
 pub mod retrieval;
 pub mod security;
@@ -36,6 +37,8 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let db_path = data_dir.join("ai-interview.db");
+            let models_dir = data_dir.join("models");
+            std::fs::create_dir_all(&models_dir)?;
             let db = storage::Db::open(&db_path)?;
             // P0 使用确定性 Mock 嵌入；真实本地 ONNX 模型在模型管理中台接入后替换
             let embedding: Arc<dyn providers::EmbeddingProvider> =
@@ -45,6 +48,7 @@ pub fn run() {
             app.manage(state::AppState::new(
                 db.into_shared_conn(),
                 db_path,
+                models_dir,
                 embedding,
                 secrets,
             ));
@@ -97,6 +101,9 @@ pub fn run() {
             commands::get_privacy_config,
             commands::save_privacy_config,
             commands::clear_local_data,
+            commands::list_models,
+            commands::download_model,
+            commands::delete_model,
             commands::export_notes_markdown,
             commands::export_backup_json,
             commands::backup_database,

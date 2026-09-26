@@ -3,11 +3,12 @@ import { Settings as SettingsIcon } from "lucide-react";
 import AiSettingsSection from "../components/settings/AiSettingsSection";
 import AsrSettingsSection from "../components/settings/AsrSettingsSection";
 import AudioSettingsSection from "../components/settings/AudioSettingsSection";
+import ModelManagerSection from "../components/settings/ModelManagerSection";
 import PrivacySettingsSection from "../components/settings/PrivacySettingsSection";
+import { useModelProgress } from "../hooks/useModelProgress";
 import { useSettingsStore } from "../stores/settingsStore";
 
 const PLACEHOLDER_SECTIONS = [
-  { title: "模型管理", desc: "嵌入 / VAD / 本地 ASR 模型的下载、更新与删除", task: "ST-10" },
   { title: "知识库", desc: "存储路径、向量库路径、默认嵌入模型", task: "ST-06" },
   { title: "界面", desc: "主题、快捷键、开机自启、托盘行为", task: "ST-07" },
 ];
@@ -42,6 +43,16 @@ export default function SettingsPage() {
   const loadPrivacySettings = useSettingsStore((s) => s.loadPrivacySettings);
   const savePrivacyConfig = useSettingsStore((s) => s.savePrivacyConfig);
   const clearLocalData = useSettingsStore((s) => s.clearLocalData);
+  const models = useSettingsStore((s) => s.models);
+  const modelProgress = useSettingsStore((s) => s.modelProgress);
+  const downloadingId = useSettingsStore((s) => s.downloadingId);
+  const loadModels = useSettingsStore((s) => s.loadModels);
+  const downloadModel = useSettingsStore((s) => s.downloadModel);
+  const deleteModel = useSettingsStore((s) => s.deleteModel);
+  const applyModelProgress = useSettingsStore((s) => s.applyModelProgress);
+
+  // 订阅模型下载进度事件
+  useModelProgress(applyModelProgress);
 
   const platform = aiConfig?.platform;
 
@@ -50,7 +61,14 @@ export default function SettingsPage() {
     loadAsrSettings();
     loadAudioSettings();
     loadPrivacySettings();
-  }, [loadAiSettings, loadAsrSettings, loadAudioSettings, loadPrivacySettings]);
+    loadModels();
+  }, [
+    loadAiSettings,
+    loadAsrSettings,
+    loadAudioSettings,
+    loadPrivacySettings,
+    loadModels,
+  ]);
 
   useEffect(() => {
     if (platform) {
@@ -103,6 +121,16 @@ export default function SettingsPage() {
               devices={audioDevices}
               onRefresh={refreshAudioDevices}
               onSave={saveAudioConfig}
+            />
+          )}
+
+          {models.length > 0 && (
+            <ModelManagerSection
+              models={models}
+              progress={modelProgress}
+              downloadingId={downloadingId}
+              onDownload={downloadModel}
+              onDelete={deleteModel}
             />
           )}
 

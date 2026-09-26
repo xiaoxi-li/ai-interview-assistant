@@ -8,6 +8,8 @@ import type {
   AudioConfig,
   AudioDevice,
   ConnectionTest,
+  ModelProgress,
+  ModelStatus,
   PlatformPreset,
   PrivacyConfig,
 } from "../types";
@@ -57,6 +59,16 @@ interface SettingsState {
   loadAudioSettings: () => Promise<void>;
   refreshAudioDevices: () => Promise<void>;
   saveAudioConfig: (config: AudioConfig) => Promise<void>;
+  /** 模型清单与安装状态 */
+  models: ModelStatus[];
+  /** 下载进度（按模型 ID） */
+  modelProgress: Record<string, ModelProgress>;
+  /** 正在下载的模型 ID */
+  downloadingId: string | null;
+  loadModels: () => Promise<void>;
+  downloadModel: (id: string) => Promise<void>;
+  deleteModel: (id: string) => Promise<void>;
+  applyModelProgress: (progress: ModelProgress) => void;
   /** 隐私配置 */
   privacyConfig: PrivacyConfig | null;
   /** 清除本地数据中 */
@@ -72,7 +84,7 @@ interface SettingsState {
   deleteApiKey: (platform: string) => Promise<void>;
 }
 
-export const useSettingsStore = create<SettingsState>((set) => {
+export const useSettingsStore = create<SettingsState>((set, get) => {
   const apply = (status: ApiKeyStatus) =>
     set((state) => ({
       apiKeys: { ...state.apiKeys, [status.platform]: status },
@@ -94,10 +106,55 @@ export const useSettingsStore = create<SettingsState>((set) => {
     asrCredentials: {},
     audioConfig: null,
     audioDevices: [],
+    models: [],
+    modelProgress: {},
+    downloadingId: null,
     privacyConfig: null,
     clearing: false,
     notice: null,
     error: null,
+
+    loadModels: () =>
+      ipc<ModelStatus[]>("list_models")
+        .then((models) => set({ models }))
+        .catch((err) => fail("加载模型清单", err)),
+
+    applyModelProgress: (progress) =>
+      set((state) => ({
+        modelProgress: { ...state.modelProgress, [progress.id]: progress },
+      })),
+
+    downloadModel: (id) => {
+      set((state) => ({
+        downloadingId: id,
+        error: null,
+        modelProgress: {
+          ...state.modelProgress,
+          [id]: { id, downloaded: 0, total: null },
+        },
+      }));
+      return ipc<string>("download_model", { id })
+        .then(() => {
+          set({ downloadingId: null, notice: "模型下载完成" });
+          return get().loadModels();
+        })
+        .catch((err) => {
+          set({ downloadingId: null });
+          fail("下载模型", err);
+        });
+    },
+
+    deleteModel: (id) =>
+      ipc<boolean>("delete_model", { id })
+        .then(() => {
+          set((state) => {
+            const next = { ...state.modelProgress };
+            delete next[id];
+            return { modelProgress: next, notice: "模型已删除" };
+          });
+          return get().loadModels();
+        })
+        .catch((err) => fail("删除模型", err)),
 
     loadPrivacySettings: () =>
       ipc<PrivacyConfig>("get_privacy_config")

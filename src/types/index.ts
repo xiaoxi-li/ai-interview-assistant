@@ -95,6 +95,35 @@ export interface AIConfig {
   temperature: number;
 }
 
+export type ModelKind = "embedding" | "vad" | "asr";
+
+/** 本地模型清单条目 */
+export interface ModelSpec {
+  id: string;
+  name: string;
+  kind: ModelKind;
+  fileName: string;
+  path: string;
+  sha256: string;
+  sizeBytes: number;
+  description: string;
+  requiredForLocalAsr: boolean;
+}
+
+/** 模型安装状态 */
+export interface ModelStatus extends ModelSpec {
+  installed: boolean;
+  resolvedPath: string | null;
+  partialBytes: number;
+}
+
+/** 下载进度事件载荷 */
+export interface ModelProgress {
+  id: string;
+  downloaded: number;
+  total: number | null;
+}
+
 /** 连接测试结果 */
 export interface ConnectionTest {
   ok: boolean;

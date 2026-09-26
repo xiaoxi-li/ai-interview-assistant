@@ -65,6 +65,58 @@ export async function mockInvoke<T>(
     case "save_ai_config":
       return (args?.config ?? null) as T;
 
+    case "list_models":
+      return [
+        {
+          id: "embedding-minilm-zh",
+          name: "中文嵌入模型（MiniLM）",
+          kind: "embedding",
+          fileName: "embedding-minilm-zh.onnx",
+          path: "embedding/minilm-zh.onnx",
+          sha256: "",
+          sizeBytes: 94371840,
+          description: "本地向量检索使用的轻量嵌入模型，约 90MB",
+          requiredForLocalAsr: false,
+          installed: true,
+          resolvedPath: "C:\\Users\\demo\\AppData\\Roaming\\ai\\models\\embedding\\minilm-zh.onnx",
+          partialBytes: 0,
+        },
+        {
+          id: "vad-silero",
+          name: "Silero VAD",
+          kind: "vad",
+          fileName: "silero_vad.onnx",
+          path: "vad/silero_vad.onnx",
+          sha256: "",
+          sizeBytes: 2097152,
+          description: "语音活动检测模型，用于静音过滤与自动分段，约 2MB",
+          requiredForLocalAsr: false,
+          installed: false,
+          resolvedPath: null,
+          partialBytes: 524288,
+        },
+        {
+          id: "asr-paraformer-zh",
+          name: "本地 ASR（Paraformer 中文）",
+          kind: "asr",
+          fileName: "sherpa-onnx-paraformer-zh.tar.bz2",
+          path: "asr/sherpa-onnx-paraformer-zh.tar.bz2",
+          sha256: "",
+          sizeBytes: 209715200,
+          description: "本地语音识别模型，仅在选择本地 ASR 模式时需要，约 200MB",
+          requiredForLocalAsr: true,
+          installed: false,
+          resolvedPath: null,
+          partialBytes: 0,
+        },
+      ] as T;
+
+    case "download_model":
+      return "mock://models/downloaded" as T;
+
+    case "delete_model":
+      return true as T;
+
     case "get_privacy_config":
       return { uploadAudio: false, encryptLocal: false } as T;
 

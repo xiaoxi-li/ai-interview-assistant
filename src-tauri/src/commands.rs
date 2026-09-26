@@ -241,6 +241,53 @@ pub fn restore_backup(
     Ok(summary)
 }
 
+/// 列出模型清单与安装状态
+#[tauri::command]
+pub fn list_models(state: State<'_, AppState>) -> Result<Vec<crate::models::ModelStatus>, String> {
+    Ok(crate::models::list_status(&state.models_dir))
+}
+
+/// 下载模型（断点续传 + SHA256 校验），通过 `model://progress` 事件上报进度
+#[tauri::command]
+pub async fn download_model(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<String, String> {
+    use tauri::Emitter;
+
+    let spec = crate::models::find_spec(&id)
+        .ok_or_else(|| format!("未知模型：{id}"))?;
+    let models_dir = state.models_dir.clone();
+    let base = crate::models::mirror_base();
+    let model_id = spec.id.clone();
+
+    let joined = tauri::async_runtime::spawn_blocking(move || {
+        crate::models::download_model(&models_dir, &spec, &base, &mut |downloaded, total| {
+            let _ = app.emit(
+                "model://progress",
+                serde_json::json!({
+                    "id": model_id,
+                    "downloaded": downloaded,
+                    "total": total,
+                }),
+            );
+        })
+    })
+    .await
+    .map_err(|e| format!("下载任务异常：{e}"))?;
+
+    joined.map(|path| path.display().to_string())
+}
+
+/// 删除已安装模型
+#[tauri::command]
+pub fn delete_model(state: State<'_, AppState>, id: String) -> Result<bool, String> {
+    let spec = crate::models::find_spec(&id)
+        .ok_or_else(|| format!("未知模型：{id}"))?;
+    crate::models::delete_model(&state.models_dir, &spec)
+}
+
 /// 读取隐私配置
 #[tauri::command]
 pub fn get_privacy_config(
