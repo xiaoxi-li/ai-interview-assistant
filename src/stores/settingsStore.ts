@@ -69,6 +69,11 @@ interface SettingsState {
   loadInterfaceSettings: () => Promise<void>;
   saveInterfaceConfig: (config: InterfaceConfig) => Promise<void>;
   setAutoStart: (enabled: boolean) => Promise<void>;
+  /** 切换隐身模式开关（窗口置顶 / 防录屏，IA-11） */
+  setStealthWindow: (patch: {
+    alwaysOnTop?: boolean;
+    hideFromCapture?: boolean;
+  }) => Promise<void>;
   /** 知识库配置 */
   knowledgeConfig: KnowledgeConfig | null;
   /** 当前生效的存储路径 */
@@ -146,6 +151,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       ipc<boolean>("set_autostart", { enabled })
         .then((autoStartEnabled) => set({ autoStartEnabled }))
         .catch((err) => fail("设置开机自启", err)),
+
+    setStealthWindow: (patch) =>
+      ipc<InterfaceConfig>("set_stealth_window", patch)
+        .then((interfaceConfig) => set({ interfaceConfig }))
+        .catch((err) => fail("切换隐身模式", err)),
     models: [],
     modelProgress: {},
     downloadingId: null,

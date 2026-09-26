@@ -2,10 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import ShortcutBar from "../ShortcutBar";
 import { useInterviewStore } from "../../../stores/interviewStore";
-import type { AsrSessionStatus } from "../../../types";
+import { useSettingsStore } from "../../../stores/settingsStore";
+import type { AsrSessionStatus, InterfaceConfig } from "../../../types";
+
+/** 记录各事件监听器，便于测试中模拟后端推送 */
+const listeners: Record<string, (event: { payload: unknown }) => void> = {};
 
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn().mockResolvedValue(() => {}),
+  listen: vi.fn((event: string, handler: (payload: { payload: unknown }) => void) => {
+    listeners[event] = handler;
+    return Promise.resolve(() => {
+      delete listeners[event];
+    });
+  }),
 }));
 
 const runningStatus: AsrSessionStatus = {
@@ -20,6 +29,15 @@ const runningStatus: AsrSessionStatus = {
 
 const idleStatus: AsrSessionStatus = { ...runningStatus, running: false };
 
+const interfaceConfig: InterfaceConfig = {
+  theme: "dark",
+  hotkeys: [],
+  autoStart: false,
+  trayBehavior: "minimize",
+  alwaysOnTop: false,
+  hideFromCapture: false,
+};
+
 const clipboardWrite = vi.fn().mockResolvedValue(undefined);
 
 function resetStore(overrides: Partial<ReturnType<typeof useInterviewStore.getState>> = {}) {
@@ -33,22 +51,32 @@ function resetStore(overrides: Partial<ReturnType<typeof useInterviewStore.getSt
     generateAnswer: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   });
+
+  useSettingsStore.setState({
+    interfaceConfig,
+    loadInterfaceSettings: vi.fn().mockResolvedValue(undefined),
+    setStealthWindow: vi.fn().mockResolvedValue(undefined),
+  } as Partial<ReturnType<typeof useSettingsStore.getState>>);
 }
 
 function pressShortcut(key: string, target?: HTMLElement) {
-  const event = new KeyboardEvent("keydown", {
-    key,
-    ctrlKey: true,
-    shiftKey: true,
-    bubbles: true,
-    cancelable: true,
-  });
-  (target ?? window).dispatchEvent(event);
+  (target ?? window).dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key,
+      ctrlKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+  );
 }
 
 describe("ShortcutBar", () => {
   beforeEach(() => {
     resetStore();
+    // 让 isTauri() 判定为真，从而挂载全局事件监听
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    delete listeners["shortcut://action"];
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: { writeText: clipboardWrite },
@@ -118,12 +146,12 @@ describe("ShortcutBar", () => {
     expect(clipboardWrite).toHaveBeenCalledWith("已生成的回答");
   });
 
-  it("快捷键 Ctrl+Shift+Q 触发一键提问", () => {
+  it("快捷键 Ctrl+Shift+A 触发一键提问", () => {
     const triggerQuestion = vi.fn().mockResolvedValue(undefined);
     resetStore({ triggerQuestion });
     render(<ShortcutBar />);
 
-    pressShortcut("q");
+    pressShortcut("a");
     expect(triggerQuestion).toHaveBeenCalledTimes(1);
   });
 
@@ -158,13 +186,48 @@ describe("ShortcutBar", () => {
 
     const input = document.createElement("input");
     container.appendChild(input);
-    pressShortcut("q", input);
+    pressShortcut("a", input);
 
     expect(triggerQuestion).not.toHaveBeenCalled();
   });
 
+  it("响应系统全局热键推送", async () => {
+    const triggerQuestion = vi.fn().mockResolvedValue(undefined);
+    resetStore({ triggerQuestion });
+    render(<ShortcutBar />);
+
+    // 等待 listen 完成注册
+    await vi.waitFor(() => expect(listeners["shortcut://action"]).toBeTruthy());
+    listeners["shortcut://action"]({ payload: { action: "ask" } });
+
+    expect(triggerQuestion).toHaveBeenCalledTimes(1);
+  });
+
   it("展示快捷键提示", () => {
     render(<ShortcutBar />);
-    expect(screen.getByText(/Ctrl\+Shift\+Q/)).toBeTruthy();
+    expect(screen.getByText(/Ctrl\+Shift\+A/)).toBeTruthy();
+  });
+
+  it("切换窗口置顶", () => {
+    render(<ShortcutBar />);
+    fireEvent.click(screen.getByTitle("隐身模式：窗口置顶"));
+    expect(useSettingsStore.getState().setStealthWindow).toHaveBeenCalledWith({
+      alwaysOnTop: true,
+    });
+  });
+
+  it("切换防录屏并展示激活状态", () => {
+    useSettingsStore.setState({
+      interfaceConfig: { ...interfaceConfig, hideFromCapture: true },
+    } as Partial<ReturnType<typeof useSettingsStore.getState>>);
+    render(<ShortcutBar />);
+
+    const button = screen.getByTitle("隐身模式：屏幕共享时隐藏窗口内容（防录屏）");
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(button);
+    expect(useSettingsStore.getState().setStealthWindow).toHaveBeenCalledWith({
+      hideFromCapture: false,
+    });
   });
 });

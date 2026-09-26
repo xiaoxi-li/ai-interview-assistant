@@ -1,13 +1,14 @@
-import { useState } from "react";
-import { Check, Copy, Pause, Play, RefreshCw, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Copy, Eye, EyeOff, Pause, Pin, Play, RefreshCw, Zap } from "lucide-react";
 import { cn } from "../../lib/utils";
 import {
   INTERVIEW_SHORTCUTS,
   useInterviewShortcuts,
 } from "../../hooks/useInterviewShortcuts";
 import { useInterviewStore } from "../../stores/interviewStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 
-/** 面试中快捷操作条（IA-12）：一键提问 / 暂停 / 重新生成 / 复制（含键盘快捷键） */
+/** 面试中快捷操作条（IA-12）：一键提问 / 暂停 / 重新生成 / 复制 / 隐身模式（含键盘快捷键） */
 export default function ShortcutBar() {
   // 快捷操作条常驻面试页，快捷键注册在此处，避免多处重复绑定
   useInterviewShortcuts();
@@ -20,11 +21,21 @@ export default function ShortcutBar() {
   const setAsrPaused = useInterviewStore((s) => s.setAsrPaused);
   const generateAnswer = useInterviewStore((s) => s.generateAnswer);
 
+  const interfaceConfig = useSettingsStore((s) => s.interfaceConfig);
+  const loadInterfaceSettings = useSettingsStore((s) => s.loadInterfaceSettings);
+  const setStealthWindow = useSettingsStore((s) => s.setStealthWindow);
+
   const [copied, setCopied] = useState(false);
 
   const sessionId = asrStatus?.sessionId ?? null;
   const running = asrStatus?.running ?? false;
   const paused = asrStatus?.paused ?? false;
+  const alwaysOnTop = interfaceConfig?.alwaysOnTop ?? false;
+  const hideFromCapture = interfaceConfig?.hideFromCapture ?? false;
+
+  useEffect(() => {
+    if (!interfaceConfig) loadInterfaceSettings();
+  }, [interfaceConfig, loadInterfaceSettings]);
 
   const shortcut = (label: string) =>
     INTERVIEW_SHORTCUTS.find((item) => item.label.includes(label))?.keys ?? "";
@@ -88,6 +99,27 @@ export default function ShortcutBar() {
       >
         {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
         复制回答
+      </button>
+
+      {/* 隐身模式（IA-11） */}
+      <span className="mx-1 h-4 w-px bg-white/10" />
+      <button
+        className={cn(buttonClass, alwaysOnTop && "border-primary/40 text-primary-3")}
+        title="隐身模式：窗口置顶"
+        aria-pressed={alwaysOnTop}
+        onClick={() => setStealthWindow({ alwaysOnTop: !alwaysOnTop })}
+      >
+        <Pin className="h-3 w-3" />
+        置顶
+      </button>
+      <button
+        className={cn(buttonClass, hideFromCapture && "border-primary/40 text-primary-3")}
+        title="隐身模式：屏幕共享时隐藏窗口内容（防录屏）"
+        aria-pressed={hideFromCapture}
+        onClick={() => setStealthWindow({ hideFromCapture: !hideFromCapture })}
+      >
+        {hideFromCapture ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+        防录屏
       </button>
 
       <span className="ml-auto hidden text-[10px] text-text-subtle lg:inline">

@@ -1,12 +1,25 @@
 import { useEffect } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { ipc } from "../lib/ipc";
+import { isTauri } from "../lib/utils";
+import { closeMiniWindow, isMiniWindow, openMiniWindow } from "../lib/window";
 import { useInterviewStore } from "../stores/interviewStore";
 
-/** 面试中快捷键（应用内，窗口聚焦时生效） */
+/** 面试中可执行的动作（与后端 HOTKEY_ACTIONS 一致） */
+export type InterviewAction =
+  | "ask"
+  | "regenerate"
+  | "copy_answer"
+  | "pause_capture"
+  | "toggle_mini";
+
+/** 面试中快捷键（应用内，窗口聚焦时生效；全局热键由 IA-11 在系统层注册） */
 export const INTERVIEW_SHORTCUTS = [
-  { keys: "Ctrl+Shift+Q", label: "一键提问" },
-  { keys: "Ctrl+Shift+P", label: "暂停/继续采集" },
-  { keys: "Ctrl+Shift+R", label: "重新生成回答" },
-  { keys: "Ctrl+Shift+C", label: "复制回答" },
+  { key: "a", keys: "Ctrl+Shift+A", label: "一键提问" },
+  { key: "p", keys: "Ctrl+Shift+P", label: "暂停/继续采集" },
+  { key: "r", keys: "Ctrl+Shift+R", label: "重新生成回答" },
+  { key: "c", keys: "Ctrl+Shift+C", label: "复制回答" },
+  { key: "m", keys: "Ctrl+Shift+M", label: "迷你模式" },
 ] as const;
 
 /** 是否正在输入控件中（避免快捷键与输入冲突） */
@@ -17,55 +30,101 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName);
 }
 
+/** 切换迷你浮窗（已打开则关闭） */
+function toggleMiniWindow() {
+  if (isMiniWindow()) {
+    closeMiniWindow().catch((err) => console.error(err));
+    return;
+  }
+  ipc<boolean>("mini_window_open")
+    .then((open) => (open ? closeMiniWindow() : openMiniWindow()))
+    .catch((err) => console.error("切换迷你浮窗失败:", err));
+}
+
+/** 执行面试动作：应用内快捷键与系统全局热键共用同一入口 */
+export function runInterviewAction(action: InterviewAction) {
+  const state = useInterviewStore.getState();
+  const sessionId = state.asrStatus?.sessionId ?? null;
+
+  switch (action) {
+    case "ask":
+      state.triggerQuestion();
+      break;
+    case "pause_capture":
+      state.setAsrPaused(!(state.asrStatus?.paused ?? false));
+      break;
+    case "regenerate":
+      if (sessionId && state.currentQaId) {
+        state.generateAnswer(sessionId, state.currentQaId, true);
+      }
+      break;
+    case "copy_answer":
+      if (state.answerText) {
+        navigator.clipboard?.writeText(state.answerText).catch((err) => {
+          console.error("复制回答失败:", err);
+        });
+      }
+      break;
+    case "toggle_mini":
+      toggleMiniWindow();
+      break;
+    default:
+      break;
+  }
+}
+
 /**
  * 面试辅助快捷键：
- * - Ctrl/Cmd + Shift + Q 一键提问（手动触发问题识别）
- * - Ctrl/Cmd + Shift + P 暂停 / 继续采集
- * - Ctrl/Cmd + Shift + R 重新生成回答
- * - Ctrl/Cmd + Shift + C 复制回答
+ * - 应用内：Ctrl/Cmd + Shift + A/P/R/C/M
+ * - 系统级：由 Rust 侧注册，触发后广播 `shortcut://action`
  */
 export function useInterviewShortcuts() {
-  const triggerQuestion = useInterviewStore((s) => s.triggerQuestion);
-  const setAsrPaused = useInterviewStore((s) => s.setAsrPaused);
-  const generateAnswer = useInterviewStore((s) => s.generateAnswer);
-
+  // 应用内键盘快捷键
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return;
       if (isTypingTarget(event.target)) return;
 
       const key = event.key.toLowerCase();
-      const state = useInterviewStore.getState();
-      const sessionId = state.asrStatus?.sessionId ?? null;
+      const matched = INTERVIEW_SHORTCUTS.find((item) => item.key === key);
+      if (!matched) return;
 
-      switch (key) {
-        case "q":
-          event.preventDefault();
-          triggerQuestion();
-          break;
-        case "p":
-          event.preventDefault();
-          setAsrPaused(!(state.asrStatus?.paused ?? false));
-          break;
-        case "r":
-          event.preventDefault();
-          if (sessionId && state.currentQaId) {
-            generateAnswer(sessionId, state.currentQaId, true);
-          }
-          break;
-        case "c":
-          if (!state.answerText) return;
-          event.preventDefault();
-          navigator.clipboard?.writeText(state.answerText).catch((err) => {
-            console.error("复制回答失败:", err);
-          });
-          break;
-        default:
-          break;
-      }
+      event.preventDefault();
+      runInterviewAction(actionForKey(matched.key));
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [triggerQuestion, setAsrPaused, generateAnswer]);
+  }, []);
+
+  // 系统全局热键事件
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    const unlisten = listen<{ action: InterviewAction }>("shortcut://action", (event) => {
+      runInterviewAction(event.payload.action);
+    });
+
+    return () => {
+      unlisten
+        .then((fn) => fn())
+        .catch((err) => console.error("取消全局快捷键监听失败:", err));
+    };
+  }, []);
+}
+
+/** 按键 → 动作 */
+function actionForKey(key: string): InterviewAction {
+  switch (key) {
+    case "a":
+      return "ask";
+    case "p":
+      return "pause_capture";
+    case "r":
+      return "regenerate";
+    case "c":
+      return "copy_answer";
+    default:
+      return "toggle_mini";
+  }
 }

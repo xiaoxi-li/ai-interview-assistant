@@ -299,6 +299,26 @@ export async function mockInvoke<T>(
         signals: ["祈使式提问「介绍一下」"],
       } as T;
 
+    case "set_stealth_window":
+      return {
+        theme: "dark",
+        hotkeys: [],
+        autoStart: false,
+        trayBehavior: "minimize",
+        alwaysOnTop: Boolean(args?.alwaysOnTop ?? false),
+        hideFromCapture: Boolean(args?.hideFromCapture ?? false),
+      } as T;
+
+    case "apply_global_hotkeys":
+      return [] as T;
+
+    case "mini_window_open":
+      return false as T;
+
+    case "open_mini_window":
+    case "close_mini_window":
+      return null as T;
+
     case "generate_answer":
       return {
         qaId: "q-mock-1",

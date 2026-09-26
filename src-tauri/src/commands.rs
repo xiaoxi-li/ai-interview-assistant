@@ -268,15 +268,79 @@ pub fn get_interface_config(
     crate::config::interface::load_interface_config(&conn).map_err(|e| e.to_string())
 }
 
-/// 保存界面配置
+/// 保存界面配置（保存后立即重注册快捷键并应用隐身模式开关）
 #[tauri::command]
 pub fn save_interface_config(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     config: crate::config::interface::InterfaceConfig,
 ) -> Result<crate::config::interface::InterfaceConfig, String> {
-    let conn = state.lock()?;
-    crate::config::interface::save_interface_config(&conn, &config)?;
-    crate::config::interface::load_interface_config(&conn).map_err(|e| e.to_string())
+    let saved = {
+        let conn = state.lock()?;
+        crate::config::interface::save_interface_config(&conn, &config)?;
+        crate::config::interface::load_interface_config(&conn).map_err(|e| e.to_string())?
+    };
+
+    for failure in crate::hotkeys::apply(&app, &saved.hotkeys) {
+        eprintln!("全局快捷键注册提示：{failure}");
+    }
+    apply_stealth_window(&app, &saved);
+
+    Ok(saved)
+}
+
+/// 应用隐身模式到主窗口（置顶 / 防录屏）
+fn apply_stealth_window(app: &tauri::AppHandle, config: &crate::config::interface::InterfaceConfig) {
+    use tauri::Manager;
+
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    if let Err(err) = window.set_always_on_top(config.always_on_top) {
+        eprintln!("设置窗口置顶失败：{err}");
+    }
+    if let Err(err) = window.set_content_protected(config.hide_from_capture) {
+        eprintln!("设置防录屏失败（当前平台可能不支持）：{err}");
+    }
+}
+
+/// 切换隐身模式（窗口置顶 / 屏幕共享隐藏），持久化并立即生效（IA-11）
+#[tauri::command]
+pub fn set_stealth_window(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    always_on_top: Option<bool>,
+    hide_from_capture: Option<bool>,
+) -> Result<crate::config::interface::InterfaceConfig, String> {
+    let saved = {
+        let conn = state.lock()?;
+        let mut config =
+            crate::config::interface::load_interface_config(&conn).map_err(|e| e.to_string())?;
+        if let Some(value) = always_on_top {
+            config.always_on_top = value;
+        }
+        if let Some(value) = hide_from_capture {
+            config.hide_from_capture = value;
+        }
+        crate::config::interface::save_interface_config(&conn, &config)?;
+        config
+    };
+
+    apply_stealth_window(&app, &saved);
+    Ok(saved)
+}
+
+/// 按当前配置重新注册全局快捷键（IA-11）；返回注册失败的条目
+#[tauri::command]
+pub fn apply_global_hotkeys(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<String>, String> {
+    let config = {
+        let conn = state.lock()?;
+        crate::config::interface::load_interface_config(&conn).map_err(|e| e.to_string())?
+    };
+    Ok(crate::hotkeys::apply(&app, &config.hotkeys))
 }
 
 /// 查询开机自启状态

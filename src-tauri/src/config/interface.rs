@@ -66,6 +66,12 @@ pub struct InterfaceConfig {
     pub hotkeys: Vec<HotkeyBinding>,
     pub auto_start: bool,
     pub tray_behavior: TrayBehavior,
+    /// 隐身模式：窗口置顶（IA-11）
+    #[serde(default)]
+    pub always_on_top: bool,
+    /// 隐身模式：屏幕共享时隐藏窗口内容（防录屏，IA-11）
+    #[serde(default)]
+    pub hide_from_capture: bool,
 }
 
 impl Default for InterfaceConfig {
@@ -75,6 +81,8 @@ impl Default for InterfaceConfig {
             hotkeys: default_hotkeys(),
             auto_start: false,
             tray_behavior: TrayBehavior::Minimize,
+            always_on_top: false,
+            hide_from_capture: false,
         }
     }
 }
@@ -176,9 +184,29 @@ mod tests {
                 hotkeys: default_hotkeys(),
                 auto_start: true,
                 tray_behavior: TrayBehavior::Quit,
+                always_on_top: true,
+                hide_from_capture: true,
             };
             save_interface_config(conn, &config).expect("save");
             assert_eq!(load_interface_config(conn).expect("load"), config);
+        });
+    }
+
+    #[test]
+    fn legacy_config_without_stealth_fields_defaults_to_off() {
+        with_db(|conn| {
+            // 旧版本写入的 JSON 不含隐身模式字段
+            save_setting(
+                conn,
+                SETTING_INTERFACE_CONFIG,
+                r#"{"theme":"dark","hotkeys":[{"action":"ask","accelerator":"Ctrl+Shift+A"}],"autoStart":false,"trayBehavior":"minimize"}"#,
+            )
+            .expect("save legacy");
+
+            let config = load_interface_config(conn).expect("load");
+            assert!(!config.always_on_top);
+            assert!(!config.hide_from_capture);
+            assert_eq!(config.hotkeys.len(), 1);
         });
     }
 

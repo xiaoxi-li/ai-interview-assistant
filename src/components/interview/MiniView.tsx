@@ -4,6 +4,7 @@ import { cn } from "../../lib/utils";
 import { ipc } from "../../lib/ipc";
 import { closeMiniWindow } from "../../lib/window";
 import { useAnswerEvents } from "../../hooks/useAnswerEvents";
+import { useInterviewShortcuts } from "../../hooks/useInterviewShortcuts";
 import { useQuestionEvents } from "../../hooks/useQuestionEvents";
 import { useInterviewStore } from "../../stores/interviewStore";
 import type { QaPair } from "../../types";
@@ -29,6 +30,8 @@ export default function MiniView() {
   const [copied, setCopied] = useState(false);
   const sessionId = asrStatus?.sessionId ?? null;
 
+  // 迷你窗内同样响应快捷键与系统全局热键
+  useInterviewShortcuts();
   useQuestionEvents(applyQuestionPush);
   useAnswerEvents(applyAnswerPush);
 

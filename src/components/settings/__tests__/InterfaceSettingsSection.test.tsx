@@ -14,6 +14,8 @@ const config: InterfaceConfig = {
   ],
   autoStart: false,
   trayBehavior: "minimize",
+  alwaysOnTop: false,
+  hideFromCapture: false,
 };
 
 function setup(overrides: Partial<Parameters<typeof InterfaceSettingsSection>[0]> = {}) {

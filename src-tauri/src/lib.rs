@@ -8,6 +8,7 @@ mod state;
 pub mod asr;
 pub mod audio;
 pub mod config;
+pub mod hotkeys;
 pub mod interview;
 pub mod knowledge;
 pub mod models;
@@ -15,6 +16,7 @@ pub mod providers;
 pub mod retrieval;
 pub mod security;
 pub mod storage;
+pub mod tray;
 
 /// 应用基础信息（用于验证前后端 IPC 通路）
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -38,6 +40,16 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    // 仅响应按下，避免一次按键触发两次
+                    if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        hotkeys::dispatch(app, shortcut);
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
             // 数据库存放于系统应用数据目录
             let data_dir = app.path().app_data_dir()?;
@@ -58,6 +70,32 @@ pub fn run() {
                 embedding,
                 secrets,
             ));
+
+            // IA-11：配置已保存的隐身模式开关（置顶 / 防录屏）
+            let interface_config = {
+                use tauri::Manager;
+                let app_state = app.state::<state::AppState>();
+                let loaded = match app_state.lock() {
+                    Ok(conn) => config::interface::load_interface_config(&conn).ok(),
+                    Err(_) => None,
+                };
+                loaded.unwrap_or_default()
+            };
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_always_on_top(interface_config.always_on_top);
+                let _ = window.set_content_protected(interface_config.hide_from_capture);
+            }
+
+            // IA-11：注册全局快捷键（失败仅告警，不阻断启动）
+            for failure in hotkeys::apply(app.handle(), &interface_config.hotkeys) {
+                eprintln!("全局快捷键注册提示：{failure}");
+            }
+
+            // IA-11：系统托盘
+            if let Err(err) = tray::create(app) {
+                eprintln!("系统托盘创建失败：{err}");
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -145,7 +183,30 @@ pub fn run() {
             commands::export_backup_json,
             commands::backup_database,
             commands::restore_backup,
+            commands::set_stealth_window,
+            commands::apply_global_hotkeys,
         ])
+        // 托盘行为：关闭主窗口时按配置最小化到托盘（IA-11）
+        .on_window_event(|window, event| {
+            use tauri::Manager;
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == commands::MINI_WINDOW_LABEL {
+                    return;
+                }
+                let handle = window.app_handle();
+                let behavior = handle
+                    .try_state::<state::AppState>()
+                    .and_then(|state| state.lock().ok().map(|conn| config::interface::load_interface_config(&conn)))
+                    .and_then(Result::ok)
+                    .map(|config| config.tray_behavior)
+                    .unwrap_or(config::interface::TrayBehavior::Minimize);
+
+                if behavior == config::interface::TrayBehavior::Minimize {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

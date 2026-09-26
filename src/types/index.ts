@@ -348,6 +348,10 @@ export interface InterfaceConfig {
   hotkeys: HotkeyBinding[];
   autoStart: boolean;
   trayBehavior: "minimize" | "quit";
+  /** 隐身模式：窗口置顶（IA-11） */
+  alwaysOnTop: boolean;
+  /** 隐身模式：屏幕共享时隐藏窗口内容（防录屏，IA-11） */
+  hideFromCapture: boolean;
 }
 
 export interface PrivacyConfig {
