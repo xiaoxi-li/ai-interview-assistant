@@ -14,6 +14,7 @@ import type {
   QuestionPush,
   RecallHit,
   RecallOutcome,
+  SourceRef,
   Speaker,
   TranscriptPush,
 } from "../types";
@@ -66,6 +67,8 @@ interface InterviewState {
   currentQaId: string | null;
   /** 当前问题的知识库召回片段（IA-07） */
   sources: RecallHit[];
+  /** 从落库记录恢复的引用来源（无摘要/得分，IA-09） */
+  persistedSources: SourceRef[];
   sourcesLoading: boolean;
   /** 最近一次召回使用的查询（便于排查召回质量） */
   recallQueries: string[];
@@ -142,6 +145,7 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
     questionConfig: null,
     currentQaId: null,
     sources: [],
+    persistedSources: [],
     sourcesLoading: false,
     recallQueries: [],
 
@@ -209,6 +213,7 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
             questions: [],
             currentQaId: null,
             sources: [],
+            persistedSources: [],
             recallQueries: [],
           })
         )
@@ -258,6 +263,7 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
         // 新问题出现即清空上一题的召回结果与回答
         currentQaId: qaId,
         sources: [],
+        persistedSources: [],
         recallQueries: [],
         answerText: "",
         answerStatus: "idle",
@@ -304,6 +310,7 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
             questions: [],
             currentQaId: null,
             sources: [],
+            persistedSources: [],
             recallQueries: [],
           })
         )
@@ -370,7 +377,7 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
         });
     },
 
-    resetSources: () => set({ sources: [], recallQueries: [] }),
+    resetSources: () => set({ sources: [], persistedSources: [], recallQueries: [] }),
 
     generateAnswer: (sessionId, questionId, regenerate) => {
       set({ answerStatus: "thinking", answerError: null, answerText: "" });
@@ -458,6 +465,8 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
         answerText: pair.answer,
         answerStatus: pair.answer ? "done" : "idle",
         answerError: null,
+        // 无实时召回结果时，用落库的引用来源兜底展示（IA-09）
+        persistedSources: pair.sources ?? [],
       }),
   };
 });

@@ -8,9 +8,7 @@ pub mod question;
 pub mod recall;
 pub mod store;
 
-pub use answer::{
-    build_answer_messages, render_context, source_titles, SYSTEM_PROMPT,
-};
+pub use answer::{build_answer_messages, render_context, source_refs, SYSTEM_PROMPT};
 
 pub use question::{
     analyze, analyze_with, DetectedQuestion, QuestionDetector, QuestionScore,
@@ -19,4 +17,4 @@ pub use question::{
 pub use recall::{
     build_queries, recall_for_question, RecallHit, RecallOutcome, DEFAULT_TOP_K,
 };
-pub use store::{QaPairDto, QaRepo};
+pub use store::{QaPairDto, QaRepo, SourceRef};

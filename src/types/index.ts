@@ -156,13 +156,19 @@ export interface QuestionPush {
   qaId: string | null;
 }
 
+/** 引用来源（IA-09）：回答引用了哪篇笔记 */
+export interface SourceRef {
+  noteId: string;
+  title: string;
+}
+
 /** 问答对（qa_pairs） */
 export interface QaPair {
   id: string;
   sessionId: string;
   question: string;
   answer: string;
-  sources: string[];
+  sources: SourceRef[];
   ts: number;
 }
 

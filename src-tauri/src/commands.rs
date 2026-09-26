@@ -11,7 +11,7 @@ use crate::audio::vad::VadConfig;
 use crate::audio::{AudioCapture, FRAME_SAMPLES};
 use crate::config::asr::CLOUD_ASR_IMPLEMENTED;
 use crate::config::interview::QuestionConfig;
-use crate::interview::answer::{build_answer_messages, source_titles};
+use crate::interview::answer::{build_answer_messages, source_refs};
 use crate::interview::question::{QuestionDetector, QuestionScore};
 use crate::interview::store::{QaPairDto, QaRepo};
 use crate::interview::DetectedQuestion;
@@ -1575,8 +1575,8 @@ pub fn recall_for_question(
     .map_err(|e| e.to_string())?;
 
     // 引用来源落库：便于会话回放与导出（回答由 IA-08 生成）
-    let titles: Vec<String> = outcome.hits.iter().map(|hit| hit.title.clone()).collect();
-    if let Err(err) = repo.set_sources(&pair.id, &titles) {
+    let refs = source_refs(&outcome.hits);
+    if let Err(err) = repo.set_sources(&pair.id, &refs) {
         eprintln!("引用来源落库失败（qa={}）：{err}", pair.id);
     }
 
@@ -1643,8 +1643,8 @@ pub fn generate_answer(
         )
         .map_err(|e| e.to_string())?;
 
-        let titles = source_titles(&outcome.hits);
-        if let Err(err) = QaRepo::new(&conn).set_sources(&pair.id, &titles) {
+        let refs = source_refs(&outcome.hits);
+        if let Err(err) = QaRepo::new(&conn).set_sources(&pair.id, &refs) {
             eprintln!("引用来源落库失败（qa={}）：{err}", pair.id);
         }
         outcome
@@ -1736,12 +1736,12 @@ pub fn generate_answer(
             }
         }
 
-        // 落库：回答 + 引用来源标题
+        // 落库：回答 + 引用来源
         if !answer.trim().is_empty() {
-            let titles = source_titles(&sources);
+            let refs = source_refs(&sources);
             let persisted = match conn_handle.lock() {
                 Ok(guard) => QaRepo::new(&guard)
-                    .set_answer(&qa_id, &answer, &titles)
+                    .set_answer(&qa_id, &answer, &refs)
                     .unwrap_or(false),
                 Err(err) => {
                     eprintln!("回答落库跳过（连接锁中毒）：{err}");

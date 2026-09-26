@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AnswerPanel from "../AnswerPanel";
+import { useAppStore } from "../../../stores/appStore";
 import { useInterviewStore } from "../../../stores/interviewStore";
+import { useKnowledgeStore } from "../../../stores/knowledgeStore";
 import type {
   AnswerStatus,
   AsrSessionStatus,
@@ -52,6 +54,7 @@ function resetStore(overrides: Partial<ReturnType<typeof useInterviewStore.getSt
     answerQaId: null,
     answerModel: null,
     sources: [],
+    persistedSources: [],
     generateAnswer: vi.fn().mockResolvedValue(undefined),
     applyAnswerPush: vi.fn(),
     loadQuestionConfig: vi.fn().mockResolvedValue(undefined),
@@ -154,7 +157,7 @@ describe("AnswerPanel", () => {
     expect(button.disabled).toBe(true);
   });
 
-  it("展示引用来源", () => {
+  it("展示引用来源（标题 / 摘要 / 得分）", () => {
     resetStore({
       currentQaId: "q1",
       answerText: "回答",
@@ -163,7 +166,59 @@ describe("AnswerPanel", () => {
     });
     render(<AnswerPanel />);
 
-    expect(screen.getByText("引用：")).toBeTruthy();
+    expect(screen.getByText("引用来源")).toBeTruthy();
+    expect(screen.getByText("1 篇")).toBeTruthy();
     expect(screen.getByText("项目架构设计")).toBeTruthy();
+    expect(screen.getByText("负责桌面应用的架构设计")).toBeTruthy();
+    expect(screen.getByText("0.030")).toBeTruthy();
+  });
+
+  it("点击引用跳转知识库并选中该笔记", () => {
+    const select = vi.fn();
+    const setCurrentPage = vi.fn();
+    useKnowledgeStore.setState({ select } as Partial<
+      ReturnType<typeof useKnowledgeStore.getState>
+    >);
+    useAppStore.setState({ setCurrentPage });
+
+    resetStore({ currentQaId: "q1", answerText: "回答", answerStatus: "done", sources: [hit] });
+    render(<AnswerPanel />);
+
+    fireEvent.click(screen.getByText("项目架构设计"));
+    expect(select).toHaveBeenCalledWith("note-1");
+    expect(setCurrentPage).toHaveBeenCalledWith("knowledge");
+  });
+
+  it("无实时召回结果时回退展示落库引用", () => {
+    resetStore({
+      currentQaId: "q1",
+      answerText: "回答",
+      answerStatus: "done",
+      sources: [],
+      persistedSources: [{ noteId: "n-9", title: "历史引用笔记" }],
+    });
+    render(<AnswerPanel />);
+
+    expect(screen.getByText("历史引用笔记")).toBeTruthy();
+    expect(screen.queryByText("负责桌面应用的架构设计")).toBeNull();
+  });
+
+  it("缺少笔记 ID 的引用不可点击", () => {
+    const setCurrentPage = vi.fn();
+    useAppStore.setState({ setCurrentPage });
+
+    resetStore({
+      currentQaId: "q1",
+      answerText: "回答",
+      answerStatus: "done",
+      sources: [],
+      persistedSources: [{ noteId: "", title: "旧格式引用" }],
+    });
+    render(<AnswerPanel />);
+
+    const button = screen.getByText("旧格式引用").closest("button") as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    fireEvent.click(button);
+    expect(setCurrentPage).not.toHaveBeenCalled();
   });
 });

@@ -79,19 +79,22 @@ pub fn build_answer_messages(question: &str, sources: &[RecallHit]) -> Vec<ChatM
     ]
 }
 
-/// 引用来源标题（去重后落库到 qa_pairs.sources_json）
-pub fn source_titles(sources: &[RecallHit]) -> Vec<String> {
-    let mut titles: Vec<String> = Vec::new();
+/// 引用来源（去重后落库到 qa_pairs.sources_json，IA-09 据此跳转定位笔记）
+pub fn source_refs(sources: &[RecallHit]) -> Vec<crate::interview::store::SourceRef> {
+    let mut refs: Vec<crate::interview::store::SourceRef> = Vec::new();
     for hit in sources {
-        let title = hit.title.trim();
-        if title.is_empty() {
+        if hit.note_id.trim().is_empty() {
             continue;
         }
-        if !titles.iter().any(|existing| existing == title) {
-            titles.push(title.to_string());
+        if refs.iter().any(|existing| existing.note_id == hit.note_id) {
+            continue;
         }
+        refs.push(crate::interview::store::SourceRef {
+            note_id: hit.note_id.clone(),
+            title: hit.title.trim().to_string(),
+        });
     }
-    titles
+    refs
 }
 
 #[cfg(test)]
@@ -169,13 +172,23 @@ mod tests {
     }
 
     #[test]
-    fn source_titles_are_deduped_and_skip_empty() {
+    fn source_refs_are_deduped_and_keep_note_ids() {
         let sources = vec![
             hit("笔记A", "x", 0.3),
-            hit("笔记A", "y", 0.2),
-            hit("  ", "z", 0.1),
-            hit("笔记B", "w", 0.1),
+            hit("笔记B", "y", 0.2),
+            hit("笔记A", "z", 0.1),
+            RecallHit {
+                note_id: "  ".into(),
+                title: "无 ID".into(),
+                snippet: "w".into(),
+                score: 0.1,
+            },
         ];
-        assert_eq!(source_titles(&sources), vec!["笔记A", "笔记B"]);
+
+        let refs = source_refs(&sources);
+        assert_eq!(refs.len(), 2, "应按笔记 ID 去重并跳过空 ID");
+        assert_eq!(refs[0].note_id, "n-笔记A");
+        assert_eq!(refs[0].title, "笔记A");
+        assert_eq!(refs[1].note_id, "n-笔记B");
     }
 }

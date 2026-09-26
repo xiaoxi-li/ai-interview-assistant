@@ -4,6 +4,33 @@ use crate::knowledge::store::new_id;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
+/// 引用来源（IA-09）：回答引用了哪篇笔记，可据此跳转定位
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceRef {
+    pub note_id: String,
+    pub title: String,
+}
+
+/// 解析引用来源 JSON。
+///
+/// 兼容早期版本只存标题数组（`["笔记A"]`）的格式，避免历史会话回放时报错。
+fn parse_sources(json: &str) -> Vec<SourceRef> {
+    if let Ok(refs) = serde_json::from_str::<Vec<SourceRef>>(json) {
+        return refs;
+    }
+    if let Ok(titles) = serde_json::from_str::<Vec<String>>(json) {
+        return titles
+            .into_iter()
+            .map(|title| SourceRef {
+                note_id: String::new(),
+                title,
+            })
+            .collect();
+    }
+    Vec::new()
+}
+
 /// 问答对
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -12,8 +39,8 @@ pub struct QaPairDto {
     pub session_id: String,
     pub question: String,
     pub answer: String,
-    /// 引用来源（笔记标题或 ID 列表）
-    pub sources: Vec<String>,
+    /// 引用来源（笔记 ID + 标题）
+    pub sources: Vec<SourceRef>,
     pub ts: i64,
 }
 
@@ -26,7 +53,7 @@ fn map_qa(row: &rusqlite::Row<'_>) -> rusqlite::Result<QaPairDto> {
         session_id: row.get(1)?,
         question: row.get(2)?,
         answer: row.get(3)?,
-        sources: serde_json::from_str(&sources_json).unwrap_or_default(),
+        sources: parse_sources(&sources_json),
         ts: row.get(5)?,
     })
 }
@@ -99,7 +126,7 @@ impl<'a> QaRepo<'a> {
         &self,
         id: &str,
         answer: &str,
-        sources: &[String],
+        sources: &[SourceRef],
     ) -> rusqlite::Result<bool> {
         let sources_json = serde_json::to_string(sources).unwrap_or_else(|_| "[]".to_string());
         let affected = self.conn.execute(
@@ -110,7 +137,7 @@ impl<'a> QaRepo<'a> {
     }
 
     /// 仅更新引用来源（IA-07 召回结果落库，回答留待 IA-08 生成）
-    pub fn set_sources(&self, id: &str, sources: &[String]) -> rusqlite::Result<bool> {
+    pub fn set_sources(&self, id: &str, sources: &[SourceRef]) -> rusqlite::Result<bool> {
         let sources_json = serde_json::to_string(sources).unwrap_or_else(|_| "[]".to_string());
         let affected = self.conn.execute(
             "UPDATE qa_pairs SET sources_json = ?2 WHERE id = ?1",
@@ -140,6 +167,13 @@ mod tests {
             .start_session("面试")
             .expect("session")
             .id
+    }
+
+    fn source(note_id: &str, title: &str) -> SourceRef {
+        SourceRef {
+            note_id: note_id.to_string(),
+            title: title.to_string(),
+        }
     }
 
     #[test]
@@ -197,12 +231,19 @@ mod tests {
 
         let pair = repo.create_question(&session, "问题", 1_000).expect("create");
         assert!(repo
-            .set_answer(&pair.id, "这是回答", &["笔记A".into(), "笔记B".into()])
+            .set_answer(
+                &pair.id,
+                "这是回答",
+                &[source("n-a", "笔记A"), source("n-b", "笔记B")]
+            )
             .expect("set"));
 
         let stored = repo.get(&pair.id).expect("get").expect("some");
         assert_eq!(stored.answer, "这是回答");
-        assert_eq!(stored.sources, vec!["笔记A".to_string(), "笔记B".to_string()]);
+        assert_eq!(
+            stored.sources,
+            vec![source("n-a", "笔记A"), source("n-b", "笔记B")]
+        );
     }
 
     #[test]
@@ -214,12 +255,28 @@ mod tests {
         let pair = repo.create_question(&session, "问题", 1_000).expect("create");
         repo.set_answer(&pair.id, "已有回答", &[]).expect("answer");
         assert!(repo
-            .set_sources(&pair.id, &["笔记X".into()])
+            .set_sources(&pair.id, &[source("n-1", "笔记X")])
             .expect("set sources"));
 
         let stored = repo.get(&pair.id).expect("get").expect("some");
-        assert_eq!(stored.sources, vec!["笔记X".to_string()]);
+        assert_eq!(stored.sources, vec![source("n-1", "笔记X")]);
         assert_eq!(stored.answer, "已有回答", "更新来源不应清空回答");
+    }
+
+    #[test]
+    fn legacy_string_sources_are_still_readable() {
+        // 早期版本 sources_json 只存标题数组
+        let parsed = parse_sources(r#"["笔记A","笔记B"]"#);
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].title, "笔记A");
+        assert!(parsed[0].note_id.is_empty(), "旧格式无笔记 ID");
+
+        // 新格式（对象数组）优先
+        let parsed = parse_sources(r#"[{"noteId":"n-1","title":"笔记A"}]"#);
+        assert_eq!(parsed[0].note_id, "n-1");
+
+        // 损坏数据安全降级
+        assert!(parse_sources("{ broken").is_empty());
     }
 
     #[test]

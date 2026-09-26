@@ -358,7 +358,7 @@ export async function mockInvoke<T>(
         sessionId: "s-mock-system",
         question: "介绍一下你最近负责的项目",
         answer: "我最近负责桌面端应用的架构设计，主要负责模块拆分与性能优化。",
-        sources: ["项目架构设计"],
+        sources: [{ noteId: "note-mock-1", title: "项目架构设计" }],
         ts: Date.now(),
       } as T;
 

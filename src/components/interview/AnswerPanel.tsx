@@ -1,8 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Check, Copy, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import {
+  AlertCircle,
+  BookOpen,
+  Check,
+  Copy,
+  ExternalLink,
+  Loader2,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useAnswerEvents } from "../../hooks/useAnswerEvents";
+import { useAppStore } from "../../stores/appStore";
 import { useInterviewStore } from "../../stores/interviewStore";
+import { useKnowledgeStore } from "../../stores/knowledgeStore";
+
+/** 引用来源展示项（实时召回含摘要与得分，落库兜底只有标题） */
+interface Citation {
+  noteId: string;
+  title: string;
+  snippet: string;
+  score: number | null;
+}
 
 export default function AnswerPanel() {
   const asrStatus = useInterviewStore((s) => s.asrStatus);
@@ -13,6 +32,7 @@ export default function AnswerPanel() {
   const answerError = useInterviewStore((s) => s.answerError);
   const answerModel = useInterviewStore((s) => s.answerModel);
   const sources = useInterviewStore((s) => s.sources);
+  const persistedSources = useInterviewStore((s) => s.persistedSources);
   const generateAnswer = useInterviewStore((s) => s.generateAnswer);
   const applyAnswerPush = useInterviewStore((s) => s.applyAnswerPush);
   const loadQuestionConfig = useInterviewStore((s) => s.loadQuestionConfig);
@@ -49,6 +69,28 @@ export default function AnswerPanel() {
       })
       .catch((err) => console.error("复制回答失败:", err));
   };
+
+  /** 在知识库中打开被引用的笔记（IA-09） */
+  const openNote = (noteId: string) => {
+    if (!noteId) return;
+    useKnowledgeStore.getState().select(noteId);
+    useAppStore.getState().setCurrentPage("knowledge");
+  };
+
+  // 优先使用实时召回结果（含摘要与得分）；无常驻结果时用落库引用兜底
+  const citations: Citation[] = sources.length
+    ? sources.map((hit) => ({
+        noteId: hit.noteId,
+        title: hit.title,
+        snippet: hit.snippet,
+        score: hit.score,
+      }))
+    : persistedSources.map((ref) => ({
+        noteId: ref.noteId,
+        title: ref.title,
+        snippet: "",
+        score: null,
+      }));
 
   return (
     <section className="glass flex flex-col rounded-xl p-4">
@@ -113,20 +155,54 @@ export default function AnswerPanel() {
         </p>
       )}
 
-      {sources.length > 0 && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="text-[10px] text-text-subtle">引用：</span>
-          {sources.map((hit) => (
-            <span
-              key={hit.noteId}
-              className={cn(
-                "max-w-[10rem] truncate rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-text-muted"
-              )}
-              title={hit.title}
-            >
-              {hit.title}
+      {citations.length > 0 && (
+        <div className="mt-3">
+          <div className="mb-1.5 flex items-center gap-1.5">
+            <BookOpen className="h-3.5 w-3.5 text-text-subtle" />
+            <span className="text-[11px] font-medium text-text-muted">引用来源</span>
+            <span className="ml-auto text-[10px] text-text-subtle">
+              {citations.length} 篇
             </span>
-          ))}
+          </div>
+
+          <ul className="flex flex-col gap-1.5">
+            {citations.map((citation, index) => (
+              <li key={`${citation.noteId || citation.title}-${index}`}>
+                <button
+                  type="button"
+                  disabled={!citation.noteId}
+                  onClick={() => openNote(citation.noteId)}
+                  title={citation.noteId ? "在知识库中打开该笔记" : "该引用缺少笔记 ID"}
+                  className={cn(
+                    "flex w-full flex-col gap-0.5 rounded-lg border border-white/[0.06] bg-background-3/30 px-2.5 py-2 text-left transition-colors",
+                    citation.noteId
+                      ? "cursor-pointer hover:border-primary/30 hover:bg-primary/[0.07]"
+                      : "cursor-default"
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-[10px] text-text-subtle">[{index + 1}]</span>
+                    <span className="truncate text-[11px] font-medium text-text">
+                      {citation.title || "未命名笔记"}
+                    </span>
+                    {citation.score !== null && (
+                      <span className="ml-auto shrink-0 text-[10px] text-text-subtle">
+                        {citation.score.toFixed(3)}
+                      </span>
+                    )}
+                    {citation.noteId && (
+                      <ExternalLink className="h-3 w-3 shrink-0 text-text-subtle" />
+                    )}
+                  </span>
+                  {citation.snippet && (
+                    <span className="line-clamp-2 text-[11px] leading-relaxed text-text-muted">
+                      {citation.snippet}
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </section>
