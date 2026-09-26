@@ -3,12 +3,14 @@
 //! P0 阶段提供设备枚举；音频捕获（麦克风 + 系统音频回环）、VAD、AEC
 //! 在 IA-01 / IA-03 / IA-02 任务中逐步实现，均通过 [`AudioCapture`] 抽象隔离平台差异。
 
+pub mod aec;
 pub mod capture;
 pub mod devices;
 pub mod mic;
 pub mod vad;
 pub mod wav;
 
+pub use aec::{AecConfig, EchoCanceller};
 pub use capture::{
     frame_samples, normalize_to_16k_mono, to_audio_chunk, FRAME_SAMPLES, TARGET_SAMPLE_RATE,
 };
