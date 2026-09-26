@@ -9,6 +9,7 @@ import type {
   AudioDevice,
   ConnectionTest,
   PlatformPreset,
+  PrivacyConfig,
 } from "../types";
 
 /** API Key 配置状态（后端只回传掩码，不泄露完整密钥） */
@@ -19,6 +20,8 @@ export interface ApiKeyStatus {
 }
 
 interface SettingsState {
+  /** 操作提示（成功类信息） */
+  notice: string | null;
   /** 各平台的密钥配置状态 */
   apiKeys: Record<string, ApiKeyStatus>;
   /** 当前 AI 配置 */
@@ -54,6 +57,13 @@ interface SettingsState {
   loadAudioSettings: () => Promise<void>;
   refreshAudioDevices: () => Promise<void>;
   saveAudioConfig: (config: AudioConfig) => Promise<void>;
+  /** 隐私配置 */
+  privacyConfig: PrivacyConfig | null;
+  /** 清除本地数据中 */
+  clearing: boolean;
+  loadPrivacySettings: () => Promise<void>;
+  savePrivacyConfig: (config: PrivacyConfig) => Promise<void>;
+  clearLocalData: () => Promise<void>;
   /** 查询指定平台的密钥状态 */
   loadApiKeyStatus: (platform: string) => Promise<void>;
   /** 保存密钥（空串表示清除） */
@@ -84,7 +94,35 @@ export const useSettingsStore = create<SettingsState>((set) => {
     asrCredentials: {},
     audioConfig: null,
     audioDevices: [],
+    privacyConfig: null,
+    clearing: false,
+    notice: null,
     error: null,
+
+    loadPrivacySettings: () =>
+      ipc<PrivacyConfig>("get_privacy_config")
+        .then((privacyConfig) => set({ privacyConfig }))
+        .catch((err) => fail("加载隐私配置", err)),
+
+    savePrivacyConfig: (config) =>
+      ipc<PrivacyConfig>("save_privacy_config", { config })
+        .then((saved) => set({ privacyConfig: saved }))
+        .catch((err) => fail("保存隐私配置", err)),
+
+    clearLocalData: () => {
+      set({ clearing: true, error: null });
+      return ipc<{ notes: number; sessions: number }>("clear_local_data")
+        .then((summary) =>
+          set({
+            clearing: false,
+            notice: `已清除本地数据（${summary.notes} 篇笔记、${summary.sessions} 场会话）`,
+          })
+        )
+        .catch((err) => {
+          set({ clearing: false });
+          fail("清除本地数据", err);
+        });
+    },
 
     loadAudioSettings: () =>
       Promise.all([

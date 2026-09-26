@@ -65,6 +65,15 @@ export async function mockInvoke<T>(
     case "save_ai_config":
       return (args?.config ?? null) as T;
 
+    case "get_privacy_config":
+      return { uploadAudio: false, encryptLocal: false } as T;
+
+    case "save_privacy_config":
+      return (args?.config ?? null) as T;
+
+    case "clear_local_data":
+      return { notes: 0, groups: 0, tags: 0, sessions: 0 } as T;
+
     case "list_audio_devices":
       return [
         { id: "麦克风 (USB Audio)", name: "麦克风 (USB Audio)", kind: "input", isDefault: true },

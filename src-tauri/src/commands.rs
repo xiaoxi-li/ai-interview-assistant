@@ -241,6 +241,38 @@ pub fn restore_backup(
     Ok(summary)
 }
 
+/// 读取隐私配置
+#[tauri::command]
+pub fn get_privacy_config(
+    state: State<'_, AppState>,
+) -> Result<crate::config::privacy::PrivacyConfig, String> {
+    let conn = state.lock()?;
+    crate::config::privacy::load_privacy_config(&conn).map_err(|e| e.to_string())
+}
+
+/// 保存隐私配置（上传开关需与 ASR 模式一致）
+#[tauri::command]
+pub fn save_privacy_config(
+    state: State<'_, AppState>,
+    config: crate::config::privacy::PrivacyConfig,
+) -> Result<crate::config::privacy::PrivacyConfig, String> {
+    let conn = state.lock()?;
+    let asr = crate::config::asr::load_asr_config(&conn).map_err(|e| e.to_string())?;
+    let cloud_enabled = asr.mode == crate::providers::types::AsrMode::Cloud;
+    config.validate(cloud_enabled)?;
+    crate::config::privacy::save_privacy_config(&conn, &config)?;
+    crate::config::privacy::load_privacy_config(&conn).map_err(|e| e.to_string())
+}
+
+/// 清除全部本地业务数据（保留设置与钥匙链凭证）
+#[tauri::command]
+pub fn clear_local_data(
+    state: State<'_, AppState>,
+) -> Result<crate::knowledge::ClearSummary, String> {
+    let conn = state.lock()?;
+    crate::knowledge::clear_all_data(&conn).map_err(|e| e.to_string())
+}
+
 /// 枚举音频设备（输入=麦克风，输出=系统音频来源）
 #[tauri::command]
 pub fn list_audio_devices() -> Vec<crate::audio::DeviceInfo> {

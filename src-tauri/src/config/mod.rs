@@ -5,6 +5,7 @@
 
 pub mod asr;
 pub mod audio;
+pub mod privacy;
 
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};

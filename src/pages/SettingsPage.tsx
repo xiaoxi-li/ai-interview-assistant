@@ -3,13 +3,13 @@ import { Settings as SettingsIcon } from "lucide-react";
 import AiSettingsSection from "../components/settings/AiSettingsSection";
 import AsrSettingsSection from "../components/settings/AsrSettingsSection";
 import AudioSettingsSection from "../components/settings/AudioSettingsSection";
+import PrivacySettingsSection from "../components/settings/PrivacySettingsSection";
 import { useSettingsStore } from "../stores/settingsStore";
 
 const PLACEHOLDER_SECTIONS = [
   { title: "模型管理", desc: "嵌入 / VAD / 本地 ASR 模型的下载、更新与删除", task: "ST-10" },
   { title: "知识库", desc: "存储路径、向量库路径、默认嵌入模型", task: "ST-06" },
   { title: "界面", desc: "主题、快捷键、开机自启、托盘行为", task: "ST-07" },
-  { title: "隐私与安全", desc: "音频上传开关、本地加密、清除数据", task: "ST-09" },
 ];
 
 export default function SettingsPage() {
@@ -37,6 +37,11 @@ export default function SettingsPage() {
   const loadAudioSettings = useSettingsStore((s) => s.loadAudioSettings);
   const refreshAudioDevices = useSettingsStore((s) => s.refreshAudioDevices);
   const saveAudioConfig = useSettingsStore((s) => s.saveAudioConfig);
+  const privacyConfig = useSettingsStore((s) => s.privacyConfig);
+  const clearing = useSettingsStore((s) => s.clearing);
+  const loadPrivacySettings = useSettingsStore((s) => s.loadPrivacySettings);
+  const savePrivacyConfig = useSettingsStore((s) => s.savePrivacyConfig);
+  const clearLocalData = useSettingsStore((s) => s.clearLocalData);
 
   const platform = aiConfig?.platform;
 
@@ -44,7 +49,8 @@ export default function SettingsPage() {
     loadAiSettings();
     loadAsrSettings();
     loadAudioSettings();
-  }, [loadAiSettings, loadAsrSettings, loadAudioSettings]);
+    loadPrivacySettings();
+  }, [loadAiSettings, loadAsrSettings, loadAudioSettings, loadPrivacySettings]);
 
   useEffect(() => {
     if (platform) {
@@ -97,6 +103,16 @@ export default function SettingsPage() {
               devices={audioDevices}
               onRefresh={refreshAudioDevices}
               onSave={saveAudioConfig}
+            />
+          )}
+
+          {privacyConfig && (
+            <PrivacySettingsSection
+              config={privacyConfig}
+              cloudAsrEnabled={asrConfig?.mode === "cloud"}
+              clearing={clearing}
+              onSave={savePrivacyConfig}
+              onClearData={clearLocalData}
             />
           )}
 

@@ -66,6 +66,53 @@ pub struct ImportOutcome {
     pub notes: Vec<NoteDto>,
 }
 
+/// 数据清理结果
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClearSummary {
+    pub notes: usize,
+    pub groups: usize,
+    pub tags: usize,
+    pub sessions: usize,
+}
+
+/// 清空全部本地业务数据（保留应用设置与钥匙链凭证）。
+///
+/// 虚拟表（fts_index / vec_chunks）不受外键级联约束，需显式清理。
+pub fn clear_all_data(conn: &Connection) -> Result<ClearSummary> {
+    let count = |sql: &str| -> Result<usize> {
+        conn.query_row(sql, [], |row| row.get::<_, i64>(0))
+            .map(|value| value as usize)
+    };
+
+    let summary = ClearSummary {
+        notes: count("SELECT count(*) FROM notes")?,
+        groups: count("SELECT count(*) FROM groups")?,
+        tags: count("SELECT count(*) FROM tags")?,
+        sessions: count("SELECT count(*) FROM sessions")?,
+    };
+
+    let tx = conn.unchecked_transaction()?;
+    for statement in [
+        "DELETE FROM vec_chunks",
+        "DELETE FROM fts_index",
+        "DELETE FROM chunks",
+        "DELETE FROM note_versions",
+        "DELETE FROM note_tags",
+        "DELETE FROM qa_pairs",
+        "DELETE FROM transcript_segments",
+        "DELETE FROM sessions",
+        "DELETE FROM notes",
+        "DELETE FROM tags",
+        "DELETE FROM groups",
+    ] {
+        tx.execute(statement, [])?;
+    }
+    tx.commit()?;
+
+    Ok(summary)
+}
+
 /// 递归展开输入路径，收集全部 Markdown 文件（结果稳定排序）
 pub fn collect_markdown_files(inputs: &[PathBuf]) -> Vec<PathBuf> {
     let mut files = Vec::new();
@@ -203,6 +250,40 @@ mod tests {
         )
         .expect("import");
         assert_eq!(outcome.imported, 0);
+    }
+
+    #[test]
+    fn clear_all_data_removes_business_data_and_indexes() {
+        use crate::providers::MockEmbeddingProvider;
+        use crate::retrieval::index;
+
+        let db = Db::open_in_memory().expect("db");
+        let provider = MockEmbeddingProvider::default();
+        let notes = NotesRepo::new(db.conn());
+        let groups = store::GroupsRepo::new(db.conn());
+        let tags = store::TagsRepo::new(db.conn());
+
+        let group = groups.create("前端", None).expect("group");
+        let note = notes
+            .create("笔记", "内容 关于 架构", Some(&group.id))
+            .expect("note");
+        tags.set_note_tags(&note.id, &["架构".to_string()])
+            .expect("tags");
+        index::reindex_note(db.conn(), &provider, &note).expect("index");
+
+        let summary = clear_all_data(db.conn()).expect("clear");
+        assert_eq!(summary.notes, 1);
+        assert_eq!(summary.groups, 1);
+        assert_eq!(summary.tags, 1);
+
+        assert_eq!(NotesRepo::new(db.conn()).count().expect("count"), 0);
+        assert_eq!(index::indexed_chunk_count(db.conn()).expect("chunks"), 0);
+
+        let fts_rows: i64 = db
+            .conn()
+            .query_row("SELECT count(*) FROM fts_index", [], |r| r.get(0))
+            .expect("fts count");
+        assert_eq!(fts_rows, 0, "全文索引应被清空");
     }
 
     #[test]
