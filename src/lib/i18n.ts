@@ -24,7 +24,7 @@ const STORAGE_KEY = "aia.locale";
 /** 英文词典：中文原文 → 英文文案 */
 const EN: Record<string, string> = {
   // 应用外壳
-  "AI 面试助手": "AI Interview Assistant",
+  轻松面试: "Easy Interview",
   知识库: "Knowledge",
   面试辅助: "Interview",
   会话历史: "Sessions",
@@ -33,6 +33,9 @@ const EN: Record<string, string> = {
   最大化: "Maximize",
   关闭: "Close",
   "迷你模式（仅显示当前问题与 AI 回答）": "Mini mode (question & answer only)",
+  迷你: "Mini",
+  恢复完整界面: "Restore full view",
+  退出应用: "Quit app",
 
   // 面试页
   未开始捕获: "Not capturing",

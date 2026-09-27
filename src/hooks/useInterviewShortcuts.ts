@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { ipc } from "../lib/ipc";
 import { isTauri } from "../lib/utils";
-import { closeMiniWindow, isMiniWindow, openMiniWindow } from "../lib/window";
+import { useAppStore } from "../stores/appStore";
 import { useInterviewStore } from "../stores/interviewStore";
 
 /** 面试中可执行的动作（与后端 HOTKEY_ACTIONS 一致） */
@@ -30,15 +29,9 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName);
 }
 
-/** 切换迷你浮窗（已打开则关闭） */
-function toggleMiniWindow() {
-  if (isMiniWindow()) {
-    closeMiniWindow().catch((err) => console.error(err));
-    return;
-  }
-  ipc<boolean>("mini_window_open")
-    .then((open) => (open ? closeMiniWindow() : openMiniWindow()))
-    .catch((err) => console.error("切换迷你浮窗失败:", err));
+/** 切换迷你模式（IA-13：应用内就地切换，与标题栏按钮、托盘同一入口） */
+function toggleMiniMode() {
+  useAppStore.getState().toggleMiniMode();
 }
 
 /** 执行面试动作：应用内快捷键与系统全局热键共用同一入口 */
@@ -66,7 +59,7 @@ export function runInterviewAction(action: InterviewAction) {
       }
       break;
     case "toggle_mini":
-      toggleMiniWindow();
+      toggleMiniMode();
       break;
     default:
       break;

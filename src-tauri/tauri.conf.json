@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "AI面试助手",
+  "productName": "轻松面试",
   "version": "0.1.0",
   "identifier": "com.aiinterview.assistant",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "AI 面试助手",
+        "title": "轻松面试",
         "width": 1280,
         "height": 800,
         "minWidth": 960,

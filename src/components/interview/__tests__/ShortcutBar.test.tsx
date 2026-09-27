@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import ShortcutBar from "../ShortcutBar";
+import { useAppStore } from "../../../stores/appStore";
 import { useInterviewStore } from "../../../stores/interviewStore";
 import { useSettingsStore } from "../../../stores/settingsStore";
 import type { AsrSessionStatus, InterfaceConfig } from "../../../types";
@@ -180,6 +181,15 @@ describe("ShortcutBar", () => {
     render(<ShortcutBar />);
     pressShortcut("c");
     expect(clipboardWrite).toHaveBeenCalledWith("已生成的回答");
+  });
+
+  it("快捷键 Ctrl+Shift+M 切换迷你模式", () => {
+    const toggleMiniMode = vi.fn();
+    useAppStore.setState({ toggleMiniMode });
+    render(<ShortcutBar />);
+
+    pressShortcut("m");
+    expect(toggleMiniMode).toHaveBeenCalledTimes(1);
   });
 
   it("在输入框中不触发快捷键", () => {

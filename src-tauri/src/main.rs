@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    ai_interview_assistant_lib::run()
+    easy_interview_lib::run()
 }

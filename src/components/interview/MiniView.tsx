@@ -1,22 +1,24 @@
-import { useEffect, useState } from "react";
-import { Check, Copy, Maximize2, RefreshCw, Sparkles, X } from "lucide-react";
-import { cn } from "../../lib/utils";
+import { useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Maximize2, Power, Sparkles } from "lucide-react";
+import { cn, isTauri } from "../../lib/utils";
 import { ipc } from "../../lib/ipc";
-import { closeMiniWindow } from "../../lib/window";
 import { useAnswerEvents } from "../../hooks/useAnswerEvents";
 import { useInterviewShortcuts } from "../../hooks/useInterviewShortcuts";
 import { useQuestionEvents } from "../../hooks/useQuestionEvents";
+import { useT } from "../../hooks/useT";
+import { useAppStore } from "../../stores/appStore";
 import { useInterviewStore } from "../../stores/interviewStore";
 import type { QaPair } from "../../types";
 
 /**
- * 迷你浮窗视图（IA-13）：独立无边框置顶小窗，仅展示当前面试官问题与 AI 回答。
- * 由主窗口通过 `open_mini_window` 打开；关闭即销毁，不占常驻内存。
+ * 迷你页视图（IA-13，就地迷你模式）：在主窗口内直接渲染，仅展示当前面试官问题与 AI 回答。
+ * 由 `useAppStore.miniMode` 控制显隐；进入/退出时由后端调整主窗口尺寸与置顶，
+ * 点击「恢复」即回到完整界面并还原窗口几何，因此不存在独立无边框窗口的「空白且无法关闭」问题。
  */
 export default function MiniView() {
   const asrStatus = useInterviewStore((s) => s.asrStatus);
   const currentQuestion = useInterviewStore((s) => s.currentQuestion);
-  const currentQaId = useInterviewStore((s) => s.currentQaId);
   const answerText = useInterviewStore((s) => s.answerText);
   const answerStatus = useInterviewStore((s) => s.answerStatus);
   const answerError = useInterviewStore((s) => s.answerError);
@@ -25,12 +27,12 @@ export default function MiniView() {
   const applyAnswerPush = useInterviewStore((s) => s.applyAnswerPush);
   const loadAsrStatus = useInterviewStore((s) => s.loadAsrStatus);
   const hydrateFromPair = useInterviewStore((s) => s.hydrateFromPair);
-  const generateAnswer = useInterviewStore((s) => s.generateAnswer);
 
-  const [copied, setCopied] = useState(false);
+  const exitMiniMode = useAppStore((s) => s.exitMiniMode);
+  const t = useT();
   const sessionId = asrStatus?.sessionId ?? null;
 
-  // 迷你窗内同样响应快捷键与系统全局热键
+  // 迷你页内同样响应快捷键与系统全局热键
   useInterviewShortcuts();
   useQuestionEvents(applyQuestionPush);
   useAnswerEvents(applyAnswerPush);
@@ -39,7 +41,7 @@ export default function MiniView() {
     loadAsrStatus();
   }, [loadAsrStatus]);
 
-  // 打开时恢复当前会话最近的问题与回答（迷你窗是纯展示端，不主动生成）
+  // 打开时恢复当前会话最近的问题与回答（迷你页是纯展示端，不主动生成）
   useEffect(() => {
     if (!sessionId) return;
     ipc<QaPair | null>("latest_question", { sessionId })
@@ -49,15 +51,12 @@ export default function MiniView() {
       .catch((err) => console.error("恢复最近问答失败:", err));
   }, [sessionId, hydrateFromPair]);
 
-  const handleCopy = () => {
-    if (!answerText) return;
-    navigator.clipboard
-      ?.writeText(answerText)
-      .then(() => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1500);
-      })
-      .catch((err) => console.error("复制回答失败:", err));
+  /** 退出应用：与标题栏「关闭」一致，遵循设置中的托盘行为配置 */
+  const quitApp = () => {
+    if (!isTauri()) return;
+    getCurrentWindow()
+      .close()
+      .catch((err) => console.error("退出应用失败:", err));
   };
 
   const iconButton =
@@ -71,33 +70,18 @@ export default function MiniView() {
       >
         <Sparkles className="h-3.5 w-3.5 text-primary-3" />
         <span data-tauri-drag-region className="text-[11px] font-medium">
-          AI 面试助手 · 迷你
+          {t("轻松面试")} · {t("迷你")}
         </span>
         <div className="ml-auto flex items-center">
-          <button className={iconButton} title="复制回答" onClick={handleCopy} disabled={!answerText}>
-            {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
-          </button>
-          <button
-            className={iconButton}
-            title="重新生成回答"
-            disabled={!sessionId || !currentQaId || answerStatus === "streaming"}
-            onClick={() => sessionId && generateAnswer(sessionId, currentQaId, true)}
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </button>
-          <button
-            className={iconButton}
-            title="返回主窗口"
-            onClick={() => closeMiniWindow().catch((err) => console.error(err))}
-          >
+          <button className={iconButton} title={t("恢复完整界面")} onClick={exitMiniMode}>
             <Maximize2 className="h-3.5 w-3.5" />
           </button>
           <button
             className={cn(iconButton, "hover:bg-danger/80 hover:text-white")}
-            title="关闭"
-            onClick={() => closeMiniWindow().catch((err) => console.error(err))}
+            title={t("退出应用")}
+            onClick={quitApp}
           >
-            <X className="h-3.5 w-3.5" />
+            <Power className="h-3.5 w-3.5" />
           </button>
         </div>
       </header>

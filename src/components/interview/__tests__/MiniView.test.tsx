@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import MiniView from "../MiniView";
+import { useAppStore } from "../../../stores/appStore";
 import { useInterviewStore } from "../../../stores/interviewStore";
 import type { AsrSessionStatus, DetectedQuestion, QaPair, RecallHit } from "../../../types";
 
@@ -13,13 +14,16 @@ vi.mock("../../../lib/ipc", () => ({
   ipc: (...args: unknown[]) => ipcMock(...args),
 }));
 
-const closeMiniWindow = vi.fn().mockResolvedValue(undefined);
-vi.mock("../../../lib/window", () => ({
-  closeMiniWindow: () => closeMiniWindow(),
-  openMiniWindow: vi.fn(),
-  isMiniWindow: () => true,
-  MINI_WINDOW_LABEL: "mini",
+const closeWindow = vi.fn().mockResolvedValue(undefined);
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({ close: () => closeWindow() }),
 }));
+
+// 「退出应用」仅在 Tauri 环境下真正调用窗口 API，这里固定为 Tauri 环境以便断言
+vi.mock("../../../lib/utils", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../lib/utils")>();
+  return { ...actual, isTauri: () => true };
+});
 
 const runningStatus: AsrSessionStatus = {
   running: true,
@@ -48,7 +52,11 @@ const hit: RecallHit = {
   score: 0.03,
 };
 
+const exitMiniMode = vi.fn();
+
 function resetStore(overrides: Partial<ReturnType<typeof useInterviewStore.getState>> = {}) {
+  useAppStore.setState({ miniMode: true, exitMiniMode });
+
   useInterviewStore.setState({
     currentQuestion: null,
     currentQaId: null,
@@ -70,7 +78,8 @@ describe("MiniView", () => {
     resetStore();
     ipcMock.mockReset();
     ipcMock.mockResolvedValue(null);
-    closeMiniWindow.mockClear();
+    exitMiniMode.mockClear();
+    closeWindow.mockClear();
   });
 
   it("无内容时展示等待提示", () => {
@@ -128,31 +137,21 @@ describe("MiniView", () => {
     expect(ipcMock).toHaveBeenCalledWith("latest_question", { sessionId: "s-1" });
   });
 
-  it("返回主窗口按钮关闭浮窗", () => {
+  it("「恢复」按钮退出迷你模式回到完整界面", () => {
     render(<MiniView />);
-    fireEvent.click(screen.getByTitle("返回主窗口"));
-    expect(closeMiniWindow).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTitle("恢复完整界面"));
+    expect(exitMiniMode).toHaveBeenCalledTimes(1);
   });
 
-  it("无当前问题时禁用重新生成", () => {
-    resetStore({ asrStatus: runningStatus });
+  it("「退出应用」按钮关闭当前窗口", () => {
     render(<MiniView />);
-
-    const button = screen.getByTitle("重新生成回答") as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
+    fireEvent.click(screen.getByTitle("退出应用"));
+    expect(closeWindow).toHaveBeenCalledTimes(1);
   });
 
-  it("有会话与问题时可用重新生成", () => {
-    const generateAnswer = vi.fn().mockResolvedValue(undefined);
-    resetStore({
-      asrStatus: runningStatus,
-      currentQuestion: question,
-      currentQaId: "q1",
-      generateAnswer,
-    });
+  it("迷你页不再提供复制与重新生成按钮（精简为恢复/退出应用）", () => {
     render(<MiniView />);
-
-    fireEvent.click(screen.getByTitle("重新生成回答"));
-    expect(generateAnswer).toHaveBeenCalledWith("s-1", "q1", true);
+    expect(screen.queryByTitle("复制回答")).toBeNull();
+    expect(screen.queryByTitle("重新生成回答")).toBeNull();
   });
 });

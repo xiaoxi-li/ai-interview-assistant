@@ -1,6 +1,7 @@
-//! 系统托盘（IA-11）：显示主窗口、切换迷你浮窗、隐藏窗口与退出。
+//! 系统托盘（IA-11）：显示主窗口、切换迷你模式、隐藏窗口与退出。
 
 use tauri::{
+    Emitter,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     App, AppHandle, Manager,
@@ -40,7 +41,7 @@ pub fn create(app: &App) -> Result<(), String> {
         .menu(&menu)
         // 左键单击直接唤出窗口，不弹菜单（更符合面试中快速切换的习惯）
         .show_menu_on_left_click(false)
-        .tooltip("AI 面试助手");
+        .tooltip("轻松面试");
 
     if let Some(icon) = app.default_window_icon() {
         builder = builder.icon(icon.clone());
@@ -50,9 +51,13 @@ pub fn create(app: &App) -> Result<(), String> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_main(app),
             "mini" => {
+                // 就地迷你模式：先唤出主窗口，再广播动作交由前端统一切换（与全局热键同一入口）
                 show_main(app);
-                if let Err(err) = crate::commands::open_mini_window(app.clone()) {
-                    tracing::warn!("从托盘打开迷你浮窗失败：{err}");
+                if let Err(err) = app.emit(
+                    "shortcut://action",
+                    serde_json::json!({ "action": "toggle_mini", "source": "tray" }),
+                ) {
+                    tracing::warn!("从托盘切换迷你模式失败：{err}");
                 }
             }
             "hide" => {

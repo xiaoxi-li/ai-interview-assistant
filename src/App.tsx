@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { cn, isTauri } from "./lib/utils";
-import { isMiniWindow, openMiniWindow } from "./lib/window";
 import { useT } from "./hooks/useT";
 import { useAppStore, type PageKey } from "./stores/appStore";
 import KnowledgePage from "./pages/KnowledgePage";
@@ -49,14 +48,16 @@ export default function App() {
   const onboarded = useAppStore((s) => s.onboarded);
   const onboardingLoaded = useAppStore((s) => s.onboardingLoaded);
   const loadOnboarding = useAppStore((s) => s.loadOnboarding);
+  const miniMode = useAppStore((s) => s.miniMode);
+  const enterMiniMode = useAppStore((s) => s.enterMiniMode);
   const t = useT();
 
   useEffect(() => {
     loadOnboarding();
   }, [loadOnboarding]);
 
-  // 迷你浮窗：仅渲染精简视图
-  if (isMiniWindow()) {
+  // 迷你模式（IA-13）：整个界面就地切换为「仅展示当前问题 + AI 回答」的迷你页
+  if (miniMode) {
     return <MiniView />;
   }
 
@@ -85,7 +86,7 @@ export default function App() {
             <Mic className="h-3.5 w-3.5 text-white" />
           </div>
           <span className="text-[13px] font-medium tracking-wide">
-            {t("AI 面试助手")}
+            {t("轻松面试")}
           </span>
           <span className="rounded border border-primary/20 bg-primary/10 px-1.5 py-[1px] text-[10px] text-primary-3">
             v0.1.0
@@ -95,7 +96,7 @@ export default function App() {
         <div className="flex items-center gap-0.5">
           <button
             title={t("迷你模式（仅显示当前问题与 AI 回答）")}
-            onClick={() => openMiniWindow().catch((err) => console.error(err))}
+            onClick={enterMiniMode}
             className="flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-primary/20 hover:text-primary-3"
           >
             <Minimize2 className="h-3.5 w-3.5" />

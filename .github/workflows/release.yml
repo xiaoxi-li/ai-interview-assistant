@@ -57,7 +57,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "AI 面试助手 ${{ github.ref_name }}"
+          releaseName: "轻松面试 ${{ github.ref_name }}"
           releaseBody: "本版本变更见提交记录。安装包由双平台 CI 自动构建。"
           releaseDraft: true
           prerelease: false
