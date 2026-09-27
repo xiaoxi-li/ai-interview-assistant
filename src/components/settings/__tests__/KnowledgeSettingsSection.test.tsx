@@ -4,7 +4,7 @@ import KnowledgeSettingsSection from "../KnowledgeSettingsSection";
 import type { KnowledgeConfig, ModelStatus, StoragePaths } from "../../../types";
 
 const storagePaths: StoragePaths = {
-  dbPath: "C:/data/ai-interview.db",
+  dbPath: "C:/data/easy-interview.db",
   modelsDir: "C:/data/models",
 };
 
@@ -54,7 +54,7 @@ function setup(overrides: Partial<Parameters<typeof KnowledgeSettingsSection>[0]
 describe("KnowledgeSettingsSection", () => {
   it("无自定义路径时展示当前生效路径作为占位", () => {
     setup();
-    expect(screen.getByPlaceholderText("C:/data/ai-interview.db")).toBeTruthy();
+    expect(screen.getByPlaceholderText("C:/data/easy-interview.db")).toBeTruthy();
     expect(screen.getByPlaceholderText("C:/data/models")).toBeTruthy();
   });
 

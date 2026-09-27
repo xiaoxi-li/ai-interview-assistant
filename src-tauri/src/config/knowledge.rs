@@ -127,7 +127,7 @@ mod tests {
     fn knowledge_config_round_trip() {
         with_db(|conn| {
             let config = KnowledgeConfig {
-                db_path: Some("D:/data/ai-interview.db".into()),
+                db_path: Some("D:/data/easy-interview.db".into()),
                 models_dir: Some("D:/data/models".into()),
                 embedding_model: DEFAULT_EMBEDDING_MODEL.into(),
             };

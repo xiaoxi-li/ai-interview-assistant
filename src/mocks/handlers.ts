@@ -90,8 +90,8 @@ export async function mockInvoke<T>(
 
     case "get_storage_paths":
       return {
-        dbPath: "C:\\Users\\demo\\AppData\\Roaming\\ai-interview\\ai-interview.db",
-        modelsDir: "C:\\Users\\demo\\AppData\\Roaming\\ai-interview\\models",
+        dbPath: "C:\\Users\\demo\\AppData\\Roaming\\com.easyinterview.app\\easy-interview.db",
+        modelsDir: "C:\\Users\\demo\\AppData\\Roaming\\com.easyinterview.app\\models",
       } as T;
 
     case "get_knowledge_config":
@@ -255,7 +255,7 @@ export async function mockInvoke<T>(
           label: "本地 ASR（sherpa-onnx 中文 paraformer）",
           ready: false,
           detail:
-            "本地 ASR 模型尚未下载：C:\\Users\\demo\\AppData\\Roaming\\ai-interview\\models\\asr\\sherpa-onnx-paraformer-zh.tar.bz2。请前往「设置 → 模型管理」下载「本地 ASR（Paraformer 中文）」后重试。",
+            "本地 ASR 模型尚未下载：C:\\Users\\demo\\AppData\\Roaming\\com.easyinterview.app\\models\\asr\\sherpa-onnx-paraformer-zh.tar.bz2。请前往「设置 → 模型管理」下载「本地 ASR（Paraformer 中文）」后重试。",
         },
       ] as T;
 

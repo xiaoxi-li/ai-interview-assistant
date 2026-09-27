@@ -54,7 +54,7 @@ describe("i18n", () => {
     expect(loadLocale()).toBe("en-US");
 
     // 非法值回退默认
-    window.localStorage.setItem("aia.locale", "fr-FR");
+    window.localStorage.setItem("ei.locale", "fr-FR");
     expect(loadLocale()).toBe(DEFAULT_LOCALE);
   });
 

@@ -69,7 +69,7 @@ pub fn run() {
                 Err(err) => eprintln!("日志初始化失败：{err}"),
             }
 
-            let db_path = data_dir.join("ai-interview.db");
+            let db_path = data_dir.join("easy-interview.db");
             let models_dir = data_dir.join("models");
             std::fs::create_dir_all(&models_dir)?;
             let db = storage::Db::open(&db_path)?;

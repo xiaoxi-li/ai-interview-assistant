@@ -175,7 +175,7 @@ cd src-tauri; cargo test  # 后端：377 项（含 PCM 回放端到端、AEC、�
 | 演示时没有 AI 回答内容 | 未配 Key 时会用离线回答；若报错请检查「设置 → AI 平台」的 Base URL 与 Key |
 | 提示「本地 ASR 推理引擎尚未接入」 | 已知限制，见第七节第 1 条；验收请走一键演示 |
 | 召回没有结果 | 确认演示已执行（会自动写入 4 篇示例笔记），或先在「知识库」导入 Markdown |
-| 想重置全部数据重来一遍 | 关闭应用后删除数据目录：Windows `%APPDATA%\com.aiinterview.assistant\`，macOS `~/Library/Application Support/com.aiinterview.assistant/`（内含 `ai-interview.db` 与 `models/`），下次启动会重新初始化并再次进入首次向导。注意：API Key 存在系统钥匙链中，如需一并清除请在「设置 → AI 平台」中删除 |
+| 想重置全部数据重来一遍 | 关闭应用后删除数据目录：Windows `%APPDATA%\com.easyinterview.app\`，macOS `~/Library/Application Support/com.easyinterview.app/`（内含 `easy-interview.db` 与 `models/`），下次启动会重新初始化并再次进入首次向导。注意：API Key 存在系统钥匙链中，如需一并清除请在「设置 → AI 平台」中删除 |
 
 ---
 

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 /// 钥匙链服务名（应用唯一标识）
-pub const SERVICE_NAME: &str = "com.aiinterview.assistant";
+pub const SERVICE_NAME: &str = "com.easyinterview.app";
 
 /// 密钥存取抽象
 pub trait SecretStore: Send + Sync {

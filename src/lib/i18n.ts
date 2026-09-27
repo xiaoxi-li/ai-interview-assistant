@@ -19,7 +19,7 @@ export const LOCALES: { value: Locale; label: string }[] = [
 export const DEFAULT_LOCALE: Locale = "zh-CN";
 
 /** 本地持久化键名 */
-const STORAGE_KEY = "aia.locale";
+const STORAGE_KEY = "ei.locale";
 
 /** 英文词典：中文原文 → 英文文案 */
 const EN: Record<string, string> = {

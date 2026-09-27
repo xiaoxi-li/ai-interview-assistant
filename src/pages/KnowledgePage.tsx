@@ -163,12 +163,12 @@ export default function KnowledgePage() {
     });
   };
   const handleExportJson = () => {
-    pickSavePath(`ai-interview-backup-${stamp}.json`, "json").then((path) => {
+    pickSavePath(`easy-interview-backup-${stamp}.json`, "json").then((path) => {
       if (path) exportJson(path);
     });
   };
   const handleBackupDatabase = () => {
-    pickSavePath(`ai-interview-${stamp}.sqlite`, "sqlite").then((path) => {
+    pickSavePath(`easy-interview-${stamp}.sqlite`, "sqlite").then((path) => {
       if (path) backupDatabase(path);
     });
   };
