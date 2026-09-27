@@ -1,4 +1,4 @@
-//! OpenAI 兼容 Provider：覆盖 DeepSeek / Qwen / GLM / ChatGPT。
+//! OpenAI 兼容 Provider：覆盖 DeepSeek / Qwen / GLM / 硅基流动 / OpenAI。
 //!
 //! * 连接测试走轻量的 `GET /models`，失败时回退提示；
 //! * 流式对话走 `POST /chat/completions`（`stream: true`），按 SSE 解析增量。

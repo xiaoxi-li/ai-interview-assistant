@@ -77,7 +77,7 @@ export interface Session {
   qaList: QAPair[];
 }
 
-export type AIPlatform = "deepseek" | "qwen" | "glm" | "chatgpt";
+export type AIPlatform = "deepseek" | "qwen" | "glm" | "siliconflow" | "openai";
 
 export interface AIConfig {
   platform: AIPlatform;

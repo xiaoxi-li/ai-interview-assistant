@@ -46,8 +46,14 @@ export async function mockInvoke<T>(
           defaultModel: "glm-4-plus",
         },
         {
-          platform: "chatgpt",
-          label: "ChatGPT",
+          platform: "siliconflow",
+          label: "硅基流动 SiliconFlow",
+          defaultBaseUrl: "https://api.siliconflow.cn/v1",
+          defaultModel: "deepseek-ai/DeepSeek-V3",
+        },
+        {
+          platform: "openai",
+          label: "OpenAI",
           defaultBaseUrl: "https://api.openai.com/v1",
           defaultModel: "gpt-4o-mini",
         },

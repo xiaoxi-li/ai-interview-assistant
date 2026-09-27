@@ -8,7 +8,7 @@ use std::time::Duration;
 /// 流式对话增量接收端
 pub type ChatStream = Receiver<ChatDelta>;
 
-/// AI 能力抽象（DeepSeek / Qwen / GLM / ChatGPT 共用）
+/// AI 能力抽象（DeepSeek / Qwen / GLM / 硅基流动 / OpenAI 共用）
 pub trait AiProvider: Send + Sync {
     /// Provider 标识
     fn name(&self) -> &str;

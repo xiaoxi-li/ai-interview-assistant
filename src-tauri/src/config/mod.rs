@@ -46,7 +46,11 @@ pub enum AiPlatform {
     Deepseek,
     Qwen,
     Glm,
-    Chatgpt,
+    /// 硅基流动（SiliconFlow）
+    Siliconflow,
+    /// OpenAI；兼容旧配置中的 `chatgpt` 标识
+    #[serde(alias = "chatgpt")]
+    Openai,
 }
 
 impl AiPlatform {
@@ -55,7 +59,8 @@ impl AiPlatform {
             AiPlatform::Deepseek => "deepseek",
             AiPlatform::Qwen => "qwen",
             AiPlatform::Glm => "glm",
-            AiPlatform::Chatgpt => "chatgpt",
+            AiPlatform::Siliconflow => "siliconflow",
+            AiPlatform::Openai => "openai",
         }
     }
 
@@ -64,7 +69,8 @@ impl AiPlatform {
             "deepseek" => Some(AiPlatform::Deepseek),
             "qwen" => Some(AiPlatform::Qwen),
             "glm" => Some(AiPlatform::Glm),
-            "chatgpt" | "openai" => Some(AiPlatform::Chatgpt),
+            "siliconflow" | "silicon_flow" => Some(AiPlatform::Siliconflow),
+            "openai" | "chatgpt" => Some(AiPlatform::Openai),
             _ => None,
         }
     }
@@ -83,7 +89,12 @@ impl AiPlatform {
                 "https://open.bigmodel.cn/api/paas/v4",
                 "glm-4-plus",
             ),
-            AiPlatform::Chatgpt => ("ChatGPT", "https://api.openai.com/v1", "gpt-4o-mini"),
+            AiPlatform::Siliconflow => (
+                "硅基流动 SiliconFlow",
+                "https://api.siliconflow.cn/v1",
+                "deepseek-ai/DeepSeek-V3",
+            ),
+            AiPlatform::Openai => ("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini"),
         };
         PlatformPreset {
             platform: self,
@@ -110,7 +121,8 @@ pub fn all_presets() -> Vec<PlatformPreset> {
         AiPlatform::Deepseek,
         AiPlatform::Qwen,
         AiPlatform::Glm,
-        AiPlatform::Chatgpt,
+        AiPlatform::Siliconflow,
+        AiPlatform::Openai,
     ]
     .into_iter()
     .map(AiPlatform::preset)
@@ -250,7 +262,7 @@ mod tests {
     #[test]
     fn presets_cover_all_platforms_with_defaults() {
         let presets = all_presets();
-        assert_eq!(presets.len(), 4);
+        assert_eq!(presets.len(), 5);
         for preset in &presets {
             assert!(!preset.label.is_empty());
             assert!(preset.default_base_url.starts_with("https://"));
@@ -262,8 +274,23 @@ mod tests {
     fn platform_parse_is_case_insensitive() {
         assert_eq!(AiPlatform::parse("DeepSeek"), Some(AiPlatform::Deepseek));
         assert_eq!(AiPlatform::parse("GLM"), Some(AiPlatform::Glm));
-        assert_eq!(AiPlatform::parse("openai"), Some(AiPlatform::Chatgpt));
+        assert_eq!(AiPlatform::parse("openai"), Some(AiPlatform::Openai));
+        assert_eq!(AiPlatform::parse("siliconflow"), Some(AiPlatform::Siliconflow));
         assert_eq!(AiPlatform::parse("unknown"), None);
+    }
+
+    #[test]
+    fn legacy_chatgpt_identifier_maps_to_openai() {
+        assert_eq!(AiPlatform::parse("chatgpt"), Some(AiPlatform::Openai));
+        let legacy = serde_json::json!({
+            "platform": "chatgpt",
+            "baseUrl": "https://api.openai.com/v1",
+            "model": "gpt-4o-mini",
+            "stream": true,
+            "temperature": 0.7,
+        });
+        let config: AiConfig = serde_json::from_value(legacy).expect("legacy config parses");
+        assert_eq!(config.platform, AiPlatform::Openai);
     }
 
     #[test]

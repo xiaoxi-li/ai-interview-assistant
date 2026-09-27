@@ -232,7 +232,7 @@ export default function OnboardingPage() {
             <div className="flex flex-col gap-3">
               <h2 className="text-[13px] font-semibold">配置一个大模型服务</h2>
               <p className="text-[12px] leading-relaxed text-text-muted">
-                用于生成口述式回答，支持 DeepSeek / Qwen / GLM / ChatGPT 等 OpenAI 兼容服务。
+                用于生成口述式回答，支持 DeepSeek / Qwen / GLM / 硅基流动 / OpenAI 等 OpenAI 兼容服务。
                 密钥存入系统钥匙链，界面只回显掩码。
               </p>
               {aiConfig ? (

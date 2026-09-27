@@ -115,14 +115,14 @@ describe("settingsStore 密钥管理", () => {
     await useSettingsStore.getState().loadApiKeyStatus("deepseek");
 
     mockedIpc.mockResolvedValueOnce({
-      platform: "chatgpt",
+      platform: "openai",
       configured: false,
       masked: "",
     });
-    await useSettingsStore.getState().loadApiKeyStatus("chatgpt");
+    await useSettingsStore.getState().loadApiKeyStatus("openai");
 
     const keys = useSettingsStore.getState().apiKeys;
     expect(keys.deepseek.configured).toBe(true);
-    expect(keys.chatgpt.configured).toBe(false);
+    expect(keys.openai.configured).toBe(false);
   });
 });
