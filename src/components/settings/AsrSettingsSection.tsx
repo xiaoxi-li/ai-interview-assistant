@@ -1,13 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, HardDrive, Save, Trash2, UploadCloud } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  HardDrive,
+  PlugZap,
+  RotateCcw,
+  Save,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
 import { cn } from "../../lib/utils";
 import {
   activeAsrModel,
   credentialFieldLabel,
+  effectiveBaseUrl,
+  hasCustomBaseUrl,
   missingCredentials,
   validateAsrConfig,
+  withProviderBaseUrl,
 } from "../../lib/asrConfig";
-import type { ASRConfig, AsrCredentialStatus, AsrProviderPreset } from "../../types";
+import type {
+  ASRConfig,
+  AsrCredentialStatus,
+  AsrProviderPreset,
+  ConnectionTest,
+} from "../../types";
 
 const FIELD =
   "focus-ring w-full rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
@@ -21,6 +38,10 @@ interface AsrSettingsSectionProps {
   onSaveCredential: (provider: string, field: string, value: string) => void;
   onDeleteCredentials: (provider: string) => void;
   onProviderChange?: (provider: string) => void;
+  /** 云端 ASR 连接测试（IA-16.8） */
+  onTestConnection?: () => void;
+  testing?: boolean;
+  testResult?: ConnectionTest | null;
 }
 
 export default function AsrSettingsSection({
@@ -31,6 +52,9 @@ export default function AsrSettingsSection({
   onSaveCredential,
   onDeleteCredentials,
   onProviderChange,
+  onTestConnection,
+  testing = false,
+  testResult = null,
 }: AsrSettingsSectionProps) {
   const [draft, setDraft] = useState<ASRConfig>(config);
   const [credentialInputs, setCredentialInputs] = useState<Record<string, string>>({});
@@ -41,6 +65,12 @@ export default function AsrSettingsSection({
 
   const preset = providers.find((p) => p.provider === draft.cloudProvider);
   const validationError = useMemo(() => validateAsrConfig(draft), [draft]);
+  const customBaseUrl = hasCustomBaseUrl(draft, draft.cloudProvider);
+  const effectiveUrl = effectiveBaseUrl(
+    draft,
+    draft.cloudProvider,
+    preset?.defaultBaseUrl ?? ""
+  );
 
   const configuredFields = useMemo(
     () =>
@@ -107,13 +137,23 @@ export default function AsrSettingsSection({
                   onProviderChange?.(provider.provider);
                 }}
                 className={cn(
-                  "focus-ring cursor-pointer rounded-lg border px-3 py-1.5 text-[12px] transition-colors",
+                  "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] transition-colors",
                   draft.cloudProvider === provider.provider
                     ? "border-primary/40 bg-primary/15 text-primary-3"
                     : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
                 )}
               >
                 {provider.label}
+                <span
+                  className={cn(
+                    "rounded px-1 py-0.5 text-[10px] leading-none",
+                    provider.implemented
+                      ? "bg-success/15 text-success"
+                      : "bg-white/[0.06] text-text-subtle"
+                  )}
+                >
+                  {provider.implemented ? "已接入" : "待接入"}
+                </span>
               </button>
             ))}
           </div>
@@ -131,7 +171,51 @@ export default function AsrSettingsSection({
                 className={FIELD}
               />
             </div>
+
+            <div>
+              <label className={LABEL} htmlFor="asr-base-url">
+                服务端地址（Base URL）
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="asr-base-url"
+                  value={draft.cloudBaseUrls?.[draft.cloudProvider] ?? ""}
+                  onChange={(e) =>
+                    setDraft(
+                      withProviderBaseUrl(draft, draft.cloudProvider, e.target.value)
+                    )
+                  }
+                  placeholder={preset?.defaultBaseUrl ?? "wss://example.com/ws"}
+                  className={FIELD}
+                />
+                <button
+                  onClick={() =>
+                    setDraft(withProviderBaseUrl(draft, draft.cloudProvider, ""))
+                  }
+                  disabled={!customBaseUrl}
+                  className="focus-ring flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-2.5 py-2 text-[11px] text-text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  恢复默认
+                </button>
+              </div>
+              <p className="mt-1 text-[10px] leading-relaxed text-text-subtle">
+                {customBaseUrl
+                  ? `当前使用自定义地址；官方默认：${preset?.defaultBaseUrl ?? "—"}`
+                  : "当前使用官方默认地址；可填写代理或私有化部署地址，各服务商各自保存"}
+              </p>
+            </div>
           </div>
+
+          {preset && !preset.implemented && (
+            <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] leading-relaxed text-warning">
+              「{preset.label}」协议待接入：配置与凭证可正常保存，但开始转写会提示切换到「阿里云智能语音」或本地模式。
+            </p>
+          )}
+
+          <p className="mt-2 text-[10px] text-text-subtle">
+            当前生效地址：{effectiveUrl || "—"}
+          </p>
 
           {/* 凭证 */}
           <div className="mt-4">
@@ -251,15 +335,44 @@ export default function AsrSettingsSection({
             {validationError}
           </span>
         )}
+        {draft.mode === "cloud" && (
+          <button
+            onClick={() => onTestConnection?.()}
+            disabled={testing || Boolean(validationError)}
+            className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <PlugZap className="h-3.5 w-3.5" />
+            {testing ? "测试中…" : "连接测试"}
+          </button>
+        )}
         <button
           onClick={() => onSaveConfig(draft)}
           disabled={Boolean(validationError)}
-          className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40"
+          className={cn(
+            "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40",
+            draft.mode !== "cloud" && "ml-auto"
+          )}
         >
           <Save className="h-3.5 w-3.5" />
           保存配置
         </button>
       </div>
+
+      {testResult && (
+        <p
+          className={cn(
+            "mt-2 flex items-center gap-1.5 text-[11px]",
+            testResult.ok ? "text-success" : "text-danger"
+          )}
+        >
+          {testResult.ok ? (
+            <Check className="h-3 w-3" />
+          ) : (
+            <AlertCircle className="h-3 w-3" />
+          )}
+          {testResult.message}
+        </p>
+      )}
     </section>
   );
 }

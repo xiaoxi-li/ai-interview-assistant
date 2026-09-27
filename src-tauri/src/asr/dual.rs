@@ -7,11 +7,10 @@
 //! 本模块不依赖 Tauri/数据库，可完全用 PCM 回放做单元测试；
 //! 命令层只负责把采集事件喂进来、把事件广播出去/落库。
 
-use super::engine::LocalAsrEngine;
-use super::pipeline::AsrPipeline;
+use super::channel::AsrChannel;
 use crate::audio::aec::{AecConfig, EchoCanceller};
 use crate::audio::TARGET_SAMPLE_RATE;
-use crate::providers::types::{Speaker, TranscriptEvent};
+use crate::providers::types::TranscriptEvent;
 use std::collections::VecDeque;
 
 /// 参考信号缓冲窗口（毫秒）：覆盖两路采集的时间对齐偏差
@@ -72,10 +71,13 @@ impl ReferenceBuffer {
     }
 }
 
-/// 双通道会话：两条独立转写管线 + 麦克风通道回声消除
+/// 双通道会话：两条独立转写通道 + 麦克风通道回声消除
+///
+/// 通道实现由调用方决定（本地段级流水线或云端流式引擎），本模块只负责
+/// 「说话人归属 + AEC 参考对齐 + 事件汇总」。
 pub struct DualChannelSession {
-    mic: AsrPipeline,
-    system: AsrPipeline,
+    mic: Box<dyn AsrChannel>,
+    system: Box<dyn AsrChannel>,
     aec: Option<EchoCanceller>,
     reference: ReferenceBuffer,
     mic_frames: u64,
@@ -84,14 +86,13 @@ pub struct DualChannelSession {
 
 impl DualChannelSession {
     pub fn new(
-        mic_engine: Box<dyn LocalAsrEngine>,
-        system_engine: Box<dyn LocalAsrEngine>,
-        vad_threshold: f32,
+        mic: Box<dyn AsrChannel>,
+        system: Box<dyn AsrChannel>,
         aec_config: Option<AecConfig>,
     ) -> Self {
         Self {
-            mic: AsrPipeline::with_defaults(mic_engine, Speaker::Me, vad_threshold),
-            system: AsrPipeline::with_defaults(system_engine, Speaker::Interviewer, vad_threshold),
+            mic,
+            system,
             aec: aec_config.map(|config| EchoCanceller::new(config, TARGET_SAMPLE_RATE)),
             reference: ReferenceBuffer::new(REFERENCE_WINDOW_MS),
             mic_frames: 0,
@@ -151,7 +152,7 @@ impl DualChannelSession {
         self.mic.push_frame(&processed, ts)
     }
 
-    /// 音频结束：冲刷两条管线的未完成语音段
+    /// 音频结束：冲刷两条通道的未完成结果
     pub fn flush(&mut self) -> Vec<TranscriptEvent> {
         let mut events = self.system.flush();
         events.extend(self.mic.flush());
@@ -165,9 +166,16 @@ mod tests {
     use crate::audio::aec::{DEFAULT_DTD_RATIO, DEFAULT_STEP_SIZE};
     use crate::audio::FRAME_SAMPLES;
     use crate::asr::engine::ReplayEngine;
+    use crate::asr::pipeline::AsrPipeline;
+    use crate::providers::types::Speaker;
 
     const FRAME: usize = FRAME_SAMPLES;
     const TS_STEP: i64 = 20;
+
+    /// 本地段级通道（测试用默认阈值 0.5）
+    fn local_channel(engine: ReplayEngine, speaker: Speaker) -> Box<dyn AsrChannel> {
+        Box::new(AsrPipeline::with_defaults(Box::new(engine), speaker, 0.5))
+    }
 
     fn aec_config() -> AecConfig {
         AecConfig {
@@ -250,9 +258,14 @@ mod tests {
     #[test]
     fn dual_streams_are_labelled_with_correct_speakers() {
         let mut session = DualChannelSession::new(
-            Box::new(ReplayEngine::with_script(vec!["我的回答".into()])),
-            Box::new(ReplayEngine::with_script(vec!["面试官的问题".into()])),
-            0.5,
+            local_channel(
+                ReplayEngine::with_script(vec!["我的回答".into()]),
+                Speaker::Me,
+            ),
+            local_channel(
+                ReplayEngine::with_script(vec!["面试官的问题".into()]),
+                Speaker::Interviewer,
+            ),
             None,
         );
 
@@ -301,9 +314,8 @@ mod tests {
     #[test]
     fn aec_suppresses_echo_on_mic_channel() {
         let mut session = DualChannelSession::new(
-            Box::new(ReplayEngine::new()),
-            Box::new(ReplayEngine::new()),
-            0.5,
+            local_channel(ReplayEngine::new(), Speaker::Me),
+            local_channel(ReplayEngine::new(), Speaker::Interviewer),
             Some(aec_config()),
         );
         assert!(session.aec_enabled());
@@ -333,9 +345,8 @@ mod tests {
     #[test]
     fn mic_channel_passes_through_without_reference() {
         let mut session = DualChannelSession::new(
-            Box::new(ReplayEngine::new()),
-            Box::new(ReplayEngine::new()),
-            0.5,
+            local_channel(ReplayEngine::new(), Speaker::Me),
+            local_channel(ReplayEngine::new(), Speaker::Interviewer),
             Some(aec_config()),
         );
 
@@ -361,9 +372,8 @@ mod tests {
     #[test]
     fn aec_disabled_reports_none_and_keeps_channels_working() {
         let mut session = DualChannelSession::new(
-            Box::new(ReplayEngine::new()),
-            Box::new(ReplayEngine::new()),
-            0.5,
+            local_channel(ReplayEngine::new(), Speaker::Me),
+            local_channel(ReplayEngine::new(), Speaker::Interviewer),
             None,
         );
         assert!(!session.aec_enabled());
@@ -383,9 +393,14 @@ mod tests {
     #[test]
     fn flush_collects_pending_segments_from_both_channels() {
         let mut session = DualChannelSession::new(
-            Box::new(ReplayEngine::with_script(vec!["我的未完成语音".into()])),
-            Box::new(ReplayEngine::with_script(vec!["面试官未完成语音".into()])),
-            0.5,
+            local_channel(
+                ReplayEngine::with_script(vec!["我的未完成语音".into()]),
+                Speaker::Me,
+            ),
+            local_channel(
+                ReplayEngine::with_script(vec!["面试官未完成语音".into()]),
+                Speaker::Interviewer,
+            ),
             None,
         );
 
@@ -405,9 +420,8 @@ mod tests {
     #[test]
     fn empty_frames_are_ignored() {
         let mut session = DualChannelSession::new(
-            Box::new(ReplayEngine::new()),
-            Box::new(ReplayEngine::new()),
-            0.5,
+            local_channel(ReplayEngine::new(), Speaker::Me),
+            local_channel(ReplayEngine::new(), Speaker::Interviewer),
             None,
         );
         assert!(session.push_mic_frame(&[], 0).is_empty());

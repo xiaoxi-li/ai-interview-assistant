@@ -3,13 +3,12 @@
 //! 约定：所有命令返回 `Result<T, String>`，错误直接以字符串形式透传给前端。
 
 use crate::asr::{
-    AsrControl, AsrPipeline, AsrSession, LocalAsrEngine, SherpaOnnxEngine, TranscriptRepo,
-    DEFAULT_PARTIAL_INTERVAL_MS,
+    AsrChannel, AsrControl, AsrPipeline, AsrSession, CloudChannel, SherpaOnnxEngine,
+    TranscriptRepo, DEFAULT_PARTIAL_INTERVAL_MS,
 };
 use crate::audio::capture::{pcm16_to_samples, rms_level};
 use crate::audio::vad::VadConfig;
 use crate::audio::{AudioCapture, FRAME_SAMPLES};
-use crate::config::asr::CLOUD_ASR_IMPLEMENTED;
 use crate::config::interview::QuestionConfig;
 use crate::interview::answer::{build_answer_messages, source_refs};
 use crate::interview::question::{QuestionDetector, QuestionScore};
@@ -763,7 +762,84 @@ fn handle_transcript_events(
     }
 }
 
-/// 启动本地 ASR 会话（默认走本地引擎；采样→VAD 分段→识别→事件+落库）
+/// 云端模式前置校验（IA-16.4 / IA-16.6）：协议是否已接入 + 是否同意上传音频
+fn ensure_cloud_ready(
+    state: &AppState,
+    config: &crate::config::asr::AsrConfig,
+) -> Result<(), String> {
+    if config.mode != AsrMode::Cloud {
+        return Ok(());
+    }
+    if !config.cloud_provider.implemented() {
+        return Err(unsupported_cloud_provider_error(config.cloud_provider));
+    }
+    let privacy = {
+        let conn = state.lock()?;
+        crate::config::privacy::load_privacy_config(&conn).map_err(|e| e.to_string())?
+    };
+    if !privacy.upload_audio {
+        return Err(
+            "云端 ASR 需要上传音频：请先到「设置 → 隐私」开启「音频上传」，或把 ASR 模式切换到「本地（隐私优先）」。"
+                .into(),
+        );
+    }
+    Ok(())
+}
+
+/// 读取当前服务商的 API Key（存于系统钥匙链）
+fn load_asr_api_key(
+    state: &AppState,
+    provider: crate::config::asr::CloudAsrProvider,
+) -> Result<String, String> {
+    let reference = crate::security::asr_credential_ref(provider.as_str(), "api_key");
+    state
+        .secrets
+        .get(&reference)?
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            format!(
+                "{}：尚未配置 API Key，请到「设置 → 语音识别」填写服务商凭证后再开始转写。",
+                provider.label()
+            )
+        })
+}
+
+/// 构造单路转写通道（IA-16）：本地走「VAD 分段 + 段级识别」，云端走实时 WS 引擎
+fn build_transcript_channel(
+    state: &AppState,
+    config: &crate::config::asr::AsrConfig,
+    speaker: Speaker,
+    channel: &str,
+) -> Result<Box<dyn AsrChannel>, String> {
+    match config.mode {
+        AsrMode::Local => {
+            let engine = SherpaOnnxEngine::new(&state.models_dir, &config.language)
+                .map_err(|err| err.to_string())?;
+            Ok(Box::new(AsrPipeline::new(
+                Box::new(engine),
+                speaker,
+                VadConfig::default(),
+                config.vad_threshold,
+                DEFAULT_PARTIAL_INTERVAL_MS,
+            )))
+        }
+        AsrMode::Cloud => {
+            let spec = crate::asr::EngineSpec {
+                provider: config.cloud_provider,
+                base_url: config.base_url_for(config.cloud_provider),
+                model: config.model.clone(),
+                language: config.language.clone(),
+                api_key: load_asr_api_key(state, config.cloud_provider)?,
+                channel: channel.to_string(),
+            };
+            // 连接与握手在此同步完成：凭证/地址/模型错误在「开始转写」时立即返回
+            let engine = crate::asr::connect_cloud_engine(spec).map_err(|err| err.to_string())?;
+            Ok(Box::new(CloudChannel::new(engine, speaker)))
+        }
+    }
+}
+
+/// 启动 ASR 会话（本地=段级流水线，云端=实时 WS；采样→识别→事件+落库）
 #[tauri::command]
 pub fn start_asr_session(
     app: tauri::AppHandle,
@@ -774,17 +850,12 @@ pub fn start_asr_session(
     let speaker = crate::asr::speaker_for_source(&source)
         .ok_or_else(|| format!("未知采集来源：{source}"))?;
 
-    // 1) 读取配置并强制本地通路
+    // 1) 读取配置并校验通路可用性（云端还需已同意上传音频）
     let config = {
         let conn = state.lock()?;
         crate::config::asr::load_asr_config(&conn).map_err(|e| e.to_string())?
     };
-    if config.mode == AsrMode::Cloud && !CLOUD_ASR_IMPLEMENTED {
-        return Err(
-            "云端 ASR 尚未接入（计划于 P1）。请到「设置 → 语音识别」将模式切换为「本地（隐私优先）」后再开始转写。"
-                .into(),
-        );
-    }
+    ensure_cloud_ready(&state, &config)?;
 
     // 问题识别配置（IA-06）
     let question_config = {
@@ -792,10 +863,9 @@ pub fn start_asr_session(
         crate::config::interview::load_question_config(&conn).map_err(|e| e.to_string())?
     };
 
-    // 2) 构造本地引擎；模型缺失时返回可操作错误
-    let engine = SherpaOnnxEngine::new(&state.models_dir, &config.language)
-        .map_err(|e| e.to_string())?;
-    let engine_name = engine.name().to_string();
+    // 2) 构造转写通道；本地模型缺失 / 云端连接失败都会在此返回可操作错误
+    let channel = build_transcript_channel(&state, &config, speaker, &source)?;
+    let engine_name = channel.name().to_string();
 
     // 3) 停止既有会话与采集，启动新采集
     {
@@ -827,20 +897,13 @@ pub fn start_asr_session(
     let conn_handle = state.conn.clone();
     let paused_handle = state.asr_paused.clone();
     let session_id = session.id.clone();
-    let threshold = config.vad_threshold;
     let auto_detect = question_config.auto_detect;
     let question_threshold = question_config.threshold;
     let question_min_chars = question_config.min_chars;
     let question_window_ms = question_config.merge_window_ms;
 
     let pump = thread::spawn(move || {
-        let mut pipeline = AsrPipeline::new(
-            Box::new(engine),
-            speaker,
-            VadConfig::default(),
-            threshold,
-            DEFAULT_PARTIAL_INTERVAL_MS,
-        );
+        let mut channel = channel;
         let mut detector =
             QuestionDetector::new(question_threshold, question_min_chars, question_window_ms);
 
@@ -899,7 +962,7 @@ pub fn start_asr_session(
                         if frame.len() < FRAME_SAMPLES {
                             break;
                         }
-                        let frame_events = pipeline.push_frame(frame, chunk.ts);
+                        let frame_events = channel.push_frame(frame, chunk.ts);
                         if !frame_events.is_empty() {
                             handle_transcript_events(
                                 &app_handle,
@@ -923,8 +986,8 @@ pub fn start_asr_session(
             }
         }
 
-        // 停止/断流：冲刷未完成的语音段与问题缓冲
-        let tail = pipeline.flush();
+        // 停止/断流：冲刷通道未完成的结果与问题缓冲
+        let tail = channel.flush();
         if !tail.is_empty() {
             handle_transcript_events(&app_handle, &conn_handle, &session_id, &tail);
             feed_questions(
@@ -1040,10 +1103,9 @@ fn spawn_dual_pump(
     session_id: String,
     mic_rx: mpsc::Receiver<crate::providers::types::AudioChunk>,
     system_rx: mpsc::Receiver<crate::providers::types::AudioChunk>,
-    mic_engine: Box<dyn LocalAsrEngine>,
-    system_engine: Box<dyn LocalAsrEngine>,
+    mic_channel: Box<dyn AsrChannel>,
+    system_channel: Box<dyn AsrChannel>,
     aec_config: Option<crate::audio::AecConfig>,
-    vad_threshold: f32,
     question_config: QuestionConfig,
 ) -> (
     mpsc::Sender<AsrControl>,
@@ -1058,12 +1120,8 @@ fn spawn_dual_pump(
     let auto_detect = question_config.auto_detect;
 
     let pump = thread::spawn(move || {
-        let mut session = crate::asr::DualChannelSession::new(
-            mic_engine,
-            system_engine,
-            vad_threshold,
-            aec_config,
-        );
+        let mut session =
+            crate::asr::DualChannelSession::new(mic_channel, system_channel, aec_config);
         let mut detector = QuestionDetector::new(
             question_config.threshold,
             question_config.min_chars,
@@ -1225,19 +1283,13 @@ pub fn start_dual_asr_session(
             crate::config::interview::load_question_config(&conn).map_err(|e| e.to_string())?,
         )
     };
-    if asr_config.mode == AsrMode::Cloud && !CLOUD_ASR_IMPLEMENTED {
-        return Err(
-            "云端 ASR 尚未接入（计划于 P1）。请到「设置 → 语音识别」将模式切换为「本地（隐私优先）」后再开始转写。"
-                .into(),
-        );
-    }
+    ensure_cloud_ready(&state, &asr_config)?;
 
-    // 2) 两路各建一个引擎实例（避免共享可变状态）
-    let mic_engine = SherpaOnnxEngine::new(&state.models_dir, &asr_config.language)
-        .map_err(|e| e.to_string())?;
-    let engine_name = mic_engine.name().to_string();
-    let system_engine = SherpaOnnxEngine::new(&state.models_dir, &asr_config.language)
-        .map_err(|e| e.to_string())?;
+    // 2) 两路各建一条通道（避免共享可变状态）：本地=段级流水线，云端=两个独立 WS 连接
+    let mic_channel = build_transcript_channel(&state, &asr_config, Speaker::Me, "mic")?;
+    let engine_name = mic_channel.name().to_string();
+    let system_channel =
+        build_transcript_channel(&state, &asr_config, Speaker::Interviewer, "system")?;
 
     // 3) 解析设备
     let mic_requested = mic_device_id
@@ -1291,10 +1343,9 @@ pub fn start_dual_asr_session(
         session.id.clone(),
         mic_rx,
         system_rx,
-        Box::new(mic_engine),
-        Box::new(system_engine),
+        mic_channel,
+        system_channel,
         aec_config.clone(),
-        asr_config.vad_threshold,
         question_config,
     );
 
@@ -2400,6 +2451,12 @@ pub struct AsrProviderPreset {
     pub label: String,
     pub default_model: String,
     pub credential_fields: Vec<String>,
+    /// 官方默认服务端地址（Base URL），用户可覆盖
+    pub default_base_url: String,
+    /// 协议适配是否已实现（未实现时设置页标注「待接入」）
+    pub implemented: bool,
+    /// 是否为 WebSocket 实时识别（否则为 HTTP 转写接口）
+    pub uses_websocket: bool,
 }
 
 /// 单个凭证字段的状态（不回传明文）
@@ -2453,10 +2510,15 @@ fn parse_provider(
         .ok_or_else(|| format!("未知的 ASR 服务商：{provider}"))
 }
 
+/// 云端服务商协议尚未接入时的**可操作错误**（IA-16.4）
+fn unsupported_cloud_provider_error(provider: crate::config::asr::CloudAsrProvider) -> String {
+    crate::config::asr::unsupported_provider_message(provider)
+}
+
 /// 列出全部云端 ASR 服务商预设
 #[tauri::command]
 pub fn list_asr_providers() -> Vec<AsrProviderPreset> {
-    crate::config::asr::all_cloud_providers()
+    crate::config::asr::cloud_providers_in_display_order()
         .into_iter()
         .map(|provider| AsrProviderPreset {
             provider: provider.as_str().to_string(),
@@ -2467,6 +2529,9 @@ pub fn list_asr_providers() -> Vec<AsrProviderPreset> {
                 .iter()
                 .map(|f| f.to_string())
                 .collect(),
+            default_base_url: provider.default_base_url().to_string(),
+            implemented: provider.implemented(),
+            uses_websocket: provider.uses_websocket(),
         })
         .collect()
 }
@@ -2487,6 +2552,67 @@ pub fn save_asr_config(
     let conn = state.lock()?;
     crate::config::asr::save_asr_config(&conn, &config)?;
     crate::config::asr::load_asr_config(&conn).map_err(|e| e.to_string())
+}
+
+/// 云端 ASR 连接测试（IA-16.8）：按当前服务商与 Base URL 建连并等到 `task-started`，
+/// 返回结果与耗时；**不发送音频、不修改任何配置**。
+#[tauri::command]
+pub fn test_cloud_asr_connection(
+    state: State<'_, AppState>,
+) -> Result<crate::providers::types::ConnectionTest, String> {
+    use crate::providers::types::ConnectionTest;
+    use std::time::Instant;
+
+    let fail = |message: String| ConnectionTest {
+        ok: false,
+        latency_ms: 0,
+        message,
+    };
+
+    let config = {
+        let conn = state.lock()?;
+        crate::config::asr::load_asr_config(&conn).map_err(|e| e.to_string())?
+    };
+    if config.mode != AsrMode::Cloud {
+        return Ok(fail(
+            "当前为「本地（隐私优先）」模式，不涉及云端连接；切换到云端模式后再测试。".into(),
+        ));
+    }
+    if !config.cloud_provider.implemented() {
+        return Ok(fail(unsupported_cloud_provider_error(config.cloud_provider)));
+    }
+    let api_key = match load_asr_api_key(&state, config.cloud_provider) {
+        Ok(api_key) => api_key,
+        Err(message) => return Ok(fail(message)),
+    };
+
+    let spec = crate::asr::EngineSpec {
+        provider: config.cloud_provider,
+        base_url: config.base_url_for(config.cloud_provider),
+        model: config.model.clone(),
+        language: config.language.clone(),
+        api_key,
+        channel: "test".to_string(),
+    };
+
+    let started = Instant::now();
+    match crate::asr::connect_cloud_engine(spec) {
+        Ok(mut engine) => {
+            // 立即结束任务并回收连接，不残留后台线程
+            let _ = engine.finish();
+            let latency = started.elapsed().as_millis() as u64;
+            Ok(ConnectionTest {
+                ok: true,
+                latency_ms: latency,
+                message: format!("{} 连接成功（{latency}ms）", config.cloud_provider.label()),
+            })
+        }
+        Err(err) => Ok(ConnectionTest {
+            ok: false,
+            latency_ms: started.elapsed().as_millis() as u64,
+            message: err.to_string(),
+        }),
+    }
 }
 
 /// 查询服务商凭证配置状态

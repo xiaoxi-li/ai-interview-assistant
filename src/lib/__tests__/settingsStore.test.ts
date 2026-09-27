@@ -15,7 +15,37 @@ describe("settingsStore 密钥管理", () => {
       error: null,
       testing: false,
       testResult: null,
+      testingAsr: false,
+      asrTestResult: null,
     });
+  });
+
+  it("云端 ASR 连接测试成功后记录结果（IA-16.8）", async () => {
+    mockedIpc.mockResolvedValueOnce({
+      ok: true,
+      latencyMs: 128,
+      message: "阿里云智能语音 连接成功（128ms）",
+    });
+
+    await useSettingsStore.getState().testAsrConnection();
+
+    expect(mockedIpc).toHaveBeenCalledWith("test_cloud_asr_connection");
+    expect(useSettingsStore.getState().testingAsr).toBe(false);
+    expect(useSettingsStore.getState().asrTestResult?.ok).toBe(true);
+    expect(useSettingsStore.getState().asrTestResult?.latencyMs).toBe(128);
+  });
+
+  it("云端 ASR 连接测试异常时记录失败结果", async () => {
+    mockedIpc.mockRejectedValueOnce(new Error("connection refused"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await useSettingsStore.getState().testAsrConnection();
+
+    const result = useSettingsStore.getState().asrTestResult;
+    expect(result?.ok).toBe(false);
+    expect(result?.message).toContain("connection refused");
+    expect(useSettingsStore.getState().testingAsr).toBe(false);
+    spy.mockRestore();
   });
 
   it("连接测试成功后记录结果并复位 loading", async () => {

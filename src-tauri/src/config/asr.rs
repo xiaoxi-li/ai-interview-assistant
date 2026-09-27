@@ -11,13 +11,21 @@ use serde::{Deserialize, Serialize};
 /// settings 表中 ASR 配置的键名
 pub const SETTING_ASR_CONFIG: &str = "asr.config";
 
-/// 云端 ASR 服务商（方案确认：首期讯飞，阿里/腾讯后续接入）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+/// 云端 ASR 服务商。
+///
+/// `AsrConfig::cloud_base_urls` 以其为 map 键，故需 `Ord`；序列化名保持稳定
+/// （`openaicompat` 为历史标识，`openai_compatible` 为规范名）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum CloudAsrProvider {
+    #[serde(rename = "xfyun")]
     Xfyun,
+    #[serde(rename = "aliyun")]
     Aliyun,
+    #[serde(rename = "tencent")]
     Tencent,
+    /// OpenAI 兼容（自定义）：HTTP 转写接口，Base URL 必填
+    #[serde(rename = "openai_compatible", alias = "openaicompat")]
+    OpenaiCompat,
 }
 
 impl CloudAsrProvider {
@@ -26,6 +34,7 @@ impl CloudAsrProvider {
             CloudAsrProvider::Xfyun => "xfyun",
             CloudAsrProvider::Aliyun => "aliyun",
             CloudAsrProvider::Tencent => "tencent",
+            CloudAsrProvider::OpenaiCompat => "openai_compatible",
         }
     }
 
@@ -34,6 +43,9 @@ impl CloudAsrProvider {
             "xfyun" | "iflytek" => Some(CloudAsrProvider::Xfyun),
             "aliyun" | "dashscope" => Some(CloudAsrProvider::Aliyun),
             "tencent" => Some(CloudAsrProvider::Tencent),
+            "openai_compatible" | "openaicompat" | "openai" => {
+                Some(CloudAsrProvider::OpenaiCompat)
+            }
             _ => None,
         }
     }
@@ -43,6 +55,7 @@ impl CloudAsrProvider {
             CloudAsrProvider::Xfyun => "讯飞开放平台",
             CloudAsrProvider::Aliyun => "阿里云智能语音",
             CloudAsrProvider::Tencent => "腾讯云语音识别",
+            CloudAsrProvider::OpenaiCompat => "OpenAI 兼容（自定义）",
         }
     }
 
@@ -52,7 +65,28 @@ impl CloudAsrProvider {
             CloudAsrProvider::Xfyun => "iat",
             CloudAsrProvider::Aliyun => "gummy-realtime-v1",
             CloudAsrProvider::Tencent => "16k_zh",
+            CloudAsrProvider::OpenaiCompat => "whisper-1",
         }
+    }
+
+    /// 官方默认服务端地址（Base URL），可被用户在设置页覆盖
+    pub fn default_base_url(self) -> &'static str {
+        match self {
+            CloudAsrProvider::Xfyun => "wss://ws-api.xfyun.cn/v2/iat",
+            CloudAsrProvider::Aliyun => "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
+            CloudAsrProvider::Tencent => "wss://asr.cloud.tencent.com/asr/v2",
+            CloudAsrProvider::OpenaiCompat => "https://api.openai.com/v1",
+        }
+    }
+
+    /// 该服务商是否走 WebSocket 实时识别（否则为 HTTP 转写接口）
+    pub fn uses_websocket(self) -> bool {
+        !matches!(self, CloudAsrProvider::OpenaiCompat)
+    }
+
+    /// 协议适配是否已实现（未实现者由命令层给出**可操作错误**，不静默失败）
+    pub fn implemented(self) -> bool {
+        matches!(self, CloudAsrProvider::Aliyun)
     }
 
     /// 该服务商需要的凭证字段
@@ -62,6 +96,7 @@ impl CloudAsrProvider {
             CloudAsrProvider::Xfyun => &["app_id", "api_key", "api_secret"],
             CloudAsrProvider::Aliyun => &["api_key"],
             CloudAsrProvider::Tencent => &["secret_id", "secret_key"],
+            CloudAsrProvider::OpenaiCompat => &["api_key"],
         }
     }
 }
@@ -69,21 +104,63 @@ impl CloudAsrProvider {
 /// 全部云端服务商
 pub fn all_cloud_providers() -> Vec<CloudAsrProvider> {
     vec![
-        CloudAsrProvider::Xfyun,
         CloudAsrProvider::Aliyun,
+        CloudAsrProvider::OpenaiCompat,
+        CloudAsrProvider::Xfyun,
         CloudAsrProvider::Tencent,
+    ]
+}
+
+/// 界面展示顺序（阿里云优先：当前已接入）
+pub fn cloud_providers_in_display_order() -> Vec<CloudAsrProvider> {
+    vec![
+        CloudAsrProvider::Aliyun,
+        CloudAsrProvider::Xfyun,
+        CloudAsrProvider::Tencent,
+        CloudAsrProvider::OpenaiCompat,
     ]
 }
 
 /// 本地 ASR 默认模型（sherpa-onnx 中文 paraformer）
 pub const DEFAULT_LOCAL_MODEL: &str = "sherpa-onnx-paraformer-zh";
 
-/// 云端 ASR 协议适配是否已实现。
-///
-/// 阶段性决策：P0 只做本地 ASR 通路，云端多厂商（讯飞/阿里/腾讯）WebSocket 协议
-/// 适配整体延后至 P1。配置项与凭证管理保留，接入时只需把此常量改为 `true`
-/// 并补充各服务商实现。
-pub const CLOUD_ASR_IMPLEMENTED: bool = false;
+/// Base URL 允许的协议前缀（ws(s) 用于实时识别，http(s) 用于 OpenAI 兼容转写/反向代理）
+const BASE_URL_SCHEMES: [&str; 4] = ["ws://", "wss://", "http://", "https://"];
+
+/// 校验单个服务商的自定义 Base URL（仅在用户填写了值时调用）
+pub fn validate_base_url(value: &str) -> Result<(), String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err("服务端地址不能为空（如需官方默认，请恢复默认或清空该服务商的自定义值）".into());
+    }
+    if !BASE_URL_SCHEMES
+        .iter()
+        .any(|scheme| trimmed.starts_with(scheme))
+    {
+        return Err("服务端地址需以 ws://、wss://、http:// 或 https:// 开头".into());
+    }
+    Ok(())
+}
+
+/// 把 `http(s)://` 地址改写为 `ws(s)://`（兼容反向代理 / 网关写法）
+pub fn to_websocket_url(value: &str) -> String {
+    let trimmed = value.trim();
+    if let Some(rest) = trimmed.strip_prefix("https://") {
+        return format!("wss://{rest}");
+    }
+    if let Some(rest) = trimmed.strip_prefix("http://") {
+        return format!("ws://{rest}");
+    }
+    trimmed.to_string()
+}
+
+/// 协议尚未接入时的**可操作错误文案**（命令层与云端工厂共用）
+pub fn unsupported_provider_message(provider: CloudAsrProvider) -> String {
+    format!(
+        "「{}」的云端 ASR 待接入，当前仅「阿里云智能语音」已接入。请到「设置 → 语音识别」切换服务商，或改用「本地（隐私优先）」后再开始转写。",
+        provider.label()
+    )
+}
 
 /// VAD 阈值合法区间
 pub const VAD_THRESHOLD_MIN: f32 = 0.0;
@@ -100,6 +177,10 @@ pub struct AsrConfig {
     /// VAD 判定阈值（0~1，越大越严格）
     pub vad_threshold: f32,
     pub local_model: String,
+    /// 各服务商自定义服务端地址（Base URL），**每个服务商各存一份**；缺失或空串表示使用官方默认。
+    /// 向后兼容：旧配置无此字段时按空表解析。
+    #[serde(default)]
+    pub cloud_base_urls: std::collections::BTreeMap<CloudAsrProvider, String>,
 }
 
 impl AsrConfig {
@@ -112,6 +193,7 @@ impl AsrConfig {
             language: "zh-CN".to_string(),
             vad_threshold: 0.5,
             local_model: DEFAULT_LOCAL_MODEL.to_string(),
+            cloud_base_urls: std::collections::BTreeMap::new(),
         }
     }
 
@@ -120,6 +202,35 @@ impl AsrConfig {
         match self.mode {
             AsrMode::Cloud => &self.model,
             AsrMode::Local => &self.local_model,
+        }
+    }
+
+    /// 读取某服务商生效的服务端地址：自定义值优先，否则回退官方默认
+    pub fn base_url_for(&self, provider: CloudAsrProvider) -> String {
+        self.cloud_base_urls
+            .get(&provider)
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| provider.default_base_url().to_string())
+    }
+
+    /// 该服务商是否使用了自定义地址（与官方默认不同）
+    pub fn has_custom_base_url(&self, provider: CloudAsrProvider) -> bool {
+        self.cloud_base_urls
+            .get(&provider)
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false)
+    }
+
+    /// 设置某服务商的自定义地址；空白值表示恢复官方默认（移除自定义项）
+    pub fn set_base_url(&mut self, provider: CloudAsrProvider, value: &str) {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            self.cloud_base_urls.remove(&provider);
+        } else {
+            self.cloud_base_urls
+                .insert(provider, trimmed.to_string());
         }
     }
 
@@ -137,6 +248,13 @@ impl AsrConfig {
             return Err(format!(
                 "VAD 阈值需在 {VAD_THRESHOLD_MIN} ~ {VAD_THRESHOLD_MAX} 之间"
             ));
+        }
+        // 各服务商的自定义 Base URL：仅校验已填写的项（空串等价于使用官方默认）
+        for (provider, value) in &self.cloud_base_urls {
+            if value.trim().is_empty() {
+                continue;
+            }
+            validate_base_url(value).map_err(|err| format!("{}：{err}", provider.label()))?;
         }
         Ok(())
     }
@@ -190,9 +308,54 @@ mod tests {
     }
 
     #[test]
-    fn cloud_protocol_is_not_implemented_in_p0() {
-        // 阶段性决策固定为 false；P1 接入云端协议后此断言需同步更新
-        assert!(!CLOUD_ASR_IMPLEMENTED, "P0 阶段云端 ASR 协议未实现");
+    fn only_aliyun_cloud_protocol_is_implemented() {
+        // P1：阿里云百炼已接入；其余服务商保持「待接入」并由命令层给出可操作错误
+        assert!(CloudAsrProvider::Aliyun.implemented());
+        for provider in [
+            CloudAsrProvider::Xfyun,
+            CloudAsrProvider::Tencent,
+            CloudAsrProvider::OpenaiCompat,
+        ] {
+            assert!(!provider.implemented(), "{} 尚未接入", provider.as_str());
+        }
+    }
+
+    #[test]
+    fn provider_defaults_cover_base_urls_and_transport() {
+        for provider in all_cloud_providers() {
+            let base_url = provider.default_base_url();
+            assert!(
+                ["ws://", "wss://", "http://", "https://"]
+                    .iter()
+                    .any(|scheme| base_url.starts_with(scheme)),
+                "{} 默认地址不合法：{base_url}",
+                provider.as_str()
+            );
+            assert!(!provider.default_model().is_empty());
+            assert!(!provider.credential_fields().is_empty());
+        }
+        assert!(CloudAsrProvider::Aliyun.uses_websocket());
+        assert!(!CloudAsrProvider::OpenaiCompat.uses_websocket());
+    }
+
+    #[test]
+    fn openai_compatible_provider_parses_and_serializes_as_map_key() {
+        assert_eq!(
+            CloudAsrProvider::parse("openai_compatible"),
+            Some(CloudAsrProvider::OpenaiCompat)
+        );
+        assert_eq!(
+            CloudAsrProvider::parse("OpenAIChatGPT".to_ascii_lowercase().as_str()),
+            None
+        );
+        assert_eq!(
+            CloudAsrProvider::parse("openaicompat"),
+            Some(CloudAsrProvider::OpenaiCompat)
+        );
+        assert_eq!(CloudAsrProvider::OpenaiCompat.as_str(), "openai_compatible");
+        // 枚举作 map 键时必须序列化为字符串（serde_json 要求）
+        let json = serde_json::to_string(&CloudAsrProvider::OpenaiCompat).expect("serialize");
+        assert_eq!(json, "\"openai_compatible\"");
     }
 
     #[test]
@@ -211,7 +374,17 @@ mod tests {
             CloudAsrProvider::Xfyun.credential_fields(),
             &["app_id", "api_key", "api_secret"]
         );
-        assert_eq!(all_cloud_providers().len(), 3);
+        assert_eq!(all_cloud_providers().len(), 4);
+        assert_eq!(
+            cloud_providers_in_display_order().len(),
+            4,
+            "展示顺序应覆盖全部服务商"
+        );
+        assert_eq!(
+            cloud_providers_in_display_order()[0],
+            CloudAsrProvider::Aliyun,
+            "已接入的服务商排在最前"
+        );
     }
 
     #[test]
@@ -234,9 +407,111 @@ mod tests {
                 language: "zh-CN".into(),
                 vad_threshold: 0.35,
                 local_model: DEFAULT_LOCAL_MODEL.into(),
+                cloud_base_urls: [
+                    (
+                        CloudAsrProvider::Aliyun,
+                        "wss://proxy.example.com/dashscope".to_string(),
+                    ),
+                    (
+                        CloudAsrProvider::OpenaiCompat,
+                        "https://asr.example.com/v1".to_string(),
+                    ),
+                ]
+                .into_iter()
+                .collect(),
             };
             save_asr_config(conn, &config).expect("save");
             assert_eq!(load_asr_config(conn).expect("load"), config);
+        });
+    }
+
+    #[test]
+    fn base_url_falls_back_to_official_default_and_can_be_overridden() {
+        let mut config = AsrConfig::default();
+        assert_eq!(
+            config.base_url_for(CloudAsrProvider::Aliyun),
+            CloudAsrProvider::Aliyun.default_base_url()
+        );
+        assert!(!config.has_custom_base_url(CloudAsrProvider::Aliyun));
+
+        config.set_base_url(CloudAsrProvider::Aliyun, "  wss://proxy.example.com/ws  ");
+        assert_eq!(
+            config.base_url_for(CloudAsrProvider::Aliyun),
+            "wss://proxy.example.com/ws",
+            "自定义值应被 trim 后使用"
+        );
+        assert!(config.has_custom_base_url(CloudAsrProvider::Aliyun));
+
+        // 每个服务商各存一份：覆盖阿里不影响腾讯
+        config.set_base_url(CloudAsrProvider::Tencent, "wss://t.example.com/asr");
+        assert_eq!(
+            config.base_url_for(CloudAsrProvider::Tencent),
+            "wss://t.example.com/asr"
+        );
+
+        // 空白值等价于恢复官方默认
+        config.set_base_url(CloudAsrProvider::Aliyun, "   ");
+        assert_eq!(
+            config.base_url_for(CloudAsrProvider::Aliyun),
+            CloudAsrProvider::Aliyun.default_base_url()
+        );
+        assert!(!config.has_custom_base_url(CloudAsrProvider::Aliyun));
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_invalid_base_url_scheme() {
+        let mut config = AsrConfig::default();
+        config.set_base_url(CloudAsrProvider::Aliyun, "ftp://example.com");
+        let err = config.validate().expect_err("非 ws/http scheme 应被拒绝");
+        assert!(err.contains("阿里云智能语音"), "错误文案应指明服务商：{err}");
+
+        config.set_base_url(CloudAsrProvider::Aliyun, "wss://example.com/ws");
+        assert!(config.validate().is_ok());
+        config.set_base_url(CloudAsrProvider::Aliyun, "http://example.com/ws");
+        assert!(
+            config.validate().is_ok(),
+            "http(s) 为反向代理写法，应被接受（连接前改写为 ws(s)）"
+        );
+    }
+
+    #[test]
+    fn to_websocket_url_rewrites_http_scheme() {
+        assert_eq!(
+            to_websocket_url("https://example.com/ws"),
+            "wss://example.com/ws"
+        );
+        assert_eq!(
+            to_websocket_url("http://example.com/ws"),
+            "ws://example.com/ws"
+        );
+        assert_eq!(
+            to_websocket_url("wss://example.com/ws"),
+            "wss://example.com/ws"
+        );
+    }
+
+    #[test]
+    fn legacy_config_without_base_urls_still_parses() {
+        with_db(|conn| {
+            // 旧版配置：无 cloudBaseUrls 字段
+            let legacy = serde_json::json!({
+                "mode": "cloud",
+                "cloudProvider": "aliyun",
+                "model": "gummy-realtime-v1",
+                "language": "zh-CN",
+                "vadThreshold": 0.5,
+                "localModel": DEFAULT_LOCAL_MODEL,
+            });
+            save_setting(conn, SETTING_ASR_CONFIG, &legacy.to_string()).expect("save raw");
+
+            let loaded = load_asr_config(conn).expect("load");
+            assert_eq!(loaded.cloud_provider, CloudAsrProvider::Aliyun);
+            assert!(loaded.cloud_base_urls.is_empty(), "缺失字段应按空表解析");
+            assert_eq!(
+                loaded.base_url_for(CloudAsrProvider::Aliyun),
+                CloudAsrProvider::Aliyun.default_base_url()
+            );
         });
     }
 

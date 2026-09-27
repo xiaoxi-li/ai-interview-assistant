@@ -519,22 +519,40 @@ export async function mockInvoke<T>(
     case "list_asr_providers":
       return [
         {
-          provider: "xfyun",
-          label: "讯飞开放平台",
-          defaultModel: "iat",
-          credentialFields: ["app_id", "api_key", "api_secret"],
-        },
-        {
           provider: "aliyun",
           label: "阿里云智能语音",
           defaultModel: "gummy-realtime-v1",
           credentialFields: ["api_key"],
+          defaultBaseUrl: "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
+          implemented: true,
+          usesWebsocket: true,
+        },
+        {
+          provider: "xfyun",
+          label: "讯飞开放平台",
+          defaultModel: "iat",
+          credentialFields: ["app_id", "api_key", "api_secret"],
+          defaultBaseUrl: "wss://ws-api.xfyun.cn/v2/iat",
+          implemented: false,
+          usesWebsocket: true,
         },
         {
           provider: "tencent",
           label: "腾讯云语音识别",
           defaultModel: "16k_zh",
           credentialFields: ["secret_id", "secret_key"],
+          defaultBaseUrl: "wss://asr.cloud.tencent.com/asr/v2",
+          implemented: false,
+          usesWebsocket: true,
+        },
+        {
+          provider: "openai_compatible",
+          label: "OpenAI 兼容（自定义）",
+          defaultModel: "whisper-1",
+          credentialFields: ["api_key"],
+          defaultBaseUrl: "https://api.openai.com/v1",
+          implemented: false,
+          usesWebsocket: false,
         },
       ] as T;
 
@@ -546,10 +564,18 @@ export async function mockInvoke<T>(
         language: "zh-CN",
         vadThreshold: 0.5,
         localModel: "sherpa-onnx-paraformer-zh",
+        cloudBaseUrls: {},
       } as T;
 
     case "save_asr_config":
       return (args?.config ?? null) as T;
+
+    case "test_cloud_asr_connection":
+      return {
+        ok: true,
+        latencyMs: 128,
+        message: "阿里云智能语音 连接成功（128ms）",
+      } as T;
 
     case "get_asr_credential_status":
     case "save_asr_credential":

@@ -384,7 +384,7 @@ export interface PlatformPreset {
 }
 
 export type ASRMode = "cloud" | "local";
-export type CloudAsrProvider = "xfyun" | "aliyun" | "tencent";
+export type CloudAsrProvider = "xfyun" | "aliyun" | "tencent" | "openai_compatible";
 
 export interface ASRConfig {
   mode: ASRMode;
@@ -396,6 +396,8 @@ export interface ASRConfig {
   vadThreshold: number;
   /** 本地模型名（sherpa-onnx） */
   localModel: string;
+  /** 各服务商自定义服务端地址（Base URL）；缺失或空串表示使用官方默认 */
+  cloudBaseUrls?: Partial<Record<CloudAsrProvider, string>>;
 }
 
 /** 云端 ASR 服务商预设 */
@@ -404,6 +406,12 @@ export interface AsrProviderPreset {
   label: string;
   defaultModel: string;
   credentialFields: string[];
+  /** 官方默认服务端地址（Base URL） */
+  defaultBaseUrl: string;
+  /** 协议适配是否已实现 */
+  implemented: boolean;
+  /** 是否为 WebSocket 实时识别（否则为 HTTP 转写接口） */
+  usesWebsocket: boolean;
 }
 
 /** 单个凭证字段状态 */

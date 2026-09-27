@@ -40,6 +40,9 @@ export default function SettingsPage() {
   const loadAsrCredentialStatus = useSettingsStore((s) => s.loadAsrCredentialStatus);
   const saveAsrCredential = useSettingsStore((s) => s.saveAsrCredential);
   const deleteAsrCredentials = useSettingsStore((s) => s.deleteAsrCredentials);
+  const testingAsr = useSettingsStore((s) => s.testingAsr);
+  const asrTestResult = useSettingsStore((s) => s.asrTestResult);
+  const testAsrConnection = useSettingsStore((s) => s.testAsrConnection);
   const audioConfig = useSettingsStore((s) => s.audioConfig);
   const audioDevices = useSettingsStore((s) => s.audioDevices);
   const loadAudioSettings = useSettingsStore((s) => s.loadAudioSettings);
@@ -150,6 +153,9 @@ export default function SettingsPage() {
               onSaveCredential={saveAsrCredential}
               onDeleteCredentials={deleteAsrCredentials}
               onProviderChange={loadAsrCredentialStatus}
+              onTestConnection={testAsrConnection}
+              testing={testingAsr}
+              testResult={asrTestResult}
             />
           )}
 

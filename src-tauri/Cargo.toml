@@ -39,6 +39,17 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing-appender = "0.2"
 
+# IA-16：云端 ASR 实时识别（阿里云百炼 DashScope WebSocket，双向流式）。
+# 引擎独占专职线程 + 单线程 tokio runtime，用 `tokio::select!` 在「送音频」与「收结果」间调度；
+# native-tls 复用系统信任库（Windows schannel / macOS Security.framework），不引入 OpenSSL。
+tokio = { version = "1", features = ["rt", "net", "sync", "time", "macros"] }
+tokio-tungstenite = { version = "0.24", default-features = false, features = [
+    "connect",
+    "handshake",
+    "native-tls",
+] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+
 # IA-14：Windows 系统音频走 WASAPI 端点级回环（cpal 无此能力），仅 Windows 目标引入
 [target.'cfg(windows)'.dependencies]
 wasapi = "0.24"

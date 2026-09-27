@@ -50,6 +50,12 @@ interface SettingsState {
   asrProviders: AsrProviderPreset[];
   /** 各服务商凭证状态（按 provider 键） */
   asrCredentials: Record<string, AsrCredentialStatus>;
+  /** 云端 ASR 连接测试进行中 */
+  testingAsr: boolean;
+  /** 最近一次云端 ASR 连接测试结果 */
+  asrTestResult: ConnectionTest | null;
+  /** 一键测试云端 ASR 连通性（IA-16.8） */
+  testAsrConnection: () => Promise<void>;
   loadAsrSettings: () => Promise<void>;
   saveAsrConfig: (config: ASRConfig) => Promise<void>;
   loadAsrCredentialStatus: (provider: string) => Promise<void>;
@@ -128,6 +134,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     asrConfig: null,
     asrProviders: [],
     asrCredentials: {},
+    testingAsr: false,
+    asrTestResult: null,
     audioConfig: null,
     audioDevices: [],
     interfaceConfig: null,
@@ -316,6 +324,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       ipc<ASRConfig>("save_asr_config", { config })
         .then((saved) => set({ asrConfig: saved }))
         .catch((err) => fail("保存 ASR 配置", err)),
+
+    testAsrConnection: () => {
+      set({ testingAsr: true, asrTestResult: null, error: null });
+      return ipc<ConnectionTest>("test_cloud_asr_connection")
+        .then((result) => set({ testingAsr: false, asrTestResult: result }))
+        .catch((err) => {
+          console.error("云端 ASR 连接测试失败:", err);
+          set({
+            testingAsr: false,
+            asrTestResult: { ok: false, latencyMs: 0, message: String(err) },
+          });
+        });
+    },
 
     loadAsrCredentialStatus: (provider) =>
       ipc<AsrCredentialStatus>("get_asr_credential_status", { provider })

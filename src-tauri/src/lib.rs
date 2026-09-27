@@ -166,6 +166,7 @@ pub fn run() {
             commands::list_asr_providers,
             commands::get_asr_config,
             commands::save_asr_config,
+            commands::test_cloud_asr_connection,
             commands::get_asr_credential_status,
             commands::save_asr_credential,
             commands::delete_asr_credentials,

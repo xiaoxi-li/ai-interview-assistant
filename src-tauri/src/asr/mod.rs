@@ -1,8 +1,11 @@
 //! ASR 子系统。
 //!
-//! **P0 决策**：ASR 只走本地通路（本地引擎 + VAD 分段），音频不出本机；
-//! 云端多服务商（讯飞/阿里/腾讯）协议适配整体延后至 P1，配置项与凭证管理保留。
+//! * **本地通路（P0，默认）**：本地引擎 + VAD 分段 + 段级识别，音频不出本机；
+//! * **云端通路（P1，IA-16）**：`cloud/` 下按服务商实现实时识别（阿里云百炼已接入），
+//!   经 [`channel::AsrChannel`] 与本地共用同一套采集泵 / 事件 / 落库 / 问题识别链路。
 
+pub mod channel;
+pub mod cloud;
 pub mod dual;
 pub mod engine;
 pub mod pipeline;
@@ -11,6 +14,8 @@ pub mod pipeline;
 pub mod sherpa;
 pub mod store;
 
+pub use channel::{AsrChannel, CloudChannel};
+pub use cloud::{connect_cloud_engine, CloudAsrEngine, CloudTranscript, EngineSpec};
 pub use dual::{DualChannelSession, REFERENCE_WINDOW_MS};
 
 pub use engine::{LocalAsrEngine, ReplayEngine, SherpaOnnxEngine, LOCAL_ASR_MODEL_ID};
