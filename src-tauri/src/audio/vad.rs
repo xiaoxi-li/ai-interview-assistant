@@ -14,9 +14,27 @@ pub trait VoiceActivityDetector: Send {
     fn is_speech(&self, frame: &[f32]) -> bool;
 }
 
+/// 界面的 VAD 阈值（0~1，越大越严格）→ 绝对 RMS 阈值。
+///
+/// **为什么需要映射**：真实语音与系统回环音频的 RMS 通常只有 0.01~0.2
+/// （约 -40 ~ -14 dBFS），而界面滑杆是按 0~1 取值的。若把滑杆值直接当 RMS 用，
+/// 只有极端音量（RMS ≥ 0.5 ≈ -6 dBFS）才会被判为语音，等于永远检测不到说话
+/// ——这正是「电平条在跳、却没有任何转写、也没有报错」的根因。
+///
+/// 因此按对数（dBFS）映射，让滑杆全程都落在有效区间：
+/// `0 → -60 dBFS (0.001 最灵敏)`、`0.5 → -33 dBFS (0.022，适合正常说话音量)`、
+/// `1 → -6 dBFS (0.5 最严格)`。
+pub fn threshold_to_rms(threshold: f32) -> f32 {
+    const MIN_DB: f32 = -60.0;
+    const MAX_DB: f32 = -6.0;
+    let t = threshold.clamp(0.0, 1.0);
+    10f32.powf((MIN_DB + t * (MAX_DB - MIN_DB)) / 20.0)
+}
+
 /// 基于短时能量的 VAD
 #[derive(Debug, Clone)]
 pub struct EnergyVad {
+    /// 界面语义的灵敏度（0~1，越大越严格）
     threshold: f32,
 }
 
@@ -27,8 +45,14 @@ impl EnergyVad {
         }
     }
 
+    /// 界面的灵敏度值（0~1）
     pub fn threshold(&self) -> f32 {
         self.threshold
+    }
+
+    /// 该灵敏度对应的绝对 RMS 判定门限
+    pub fn rms_threshold(&self) -> f32 {
+        threshold_to_rms(self.threshold)
     }
 }
 
@@ -40,7 +64,7 @@ impl Default for EnergyVad {
 
 impl VoiceActivityDetector for EnergyVad {
     fn is_speech(&self, frame: &[f32]) -> bool {
-        rms_level(frame) >= self.threshold
+        rms_level(frame) >= self.rms_threshold()
     }
 }
 
@@ -401,6 +425,45 @@ mod tests {
     }
 
     #[test]
+    fn vad_threshold_maps_to_log_scale_rms() {
+        // 0 → -60dBFS、0.5 → -33dBFS、1 → -6dBFS
+        assert!((threshold_to_rms(0.0) - 0.001).abs() < 1e-4, "0 应最灵敏");
+        assert!((threshold_to_rms(0.5) - 0.0224).abs() < 1e-3, "0.5 应约为 -33dBFS");
+        assert!((threshold_to_rms(1.0) - 0.5012).abs() < 1e-3, "1 应最严格");
+        // 单调递增（越大越严格）
+        assert!(threshold_to_rms(0.2) < threshold_to_rms(0.4));
+        assert!(threshold_to_rms(0.8) < threshold_to_rms(1.0));
+    }
+
+    /// 回归测试：真实录音音量（RMS 约 0.02~0.1）必须被判为语音。
+    ///
+    /// 历史 bug：界面 0~1 的滑杆值被直接当作绝对 RMS 门限，默认 0.5 等于要求
+    /// RMS ≥ 0.5（≈ -6dBFS），导致真实语音全被当成静音 —— 现象就是「电平条在跳、
+    /// 却没有任何转写、也没有报错」。
+    #[test]
+    fn realistic_recording_level_is_detected_as_speech() {
+        let vad = EnergyVad::default(); // 界面默认 0.5 → ≈ -33dBFS
+
+        // 正常说话音量：正弦振幅 0.07 → RMS ≈ 0.05
+        let normal: Vec<f32> = (0..FRAME_SAMPLES)
+            .map(|i| 0.07 * (i as f32 * 0.2).sin())
+            .collect();
+        assert!(vad.is_speech(&normal), "正常音量应判为语音");
+
+        // 偏低音量（如系统回环音量不大）：振幅 0.04 → RMS ≈ 0.028
+        let quiet: Vec<f32> = (0..FRAME_SAMPLES)
+            .map(|i| 0.04 * (i as f32 * 0.2).sin())
+            .collect();
+        assert!(vad.is_speech(&quiet), "偏低音量也应判为语音");
+
+        // 底噪：振幅 0.007 → RMS ≈ 0.005，应被过滤
+        let noise: Vec<f32> = (0..FRAME_SAMPLES)
+            .map(|i| 0.007 * (i as f32 * 0.2).sin())
+            .collect();
+        assert!(!vad.is_speech(&noise), "底噪不应判为语音");
+    }
+
+    #[test]
     fn pure_silence_produces_no_segment() {
         let mut segmenter = VadSegmenter::with_energy_vad(VadConfig::default(), 0.5);
         // 1 秒静音
@@ -622,14 +685,20 @@ mod tests {
 
     #[test]
     fn higher_threshold_reduces_speech_ratio() {
-        // 中等振幅信号：低阈值判定为语音，高阈值判定为静音
+        // 0.2 振幅方波（RMS = 0.2）。按对数映射：0.6 ≈ -27.6dBFS（判为语音）、
+        // 0.9 ≈ -11.4dBFS（判为静音），因此低阈值段的语音时长更长。
         let medium: Vec<f32> = (0..FRAME_SAMPLES * 30)
             .map(|i| if i % 2 == 0 { 0.2 } else { -0.2 })
             .collect();
 
-        let sensitive = analyze(&medium, 0.1);
-        let strict = analyze(&medium, 0.5);
+        let sensitive = analyze(&medium, 0.6);
+        let strict = analyze(&medium, 0.9);
 
-        assert!(sensitive.speech_ms > strict.speech_ms);
+        assert!(
+            sensitive.speech_ms > strict.speech_ms,
+            "阈值越高判定的语音应越少：{} vs {}",
+            sensitive.speech_ms,
+            strict.speech_ms
+        );
     }
 }

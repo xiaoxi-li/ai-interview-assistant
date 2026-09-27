@@ -269,6 +269,41 @@ mod tests {
         );
     }
 
+    /// 回归：真实录音音量（正弦振幅 0.07 → RMS ≈ 0.05）必须能走完整条链路产出 final。
+    ///
+    /// 历史 bug：VAD 把界面 0~1 的滑杆值当绝对 RMS 用，真实语音全被判定为静音，
+    /// 于是「电平条在跳、却没有任何转写、也没有报错」。
+    #[test]
+    fn realistic_level_audio_produces_final() {
+        let engine = ReplayEngine::with_script(vec!["真实音量的转写".into()]);
+        let mut pipeline =
+            AsrPipeline::with_defaults(Box::new(engine), Speaker::Interviewer, 0.5);
+
+        let normal: Vec<f32> = (0..FRAME_SAMPLES)
+            .map(|i| 0.07 * (i as f32 * 0.2).sin())
+            .collect();
+
+        let mut events = Vec::new();
+        for _ in 0..30 {
+            events.extend(pipeline.push_frame(&normal, TS_STEP));
+        }
+        for _ in 0..30 {
+            events.extend(pipeline.push_frame(&silence_frame(), TS_STEP));
+        }
+
+        assert_eq!(
+            collect_finals(&events),
+            vec!["真实音量的转写".to_string()],
+            "真实音量音频应产出 final"
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, TranscriptEvent::Partial { .. })),
+            "应产出至少一个 partial"
+        );
+    }
+
     #[test]
     fn partial_is_emitted_at_configured_interval() {
         let engine = CountingEngine {

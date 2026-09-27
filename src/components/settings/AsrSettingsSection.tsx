@@ -234,8 +234,9 @@ export default function AsrSettingsSection({
             }
             className="w-full cursor-pointer accent-[#4F6BED]"
           />
-          <p className="mt-1 text-[10px] text-text-subtle">
-            值越大越严格，可减少环境噪声导致的误触发
+          <p className="mt-1 text-[10px] leading-relaxed text-text-subtle">
+            值越大越严格（0.5 约等于 -33dBFS，适合正常说话音量）。识别不到说话时调低，
+            环境噪声误触发时调高。
           </p>
         </div>
       </div>
