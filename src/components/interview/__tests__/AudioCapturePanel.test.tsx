@@ -13,6 +13,12 @@ const devices: AudioDevice[] = [
   { id: "mix-realtek", name: "立体声混音 (Realtek)", kind: "input", isDefault: false },
 ];
 
+/** 系统音频来源：Windows 为播放设备（IA-14 端点级回环） */
+const systemDevices: AudioDevice[] = [
+  { id: "spk-realtek", name: "扬声器 (Realtek)", kind: "output", isDefault: true },
+  { id: "spk-bt", name: "耳机 (Bluetooth)", kind: "output", isDefault: false },
+];
+
 const status: CaptureStatus = {
   running: false,
   source: null,
@@ -27,6 +33,7 @@ function resetStore(overrides: Partial<ReturnType<typeof useInterviewStore.getSt
   useInterviewStore.setState({
     status,
     inputDevices: devices,
+    systemDevices,
     level: 0,
     error: null,
     starting: false,
@@ -47,6 +54,19 @@ describe("AudioCapturePanel", () => {
     render(<AudioCapturePanel />);
     expect(screen.getByText("系统音频（面试官）")).toBeTruthy();
     expect(screen.getByText("麦克风（我）")).toBeTruthy();
+
+    // 默认来源为系统音频：列出播放设备（Windows 端点级回环）
+    const select = screen.getByLabelText("采集设备") as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
+      "使用系统默认设备",
+      "扬声器 (Realtek)（系统默认）",
+      "耳机 (Bluetooth)",
+    ]);
+  });
+
+  it("切换来源时设备下拉改用对应列表", () => {
+    render(<AudioCapturePanel />);
+    fireEvent.click(screen.getByText("麦克风（我）"));
 
     const select = screen.getByLabelText("采集设备") as HTMLSelectElement;
     expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
@@ -107,16 +127,16 @@ describe("AudioCapturePanel", () => {
     expect(startCapture).toHaveBeenCalledWith("mic", "mic-usb");
   });
 
-  it("缺少回环设备时在系统音频来源下给出提示", () => {
+  it("缺少系统音频来源时在系统音频来源下给出提示", () => {
     resetStore({
       status: { ...status, loopbackAvailable: false },
     });
     render(<AudioCapturePanel />);
 
-    expect(screen.getByText(/未检测到系统音频回环设备/)).toBeTruthy();
+    expect(screen.getByText(/未检测到可用的系统音频来源/)).toBeTruthy();
 
     fireEvent.click(screen.getByText("麦克风（我）"));
-    expect(screen.queryByText(/未检测到系统音频回环设备/)).toBeNull();
+    expect(screen.queryByText(/未检测到可用的系统音频来源/)).toBeNull();
   });
 
   it("电平百分比随 store 更新", () => {

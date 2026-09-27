@@ -32,6 +32,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing-appender = "0.2"
 
+# IA-14：Windows 系统音频走 WASAPI 端点级回环（cpal 无此能力），仅 Windows 目标引入
+[target.'cfg(windows)'.dependencies]
+wasapi = "0.24"
+
 [profile.release]
 panic = "abort"
 codegen-units = 1

@@ -510,7 +510,9 @@ pub struct CaptureStatus {
     pub system_running: bool,
     pub mic_device: String,
     pub system_device: String,
-    /// 是否检测到系统音频回环设备
+    /// 是否存在可用的系统音频来源（IA-14）
+    ///
+    /// Windows：至少一个播放设备（端点级回环）；其他平台：虚拟回环输入设备。
     pub loopback_available: bool,
 }
 
@@ -528,14 +530,16 @@ fn capture_status(state: &AppState) -> Result<CaptureStatus, String> {
         system_running: manager.system.is_running(),
         mic_device: manager.mic.device_name().to_string(),
         system_device: manager.system.device_name().to_string(),
-        loopback_available: !crate::audio::loopback_candidates().is_empty(),
+        loopback_available: crate::audio::system_audio_available(),
     })
 }
 
-/// 列出可用于采集系统音频的回环设备
+/// 列出可作为「系统音频（面试官）」来源的设备
+///
+/// Windows：全部播放设备（IA-14 端点级回环）；其他平台：虚拟回环输入设备。
 #[tauri::command]
 pub fn list_loopback_devices() -> Vec<crate::audio::DeviceInfo> {
-    crate::audio::loopback_candidates()
+    crate::audio::system_source_devices()
 }
 
 /// 查询当前采集状态
@@ -792,11 +796,9 @@ pub fn start_asr_session(
     let audio_rx = {
         let mut manager = state.capture_lock()?;
         manager.stop_all();
-        let capture = match source.as_str() {
-            "mic" => &mut manager.mic,
-            "system" => &mut manager.system,
-            other => return Err(format!("未知的采集来源：{other}")),
-        };
+        let capture = manager
+            .capture_mut(&source)
+            .ok_or_else(|| format!("未知的采集来源：{source}"))?;
         capture.start(device_id.as_deref().unwrap_or(""))?;
         let audio_rx = capture.take_events()?;
         audio_rx
@@ -954,11 +956,37 @@ pub fn start_asr_session(
 
 // ==================== 双通道会话（IA-05 说话人区分） ====================
 
-/// 解析实际使用的采集设备名：未指定时自动挑选（系统通道优先回环设备）
+/// 解析实际使用的采集设备名：未指定时自动挑选
+///
+/// * `prefer_loopback = false`（麦克风通道）：优先系统默认输入设备；
+/// * `prefer_loopback = true`（系统音频通道）：Windows 取系统默认**播放**设备
+///   （IA-14 端点级回环，无需立体声混音）；其他平台取虚拟回环输入设备。
+///
+/// 注意：系统音频通道**不再退化为麦克风**——缺少可用来源时直接报错，
+/// 避免「面试官」通道静默采到「我」的声音导致说话人区分错乱。
 fn resolve_capture_device(requested: &str, prefer_loopback: bool) -> Result<String, String> {
     let requested = requested.trim();
     if !requested.is_empty() {
         return Ok(requested.to_string());
+    }
+
+    if prefer_loopback {
+        #[cfg(windows)]
+        {
+            return crate::audio::default_render_device_name().ok_or_else(|| {
+                "未检测到可用的播放设备：系统音频（面试官）通道需要至少一个输出设备".to_string()
+            });
+        }
+        #[cfg(not(windows))]
+        {
+            return crate::audio::loopback_candidates()
+                .first()
+                .map(|device| device.name.clone())
+                .ok_or_else(|| {
+                    "未检测到可用的系统音频来源：macOS 请安装 BlackHole 等虚拟回环设备后重启应用"
+                        .to_string()
+                });
+        }
     }
 
     let devices = crate::audio::list_devices();
@@ -969,22 +997,6 @@ fn resolve_capture_device(requested: &str, prefer_loopback: bool) -> Result<Stri
     let is_loopback = |device: &&crate::audio::DeviceInfo| {
         crate::audio::is_loopback_device_name(&device.name)
     };
-
-    if prefer_loopback {
-        if let Some(device) = inputs.iter().find(|device| is_loopback(device)) {
-            return Ok(device.name.clone());
-        }
-        // 缺少回环设备时退化为默认输入设备，并在前端提示
-        return inputs
-            .iter()
-            .find(|device| device.is_default)
-            .or_else(|| inputs.first())
-            .map(|device| device.name.clone())
-            .ok_or_else(|| {
-                "未检测到可用的系统音频来源：Windows 请启用「立体声混音」，macOS 请安装 BlackHole 等回环设备"
-                    .to_string()
-            });
-    }
 
     inputs
         .iter()

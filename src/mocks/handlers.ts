@@ -176,12 +176,19 @@ export async function mockInvoke<T>(
     case "clear_local_data":
       return { notes: 0, groups: 0, tags: 0, sessions: 0 } as T;
 
+    // 系统音频来源：Windows 为播放设备（IA-14 端点级回环）
     case "list_loopback_devices":
       return [
         {
-          id: "立体声混音 (Realtek)",
-          name: "立体声混音 (Realtek)",
-          kind: "input",
+          id: "扬声器 (Realtek)",
+          name: "扬声器 (Realtek)",
+          kind: "output",
+          isDefault: true,
+        },
+        {
+          id: "耳机 (Bluetooth)",
+          name: "耳机 (Bluetooth)",
+          kind: "output",
           isDefault: false,
         },
       ] as T;
@@ -194,7 +201,7 @@ export async function mockInvoke<T>(
         micRunning: false,
         systemRunning: false,
         micDevice: "麦克风 (USB Audio)",
-        systemDevice: "立体声混音 (Realtek)",
+        systemDevice: "扬声器 (Realtek)",
         loopbackAvailable: true,
       } as T;
 
@@ -206,7 +213,7 @@ export async function mockInvoke<T>(
         micRunning: source === "mic",
         systemRunning: source === "system",
         micDevice: "麦克风 (USB Audio)",
-        systemDevice: "立体声混音 (Realtek)",
+        systemDevice: "扬声器 (Realtek)",
         loopbackAvailable: true,
       } as T;
     }

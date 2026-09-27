@@ -9,17 +9,13 @@
 
 use super::capture::{self, FRAME_MS};
 use super::devices::{list_devices, DeviceInfo, DeviceKind};
+use super::worker::CaptureWorker;
 use super::AudioCapture;
 use crate::knowledge::store::now_ms;
 use crate::providers::types::AudioChunk;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::thread::{self, JoinHandle};
-use std::time::Duration;
-
-/// 启动超时（等待设备打开）
-const START_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// 常见回环设备名称特征（大小写不敏感）
 pub const LOOPBACK_NAME_HINTS: [&str; 6] = [
@@ -133,12 +129,7 @@ fn build_input_stream(
             },
             move |err| {
                 tracing::warn!("音频流错误：{err}");
-                let _ = error_tx.send(AudioChunk {
-                    data: Vec::new(),
-                    sample_rate: 0,
-                    channels: 0,
-                    ts: -1, // -1 为错误哨兵
-                });
+                let _ = error_tx.send(capture::error_chunk());
             },
             None,
         )
@@ -148,17 +139,10 @@ fn build_input_stream(
     Ok(stream)
 }
 
-/// 采集工作线程句柄
-struct Worker {
-    stop_tx: Sender<()>,
-    events: Option<Receiver<AudioChunk>>,
-    join: Option<JoinHandle<()>>,
-}
-
 /// 跨线程采集句柄：内部线程持有 cpal Stream，对外仅暴露 Send 字段
 #[derive(Default)]
 pub struct CpalCapture {
-    worker: Option<Worker>,
+    worker: Option<CaptureWorker>,
     device_name: String,
 }
 
@@ -191,64 +175,33 @@ impl AudioCapture for CpalCapture {
             return Err("未指定音频设备".into());
         }
 
-        let (chunk_tx, chunk_rx) = mpsc::channel();
-        let (stop_tx, stop_rx) = mpsc::channel::<()>();
-        let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
         let thread_device = device_name.clone();
+        let worker = CaptureWorker::spawn(move |ready, chunk_tx, stop_rx| {
+            let stream = build_input_stream(&thread_device, chunk_tx)?;
+            ready.ok();
+            // 阻塞至停止信号；期间 stream 保持存活，回调持续投递数据
+            let _ = stop_rx.recv();
+            drop(stream);
+            Ok(())
+        })?;
 
-        let join = thread::spawn(move || {
-            match build_input_stream(&thread_device, chunk_tx) {
-                Ok(stream) => {
-                    let _ = ready_tx.send(Ok(()));
-                    // 阻塞至停止信号；期间 stream 保持存活，回调持续投递数据
-                    let _ = stop_rx.recv();
-                    drop(stream);
-                }
-                Err(err) => {
-                    let _ = ready_tx.send(Err(err));
-                }
-            }
-        });
-
-        match ready_rx.recv_timeout(START_TIMEOUT) {
-            Ok(Ok(())) => {
-                self.device_name = device_name;
-                self.worker = Some(Worker {
-                    stop_tx,
-                    events: Some(chunk_rx),
-                    join: Some(join),
-                });
-                Ok(())
-            }
-            Ok(Err(err)) => {
-                let _ = join.join();
-                Err(err)
-            }
-            Err(_) => Err("启动音频采集超时".into()),
-        }
+        self.device_name = device_name;
+        self.worker = Some(worker);
+        Ok(())
     }
 
     fn stop(&mut self) -> Result<(), String> {
         if let Some(mut worker) = self.worker.take() {
-            let _ = worker.stop_tx.send(());
-            if let Some(join) = worker.join.take() {
-                let _ = join.join();
-            }
+            worker.stop();
         }
         Ok(())
     }
 
     fn take_events(&mut self) -> Result<Receiver<AudioChunk>, String> {
-        self.worker
-            .as_mut()
-            .and_then(|worker| worker.events.take())
-            .ok_or_else(|| "采集尚未启动或事件流已被取出".to_string())
-    }
-}
-
-impl Drop for CpalCapture {
-    fn drop(&mut self) {
-        let _ = AudioCapture::stop(self);
+        match self.worker.as_mut() {
+            Some(worker) => worker.take_events(),
+            None => Err("采集尚未启动或事件流已被取出".to_string()),
+        }
     }
 }
 
@@ -256,6 +209,7 @@ impl Drop for CpalCapture {
 mod tests {
     use super::*;
     use crate::audio::capture::FRAME_SAMPLES;
+    use std::sync::mpsc;
 
     #[test]
     fn detects_loopback_devices_by_name() {

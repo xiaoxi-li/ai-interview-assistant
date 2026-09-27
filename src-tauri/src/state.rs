@@ -1,6 +1,6 @@
 //! 应用共享状态。
 
-use crate::audio::CpalCapture;
+use crate::audio::{AudioCapture, CpalCapture, SystemCapture};
 use crate::providers::EmbeddingProvider;
 use crate::security::SecretStore;
 use rusqlite::Connection;
@@ -8,10 +8,13 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 /// 音频采集管理器：麦克风与系统音频各持一路，支持**并行采集**（IA-05 双通道）
+///
+/// 系统音频通道的实现随平台而定（IA-14：Windows 为 WASAPI 端点级回环，
+/// 其他平台为名称匹配到的虚拟回环设备），故统一以 [`AudioCapture`] trait 对象暴露。
 #[derive(Default)]
 pub struct CaptureManager {
     pub mic: CpalCapture,
-    pub system: CpalCapture,
+    pub system: SystemCapture,
 }
 
 impl CaptureManager {
@@ -47,8 +50,8 @@ impl CaptureManager {
         self.mic.is_running() || self.system.is_running()
     }
 
-    /// 按来源取采集句柄的可变引用
-    pub fn capture_mut(&mut self, source: &str) -> Option<&mut CpalCapture> {
+    /// 按来源取采集句柄的可变引用（两路实现类型不同，故返回 trait 对象）
+    pub fn capture_mut(&mut self, source: &str) -> Option<&mut dyn AudioCapture> {
         match source {
             "mic" => Some(&mut self.mic),
             "system" => Some(&mut self.system),

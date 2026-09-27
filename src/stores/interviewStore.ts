@@ -37,8 +37,10 @@ export const DEFAULT_RECALL_TOP_K = 3;
 
 interface InterviewState {
   status: CaptureStatus | null;
-  /** 输入设备（麦克风 + 回环设备） */
+  /** 输入设备（麦克风通道可选设备） */
   inputDevices: AudioDevice[];
+  /** 系统音频（面试官）通道可选来源：Windows 为播放设备，其他平台为虚拟回环设备 */
+  systemDevices: AudioDevice[];
   /** 当前电平（RMS 0~1） */
   level: number;
   error: string | null;
@@ -136,6 +138,7 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
   return {
     status: null,
     inputDevices: [],
+    systemDevices: [],
     level: 0,
     error: null,
     starting: false,
@@ -171,11 +174,13 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
       Promise.all([
         ipc<CaptureStatus>("audio_capture_status"),
         ipc<AudioDevice[]>("list_audio_devices"),
+        ipc<AudioDevice[]>("list_loopback_devices"),
       ])
-        .then(([status, devices]) =>
+        .then(([status, devices, systemSources]) =>
           set({
             status,
             inputDevices: devices.filter((d) => d.kind === "input"),
+            systemDevices: systemSources,
           })
         )
         .catch((err) => fail("读取采集状态", err)),

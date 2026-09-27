@@ -79,6 +79,16 @@ pub fn to_audio_chunk(samples: &[f32], ts: i64) -> AudioChunk {
     }
 }
 
+/// 采集错误哨兵帧：`ts = -1` 表示本轮采集流发生错误（消费端以此上报而非解析音频）
+pub fn error_chunk() -> AudioChunk {
+    AudioChunk {
+        data: Vec::new(),
+        sample_rate: 0,
+        channels: 0,
+        ts: -1,
+    }
+}
+
 /// 16-bit PCM 小端字节还原为 f32 样本
 pub fn pcm16_to_samples(bytes: &[u8]) -> Vec<f32> {
     bytes

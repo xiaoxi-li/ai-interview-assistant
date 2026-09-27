@@ -10,6 +10,7 @@ const LEVEL_BARS = 24;
 export default function AudioCapturePanel() {
   const status = useInterviewStore((s) => s.status);
   const inputDevices = useInterviewStore((s) => s.inputDevices);
+  const systemDevices = useInterviewStore((s) => s.systemDevices);
   const level = useInterviewStore((s) => s.level);
   const starting = useInterviewStore((s) => s.starting);
   const error = useInterviewStore((s) => s.error);
@@ -30,6 +31,8 @@ export default function AudioCapturePanel() {
 
   const running = status?.running ?? false;
   const activeBars = Math.round(level * LEVEL_BARS);
+  // 系统音频的来源是「播放设备」（Windows 端点级回环）或虚拟回环设备，与麦克风列表不同
+  const devices = source === "system" ? systemDevices : inputDevices;
 
   const handleToggle = () => {
     if (running) {
@@ -97,7 +100,7 @@ export default function AudioCapturePanel() {
           className="focus-ring w-full cursor-pointer rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text outline-none focus:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <option value="">使用系统默认设备</option>
-          {inputDevices.map((device) => (
+          {devices.map((device) => (
             <option key={device.id} value={device.id}>
               {device.name}
               {device.isDefault ? "（系统默认）" : ""}
@@ -132,8 +135,8 @@ export default function AudioCapturePanel() {
 
       {source === "system" && status && !status.loopbackAvailable && (
         <p className="mb-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[10px] leading-relaxed text-warning">
-          未检测到系统音频回环设备。Windows 请在「声音设置 → 录制」中启用「立体声混音」；
-          macOS 需安装 BlackHole 等虚拟音频设备后重启应用。
+          未检测到可用的系统音频来源。Windows 需要至少一个可用的播放设备（直接在播放设备上
+          回环采集，无需「立体声混音」）；macOS 需安装 BlackHole 等虚拟音频设备后重启应用。
         </p>
       )}
 
