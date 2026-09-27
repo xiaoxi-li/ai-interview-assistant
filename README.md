@@ -1,4 +1,4 @@
-# AI 面试助手（AI Interview Assistant）
+# 轻松面试（Easy Interview）
 
 面试实时辅助桌面应用：边听面试官提问，边把问题、知识库参考与 AI 回答放在你眼前。
 
@@ -57,6 +57,7 @@ npm run tauri dev           # 启动桌面应用（首次 Rust 编译约 3–6 �
 3. 左侧导航进入 **「面试辅助」**。
 4. 顶部卡片 **「一键演示 · 完整链路」** → 点 **「开始演示」**。
 5. 观察约 30 秒（1x 速度，3 轮问答）。
+6. （可选）演示过程中点标题栏 **「缩小」** 或按 `Ctrl+Shift+M` 进入迷你模式，确认界面就地切换为迷你页、窗口缩为小窗并置顶；点 **「恢复完整界面」** 回到原界面与窗口状态。
 
 ### 3.2 验收清单（逐项确认）
 
@@ -71,6 +72,7 @@ npm run tauri dev           # 启动桌面应用（首次 Rust 编译约 3–6 �
 | 7 | 回答下方显示**引用来源**，点击可跳转到知识库并定位该笔记 | AI 回答 |
 | 8 | 演示结束（约 30 秒）后自动收尾，卡片重新出现 | 全局 |
 | 9 | **「会话历史」**中可看到「演示会话 · 全链路」：时间线回放、问答与引用、**导出 Markdown / JSON** | 会话历史 |
+| 10 | 点标题栏**「缩小」**（或 `Ctrl+Shift+M`）：整个界面**就地切换**为迷你页（仅面试官问题 + AI 回答），窗口同时缩为小尺寸并置顶；点**「恢复完整界面」**还原完整界面与窗口尺寸/位置/置顶状态，点**「退出应用」**关闭应用 | 全局 |
 
 ### 3.3 演示模式的真实性边界（请务必了解）
 
@@ -101,9 +103,9 @@ npm run tauri build
 
 | 平台 | 路径 | 大小 |
 |---|---|---|
-| Windows 免安装 exe | `src-tauri/target/release/ai-interview-assistant.exe` | 10.8 MB |
-| Windows 安装包（NSIS） | `src-tauri/target/release/bundle/nsis/AI面试助手_0.1.0_x64-setup.exe` | 5.4 MB |
-| Windows 安装包（MSI） | `src-tauri/target/release/bundle/msi/AI面试助手_0.1.0_x64_zh-CN.msi` | 6.4 MB |
+| Windows 免安装 exe | `src-tauri/target/release/easy-interview.exe` | 10.8 MB |
+| Windows 安装包（NSIS） | `src-tauri/target/release/bundle/nsis/轻松面试_0.1.0_x64-setup.exe` | 5.4 MB |
+| Windows 安装包（MSI） | `src-tauri/target/release/bundle/msi/轻松面试_0.1.0_x64_zh-CN.msi` | 6.4 MB |
 | macOS | `src-tauri/target/release/bundle/dmg/*.dmg`、`.../macos/*.app` | — |
 
 按需单独打包（更快）：
@@ -130,8 +132,8 @@ npm run tauri build -- --bundles msi          # 只出 MSI 安装包
 ## 五、本地校验（提交前自检）
 
 ```powershell
-npm run verify            # 前端：tsc 构建 + vitest（270 项）
-cd src-tauri; cargo test  # 后端：375 项（含 PCM 回放端到端、AEC、双通道、演示链路）
+npm run verify            # 前端：tsc 构建 + vitest（279 项）
+cd src-tauri; cargo test  # 后端：377 项（含 PCM 回放端到端、AEC、双通道、演示链路）
 ```
 
 `npm run verify` 等价于 `npm run build && npm test`。CI 会在 Windows / macOS 双平台跑同一套校验（`.github/workflows/`）。
@@ -158,7 +160,7 @@ cd src-tauri; cargo test  # 后端：375 项（含 PCM 回放端到端、AEC、�
    `SherpaOnnxEngine::transcribe_segment`。目前该方法**显式返回错误**（宁可不产出文本，也不伪造转写结果）。
    接入后麦克风/系统音频链路（双通道 + AEC + VAD）无需改动即可工作。
 2. **云端 ASR 延后至 P1**：讯飞/阿里/腾讯的配置项与凭证管理已保留，协议适配未实现（`config/asr.rs` 的 `CLOUD_ASR_IMPLEMENTED = false`）。
-3. **Embedding 走本地确定性 Mock**：语义召回可用但质量有限；接入本地 ONNX 模型后自动提升（向量通道不可用时会退化为纯关键词检索，不影响使用）。
+3. **Embedding 走本地确定性 Mock**：语义召回可用但质量有限；接入本地 ONNX 模型后自动提升（向量通道不可用时会退化为纯关键词检索，不影响使用）。**选型已定**：本地 `BAAI/bge-m3`（ONNX，1024 维，约 2.27GB），下载源固定为魔搭社区，落地清单见 `ai-doc/技术方案.md` 6.5。
 4. **隐身模式开关**目前只出现在面试页快捷条，尚未同步到「设置 → 界面」表单。
 5. 自动更新已实现「检查 + 提示 + 下载」，安装需由发布流水线对产物签名后生效。
 
@@ -181,7 +183,7 @@ cd src-tauri; cargo test  # 后端：375 项（含 PCM 回放端到端、AEC、�
 
 ```
 src/                    前端（React）
-  components/interview/ 面试面板：转写 / 问题 / 回答 / 快捷条 / 演示卡 / 迷你窗
+  components/interview/ 面试面板：转写 / 问题 / 回答 / 快捷条 / 演示卡 / 迷你页（就地迷你模式）
   pages/                知识库 / 面试辅助 / 会话历史 / 设置 / 首次向导
   stores/               zustand 状态（含 IPC 降级 mock）
   hooks/                事件订阅（转写 / 问题 / 回答）与快捷键
@@ -192,5 +194,6 @@ src-tauri/src/          后端（Rust）
   retrieval/            分块 / 中文分词 / FTS5 / 向量 / RRF 融合
   demo.rs               一键演示脚本与离线链路自检
   tray.rs hotkeys.rs    系统托盘 / 全局快捷键
+ai-doc/需求分析.md       需求分析文档（场景/用例、FR+NFR、验收标准、追溯矩阵）
 ai-doc/技术方案.md       完整技术方案（需求表、架构、决策与风险）
 ```
