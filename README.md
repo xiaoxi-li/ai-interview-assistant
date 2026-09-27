@@ -49,17 +49,25 @@ npm run tauri dev           # 启动桌面应用（首次 Rust 编译约 3–6 �
 默认构建**不启用**原生识别（否则所有构建机都被 libclang 约束）。启用步骤：
 
 ```powershell
-# 1) 准备 libclang（sherpa-rs-sys 用 bindgen 生成绑定）。
-#    最轻量做法：只取 PyPI libclang 包里的 libclang.dll（约 25MB），无需安装完整 LLVM。
-#    本仓库已在 .libclang/bin/ 放好一份（该目录已 gitignore），直接设环境变量即可：
+# 1) 准备 libclang（sherpa-rs-sys 用 bindgen 生成 FFI 绑定）。
+#    最轻量做法：只取 PyPI libclang 包里的 libclang.dll，无需安装完整 LLVM。
+#    本仓库已在 .libclang/bin/libclang.dll 放好一份（LLVM 18.1.1，该目录已 gitignore）：
 $env:LIBCLANG_PATH="d:\program\ai-interview-assistant\.libclang\bin"
 
-# 2) 带特性构建/运行：首次会下载约 23MB 预编译 sherpa-onnx 原生库（校验 SHA256 后缓存），之后不再下载
+# 2) 开发运行
 npm run tauri dev -- --features local-asr-native
+
+# 3) 出安装包：必须额外用 --config 声明随包携带的原生 DLL，
+#    否则安装版缺少 DLL 会在启动阶段直接失败（默认构建不受影响，CI 安全）
+npm run tauri build -- --features local-asr-native --config src-tauri/tauri.local-asr.conf.json
 ```
 
-启用后：在「设置 → 模型管理」下载「本地 ASR（Paraformer 中文）」，再回到面试辅助页开始转写，即可得到真实中文转写。
-未启用时相关命令会返回**明确的构建指引**错误（不再是一句含糊的「尚未接入」）。macOS 通路见 `ai-doc/需求分析.md` 5.5 待办 TODO-01。
+- 首次启用构建时，`sherpa-rs-sys` 会按 target 下载**约 23MB** 预编译原生库（SHA256 校验后缓存到 `%LOCALAPPDATA%\sherpa-rs\`），之后构建不再下载。
+- 构建产物由 `sherpa-rs-sys` 的 build.rs 把 DLL 复制到 `target/<profile>/`（与 exe 同目录）；**安装包**则由 `tauri.local-asr.conf.json` 的 `bundle.resources` 携带。
+- 启用后：在「设置 → 模型管理」下载「本地 ASR（Paraformer 中文）」，再回到面试辅助页开始转写，即可得到真实中文转写。
+- 未启用时相关命令会返回**明确的构建指引**错误（不再是一句含糊的「尚未接入」）。
+- 冒烟自检（需已下载模型）：`cargo test --features local-asr-native -- --ignored asr::sherpa`（会加载真实模型并解码 1 秒静音）。
+- macOS 通路见 `ai-doc/需求分析.md` 5.5 待办 TODO-01。
 
 ---
 
@@ -173,10 +181,10 @@ cd src-tauri; cargo test  # 后端：377 项（含 PCM 回放端到端、AEC、�
 
 ## 七、当前已知限制
 
-1. **本地 ASR 原生推理（IA-15）已接入但默认未启用**：Windows 通路（sherpa-onnx 中文 paraformer）代码已就绪，由 cargo 特性 `local-asr-native` 控制；启用见 2.1（构建机需 libclang）。
+1. **本地 ASR 原生推理（IA-15）Windows 通路已接入并验证，但默认未启用**：由 cargo 特性 `local-asr-native` 控制，启用见 2.1（构建机需 libclang）。
    - 未启用时 `SherpaOnnxEngine::transcribe_segment` 返回**明确的构建指引错误**，不静默降级、不伪造文本。
-   - 安装包携带原生库（DLL）尚未配置，见 `ai-doc/需求分析.md` 5.5 待办 TODO-02。
-   - macOS 通路待接入，见同处 TODO-01。
+   - 已验证：真实模型可加载并完成解码（冒烟自检见 2.1）；带特性的安装包已随包携带原生 DLL（MSI 11.95MB / NSIS 9.32MB，未启用特性时为 6.40MB / 5.39MB）。
+   - macOS 通路待接入，见 `ai-doc/需求分析.md` 5.5 待办 TODO-01。
 2. **云端 ASR 延后至 P1**：讯飞/阿里/腾讯的配置项与凭证管理已保留，协议适配未实现（`config/asr.rs` 的 `CLOUD_ASR_IMPLEMENTED = false`）。
 3. **Embedding 走本地确定性 Mock**：语义召回可用但质量有限；接入本地 ONNX 模型后自动提升（向量通道不可用时会退化为纯关键词检索，不影响使用）。**选型已定**：本地 `BAAI/bge-m3`（ONNX，1024 维，约 2.27GB），下载源固定为魔搭社区，落地清单见 `ai-doc/技术方案.md` 6.5。
 4. **隐身模式开关**目前只出现在面试页快捷条，尚未同步到「设置 → 界面」表单。
