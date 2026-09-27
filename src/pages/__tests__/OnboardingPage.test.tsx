@@ -30,10 +30,21 @@ const asrModel: ModelStatus = {
   id: "asr-paraformer-zh",
   name: "本地语音识别（Paraformer 中文）",
   kind: "asr",
-  fileName: "sherpa-onnx-paraformer-zh.tar.bz2",
-  path: "models/asr/sherpa-onnx-paraformer-zh.tar.bz2",
-  sha256: "0".repeat(64),
-  sizeBytes: 200 * 1024 * 1024,
+  repo: "pengzhendong/sherpa-onnx-paraformer-zh",
+  files: [
+    {
+      remotePath: "model.int8.onnx",
+      localName: "model.int8.onnx",
+      sha256: "0".repeat(64),
+      sizeBytes: 200 * 1024 * 1024,
+    },
+    {
+      remotePath: "tokens.txt",
+      localName: "tokens.txt",
+      sha256: "",
+      sizeBytes: 75_354,
+    },
+  ],
   description: "中文流式识别，离线可用",
   requiredForLocalAsr: true,
   installed: false,
@@ -88,7 +99,7 @@ describe("OnboardingPage", () => {
   it("默认展示第一步的隐私说明", () => {
     render(<OnboardingPage />);
 
-    expect(screen.getByText("欢迎使用 AI 面试助手")).toBeTruthy();
+    expect(screen.getByText("欢迎使用轻松面试")).toBeTruthy();
     expect(screen.getByText("第 1 / 4 步 · 本地优先与权限")).toBeTruthy();
     expect(screen.getByText(/不会上传/)).toBeTruthy();
   });

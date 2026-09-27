@@ -93,7 +93,7 @@ export default function OnboardingPage() {
             <Sparkles className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h1 className="text-[15px] font-semibold">欢迎使用 AI 面试助手</h1>
+            <h1 className="text-[15px] font-semibold">欢迎使用轻松面试</h1>
             <p className="text-[11px] text-text-subtle">
               第 {step + 1} / {STEPS.length} 步 · {current.title}
             </p>

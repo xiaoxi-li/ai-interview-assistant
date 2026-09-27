@@ -2,6 +2,9 @@
 //!
 //! 设计要点：
 //! * 安装包不包含模型（保持 < 20MB），模型按需下载到应用数据目录；
+//! * 下载源统一固定为魔搭社区（ModelScope），通过 HTTP 直链
+//!   `https://modelscope.cn/models/{repo}/resolve/master/{path}` 下载；
+//! * 每个模型可包含多个文件（如 sherpa-onnx 的 onnx + tokens，BGE 的 onnx + onnx_data）；
 //! * 下载支持断点续传（HTTP Range），完成后做 SHA256 校验；
 //! * 校验失败的半成品保留为 `.part` 文件，便于重新续传或手动清理。
 
@@ -12,6 +15,9 @@ use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+/// 魔搭社区（ModelScope）默认下载源根地址
+pub const MODELSCOPE_BASE: &str = "https://modelscope.cn";
+
 /// 模型类别
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -21,6 +27,20 @@ pub enum ModelKind {
     Asr,
 }
 
+/// 模型内的单个文件
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelFile {
+    /// 模型仓库内的相对路径（用于拼接 `resolve/master/{remote_path}` 直链）
+    pub remote_path: String,
+    /// 本地落地文件名
+    pub local_name: String,
+    /// 期望的 SHA256（小写十六进制）；为空表示跳过校验
+    pub sha256: String,
+    /// 期望大小（字节，0 表示未知）
+    pub size_bytes: u64,
+}
+
 /// 模型清单条目
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,14 +48,10 @@ pub struct ModelSpec {
     pub id: String,
     pub name: String,
     pub kind: ModelKind,
-    /// 本地文件名
-    pub file_name: String,
-    /// 相对镜像根目录的路径
-    pub path: String,
-    /// 期望的 SHA256（小写十六进制）；为空表示跳过校验
-    pub sha256: String,
-    /// 期望大小（字节，0 表示未知）
-    pub size_bytes: u64,
+    /// ModelScope 仓库 ID（namespace/model）
+    pub repo: String,
+    /// 需要下载的文件列表
+    pub files: Vec<ModelFile>,
     pub description: String,
     /// 本地 ASR 所需（选择本地模式时下载）
     pub required_for_local_asr: bool,
@@ -53,124 +69,83 @@ pub struct ModelStatus {
     pub partial_bytes: u64,
 }
 
-/// 镜像根地址（仅读取环境变量，便于内网/离线部署）
-pub fn mirror_base() -> String {
-    std::env::var("AIA_MODEL_MIRROR").unwrap_or_default()
-}
-
-/// 解析镜像根地址：配置值优先，其次环境变量 `AIA_MODEL_MIRROR`，否则为空（未配置）。
-///
-/// 空串表示「未配置镜像源」，下载前需据此给出可操作的错误提示，而非静默失败。
-pub fn resolve_mirror(configured: Option<&str>) -> String {
-    if let Some(url) = configured {
-        let trimmed = url.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
-    std::env::var("AIA_MODEL_MIRROR").unwrap_or_default()
-}
-
-/// 镜像连通性探测结果（HEAD 请求，不下载正文）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MirrorProbe {
-    /// 是否可达（2xx）
-    pub ok: bool,
-    /// HTTP 状态码
-    pub status: Option<u16>,
-    /// 响应体大小（Content-Length）
-    pub content_length: Option<u64>,
-    /// 是否支持断点续传（Accept-Ranges: bytes）
-    pub supports_range: bool,
-    /// 可读说明（失败原因等）
-    pub message: String,
-}
-
-/// 用 HEAD 请求探测某个模型文件是否可访问（不下载正文，避免误拉取大文件）。
-pub fn probe_url(base_url: &str, path: &str) -> MirrorProbe {
-    if base_url.trim().is_empty() {
-        return MirrorProbe {
-            ok: false,
-            status: None,
-            content_length: None,
-            supports_range: false,
-            message: "镜像源未配置".to_string(),
-        };
-    }
-
-    let url = format!("{}/{}", base_url.trim_end_matches('/'), path.trim_start_matches('/'));
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(15))
-        .build();
-
-    match agent.head(&url).call() {
-        Ok(resp) => {
-            let status = resp.status();
-            let content_length = resp
-                .header("Content-Length")
-                .and_then(|v| v.parse::<u64>().ok());
-            let supports_range = resp
-                .header("Accept-Ranges")
-                .map(|v| v.to_ascii_lowercase().contains("bytes"))
-                .unwrap_or(false);
-            let ok = (200..300).contains(&status);
-            MirrorProbe {
-                ok,
-                status: Some(status),
-                content_length,
-                supports_range,
-                message: if ok {
-                    "可达".to_string()
-                } else {
-                    format!("HTTP {status}")
-                },
-            }
-        }
-        Err(err) => MirrorProbe {
-            ok: false,
-            status: None,
-            content_length: None,
-            supports_range: false,
-            message: format!("不可达：{err}"),
-        },
-    }
-}
-
-/// 内置模型清单
+/// 内置模型清单（下载源固定为魔搭社区）
 pub fn catalog() -> Vec<ModelSpec> {
     vec![
         ModelSpec {
-            id: "embedding-minilm-zh".into(),
-            name: "中文嵌入模型（MiniLM）".into(),
+            id: "bge-m3".into(),
+            name: "嵌入模型（BGE-M3）".into(),
             kind: ModelKind::Embedding,
-            file_name: "embedding-minilm-zh.onnx".into(),
-            path: "embedding/minilm-zh.onnx".into(),
-            sha256: String::new(),
-            size_bytes: 0,
-            description: "本地向量检索使用的轻量嵌入模型，约 90MB".into(),
+            repo: "BAAI/bge-m3".into(),
+            files: vec![
+                ModelFile {
+                    remote_path: "onnx/model.onnx".into(),
+                    local_name: "model.onnx".into(),
+                    sha256: String::new(),
+                    size_bytes: 724_923,
+                },
+                ModelFile {
+                    remote_path: "onnx/model.onnx_data".into(),
+                    local_name: "model.onnx_data".into(),
+                    sha256: String::new(),
+                    size_bytes: 2_266_820_608,
+                },
+                ModelFile {
+                    remote_path: "onnx/tokenizer.json".into(),
+                    local_name: "tokenizer.json".into(),
+                    sha256: String::new(),
+                    size_bytes: 17_082_821,
+                },
+                ModelFile {
+                    remote_path: "onnx/config.json".into(),
+                    local_name: "config.json".into(),
+                    sha256: String::new(),
+                    size_bytes: 698,
+                },
+            ],
+            description: "本地向量检索使用的多语言嵌入模型（1024 维），约 2.1GB".into(),
             required_for_local_asr: false,
         },
         ModelSpec {
             id: "vad-silero".into(),
             name: "Silero VAD".into(),
             kind: ModelKind::Vad,
-            file_name: "silero_vad.onnx".into(),
-            path: "vad/silero_vad.onnx".into(),
-            sha256: String::new(),
-            size_bytes: 0,
-            description: "语音活动检测模型，用于静音过滤与自动分段，约 2MB".into(),
+            repo: "pengzhendong/silero-vad".into(),
+            files: vec![ModelFile {
+                remote_path: "silero_vad.onnx".into(),
+                local_name: "silero_vad.onnx".into(),
+                sha256: String::new(),
+                size_bytes: 2_327_524,
+            }],
+            description: "语音活动检测模型，用于静音过滤与自动分段，约 2.3MB".into(),
             required_for_local_asr: false,
         },
         ModelSpec {
             id: "asr-paraformer-zh".into(),
             name: "本地 ASR（Paraformer 中文）".into(),
             kind: ModelKind::Asr,
-            file_name: "sherpa-onnx-paraformer-zh.tar.bz2".into(),
-            path: "asr/sherpa-onnx-paraformer-zh.tar.bz2".into(),
-            sha256: String::new(),
-            size_bytes: 0,
-            description: "本地语音识别模型，仅在选择本地 ASR 模式时需要，约 200MB".into(),
+            repo: "pengzhendong/sherpa-onnx-paraformer-zh".into(),
+            files: vec![
+                ModelFile {
+                    remote_path: "model.int8.onnx".into(),
+                    local_name: "model.int8.onnx".into(),
+                    sha256: "90bc03034ae1bef9575f8cc798cd1519c8be8aa9e8b458a033e32017ff4d584c".into(),
+                    size_bytes: 227_330_205,
+                },
+                ModelFile {
+                    remote_path: "tokens.txt".into(),
+                    local_name: "tokens.txt".into(),
+                    sha256: "6c0e3b35cece259829e6cb5b8d90d13db88f61ea3a2953d11898e4b2bfd7a2e2".into(),
+                    size_bytes: 75_354,
+                },
+                ModelFile {
+                    remote_path: "configuration.json".into(),
+                    local_name: "configuration.json".into(),
+                    sha256: String::new(),
+                    size_bytes: 56,
+                },
+            ],
+            description: "本地语音识别模型，仅在选择本地 ASR 模式时需要，约 217MB".into(),
             required_for_local_asr: true,
         },
     ]
@@ -197,9 +172,9 @@ fn safe_relative_path(path: &str) -> Result<PathBuf, String> {
     Ok(safe)
 }
 
-/// 模型在本地磁盘上的目标路径
-pub fn model_file_path(models_dir: &Path, spec: &ModelSpec) -> Result<PathBuf, String> {
-    Ok(models_dir.join(safe_relative_path(&spec.file_name)?))
+/// 模型在本地磁盘上的目录路径（多文件模型按 `models_dir/{model_id}/` 落地）
+pub fn model_dir_path(models_dir: &Path, spec: &ModelSpec) -> Result<PathBuf, String> {
+    Ok(models_dir.join(safe_relative_path(&spec.id)?))
 }
 
 /// 断点续传使用的临时文件路径
@@ -241,16 +216,31 @@ pub fn list_status(models_dir: &Path) -> Vec<ModelStatus> {
     catalog()
         .into_iter()
         .map(|spec| {
-            let target = model_file_path(models_dir, &spec).ok();
-            let part = target.as_ref().map(|p| part_file_path(p));
-            let installed = target.as_ref().map(|p| p.exists()).unwrap_or(false);
-            let partial_bytes = part
+            let dir = model_dir_path(models_dir, &spec).ok();
+            let installed = dir
                 .as_ref()
-                .and_then(|p| std::fs::metadata(p).ok())
-                .map(|m| m.len())
+                .map(|d| {
+                    spec.files
+                        .iter()
+                        .all(|file| d.join(&file.local_name).exists())
+                })
+                .unwrap_or(false);
+            let partial_bytes = dir
+                .as_ref()
+                .map(|d| {
+                    spec.files
+                        .iter()
+                        .map(|file| {
+                            std::fs::metadata(part_file_path(&d.join(&file.local_name)))
+                                .map(|m| m.len())
+                                .unwrap_or(0)
+                        })
+                        .sum()
+                })
                 .unwrap_or(0);
+            let resolved_path = dir.as_ref().map(|d| d.display().to_string());
             ModelStatus {
-                resolved_path: target.as_ref().map(|p| p.display().to_string()),
+                resolved_path,
                 installed,
                 partial_bytes,
                 spec,
@@ -262,28 +252,70 @@ pub fn list_status(models_dir: &Path) -> Vec<ModelStatus> {
 /// 下载进度回调：(已下载字节, 总字节 Option)
 pub type ProgressFn<'a> = &'a mut dyn FnMut(u64, Option<u64>);
 
-/// 下载模型文件，支持断点续传与 SHA256 校验。
+/// 下载模型，支持多文件、断点续传与 SHA256 校验。
 ///
-/// 成功后返回最终文件路径；校验失败会保留 `.part` 文件并返回错误。
+/// `base_url` 为下载源根地址（生产传 [`MODELSCOPE_BASE`]，测试可传本地服务地址）。
+/// 成功后返回模型目录路径；校验失败会保留 `.part` 文件并返回错误。
 pub fn download_model(
     models_dir: &Path,
     spec: &ModelSpec,
     base_url: &str,
-    on_progress: ProgressFn<'_>,
+    on_progress: &mut dyn FnMut(u64, Option<u64>),
 ) -> Result<PathBuf, String> {
-    let target = model_file_path(models_dir, spec)?;
-    if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let part = part_file_path(&target);
+    let model_dir = model_dir_path(models_dir, spec)?;
+    std::fs::create_dir_all(&model_dir).map_err(|e| e.to_string())?;
 
-    let mut offset = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
-    let url = format!("{}/{}", base_url.trim_end_matches('/'), spec.path);
+    let total: u64 = spec.files.iter().map(|file| file.size_bytes).sum();
+    let mut base_downloaded: u64 = 0;
+
+    for file in &spec.files {
+        let target = model_dir.join(&file.local_name);
+        let part = part_file_path(&target);
+
+        // 已完整安装且校验通过：跳过并计入进度
+        if target.exists() && verify_file(&target, &file.sha256)? {
+            base_downloaded += file.size_bytes;
+            on_progress(base_downloaded, Some(total));
+            continue;
+        }
+
+        // target 损坏或不存在：清理 target 避免 rename 冲突
+        if target.exists() {
+            std::fs::remove_file(&target).map_err(|e| e.to_string())?;
+        }
+
+        let url = format!(
+            "{}/models/{}/resolve/master/{}",
+            base_url.trim_end_matches('/'),
+            spec.repo,
+            file.remote_path
+        );
+
+        let base = base_downloaded;
+        download_file(&url, &target, &part, &file.sha256, &mut |downloaded, _| {
+            on_progress(base + downloaded, Some(total));
+        })?;
+
+        base_downloaded += file.size_bytes;
+    }
+
+    Ok(model_dir)
+}
+
+/// 下载单个文件，支持断点续传与 SHA256 校验（内部辅助）。
+fn download_file(
+    url: &str,
+    target: &Path,
+    part: &Path,
+    sha256: &str,
+    on_progress: &mut dyn FnMut(u64, Option<u64>),
+) -> Result<(), String> {
+    let mut offset = std::fs::metadata(part).map(|m| m.len()).unwrap_or(0);
 
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(600))
         .build();
-    let mut request = agent.get(&url);
+    let mut request = agent.get(url);
     if offset > 0 {
         request = request.set("Range", &format!("bytes={offset}-"));
     }
@@ -293,7 +325,7 @@ pub fn download_model(
 
     // 服务端不支持续传（返回 200）时从头下载
     if offset > 0 && status != 206 {
-        let _ = std::fs::remove_file(&part);
+        let _ = std::fs::remove_file(part);
         offset = 0;
     }
 
@@ -306,7 +338,7 @@ pub fn download_model(
     let file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&part)
+        .open(part)
         .map_err(|e| format!("创建临时文件失败：{e}"))?;
     let mut writer = BufWriter::new(file);
 
@@ -325,32 +357,27 @@ pub fn download_model(
     drop(writer);
 
     // 校验
-    if !spec.sha256.trim().is_empty() {
-        let actual = file_sha256(&part)?;
-        if !actual.eq_ignore_ascii_case(&spec.sha256) {
+    if !sha256.trim().is_empty() {
+        let actual = file_sha256(part)?;
+        if !actual.eq_ignore_ascii_case(sha256) {
             return Err(format!(
-                "SHA256 校验失败（期望 {}，实际 {actual}），已保留 .part 文件可重新续传",
-                spec.sha256
+                "SHA256 校验失败（期望 {sha256}，实际 {actual}），已保留 .part 文件可重新续传"
             ));
         }
     }
 
-    std::fs::rename(&part, &target).map_err(|e| format!("落盘失败：{e}"))?;
-    Ok(target)
+    std::fs::rename(part, target).map_err(|e| format!("落盘失败：{e}"))?;
+    Ok(())
 }
 
-/// 删除已安装模型（同时清理 .part 残留）
+/// 删除已安装模型（清理整个模型目录）
 pub fn delete_model(models_dir: &Path, spec: &ModelSpec) -> Result<bool, String> {
-    let target = model_file_path(models_dir, spec)?;
-    let part = part_file_path(&target);
-    let mut removed = false;
-    for path in [target, part] {
-        if path.exists() {
-            std::fs::remove_file(&path).map_err(|e| e.to_string())?;
-            removed = true;
-        }
+    let model_dir = model_dir_path(models_dir, spec)?;
+    if !model_dir.exists() {
+        return Ok(false);
     }
-    Ok(removed)
+    std::fs::remove_dir_all(&model_dir).map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -381,10 +408,13 @@ mod tests {
             id: "test-model".into(),
             name: "测试模型".into(),
             kind: ModelKind::Embedding,
-            file_name: "test-model.bin".into(),
-            path: "test/model.bin".into(),
-            sha256: sha256_of(payload),
-            size_bytes: payload.len() as u64,
+            repo: "test/test-model".into(),
+            files: vec![ModelFile {
+                remote_path: "test/model.bin".into(),
+                local_name: "test-model.bin".into(),
+                sha256: sha256_of(payload),
+                size_bytes: payload.len() as u64,
+            }],
             description: "单测用".into(),
             required_for_local_asr: false,
         }
@@ -469,7 +499,7 @@ mod tests {
     }
 
     #[test]
-    fn download_writes_file_and_verifies_checksum() {
+    fn download_writes_files_and_verifies_checksum() {
         let payload = b"model-binary-content".to_vec();
         let (base, handle) = spawn_file_server(payload.clone());
         let dir = temp_dir("download");
@@ -482,11 +512,13 @@ mod tests {
         };
 
         let path = download_model(&dir, &spec, &base, &mut on_progress).expect("download");
-        // 先释放闭包对 progress_calls 的可变借用，再断言
         drop(on_progress);
 
         assert!(path.exists());
-        assert_eq!(std::fs::read(&path).expect("read"), payload);
+        assert_eq!(
+            std::fs::read(path.join("test-model.bin")).expect("read"),
+            payload
+        );
         assert!(progress_calls > 0, "应上报进度");
         handle.join().ok();
         std::fs::remove_dir_all(&dir).ok();
@@ -500,14 +532,17 @@ mod tests {
         let spec = spec_for(&payload);
 
         // 预置前 6 个字节的半成品
-        let target = model_file_path(&dir, &spec).expect("target");
-        std::fs::create_dir_all(target.parent().expect("parent")).expect("mkdir");
-        let part = part_file_path(&target);
-        std::fs::write(&part, &payload[..6]).expect("partial");
+        let model_dir = model_dir_path(&dir, &spec).expect("dir");
+        std::fs::create_dir_all(&model_dir).expect("mkdir");
+        let target = model_dir.join("test-model.bin");
+        std::fs::write(part_file_path(&target), &payload[..6]).expect("partial");
 
         let mut on_progress = |_downloaded: u64, _total: Option<u64>| {};
         let path = download_model(&dir, &spec, &base, &mut on_progress).expect("resume");
-        assert_eq!(std::fs::read(&path).expect("read"), payload);
+        assert_eq!(
+            std::fs::read(path.join("test-model.bin")).expect("read"),
+            payload
+        );
 
         drop(on_progress);
         let requests = handle.join().unwrap_or_default();
@@ -526,13 +561,14 @@ mod tests {
         let (base, handle) = spawn_file_server(payload.clone());
         let dir = temp_dir("checksum");
         let mut spec = spec_for(&payload);
-        spec.sha256 = "0".repeat(64);
+        spec.files[0].sha256 = "0".repeat(64);
 
         let mut on_progress = |_d: u64, _t: Option<u64>| {};
         let error = download_model(&dir, &spec, &base, &mut on_progress).expect_err("should fail");
         assert!(error.contains("SHA256"), "错误信息应说明校验失败：{error}");
 
-        let target = model_file_path(&dir, &spec).expect("target");
+        let model_dir = model_dir_path(&dir, &spec).expect("dir");
+        let target = model_dir.join("test-model.bin");
         assert!(!target.exists(), "校验失败不应落盘正式文件");
         assert!(part_file_path(&target).exists(), ".part 应保留以便续传");
 
@@ -542,7 +578,45 @@ mod tests {
     }
 
     #[test]
-    fn catalog_ids_are_unique_and_paths_are_safe() {
+    fn download_skips_installed_files_and_aggregates_progress() {
+        let payload = b"second-file-content".to_vec();
+        let (base, handle) = spawn_file_server(payload.clone());
+        let dir = temp_dir("skip-installed");
+        let mut spec = spec_for(&payload);
+        spec.files.push(ModelFile {
+            remote_path: "test/first.bin".into(),
+            local_name: "first.bin".into(),
+            sha256: sha256_of(b"first-file-content"),
+            size_bytes: 18,
+        });
+
+        // 预置第一个文件已安装
+        let model_dir = model_dir_path(&dir, &spec).expect("dir");
+        std::fs::create_dir_all(&model_dir).expect("mkdir");
+        std::fs::write(model_dir.join("first.bin"), b"first-file-content").expect("write");
+
+        let mut progress = Vec::new();
+        let mut on_progress = |downloaded: u64, total: Option<u64>| {
+            progress.push((downloaded, total));
+        };
+        let path = download_model(&dir, &spec, &base, &mut on_progress).expect("download");
+        assert_eq!(
+            std::fs::read(path.join("test-model.bin")).expect("read"),
+            payload
+        );
+
+        drop(on_progress);
+        let requests = handle.join().unwrap_or_default();
+        assert_eq!(requests.len(), 1, "应只请求未安装的文件：{requests:?}");
+
+        let total = spec.files.iter().map(|f| f.size_bytes).sum::<u64>();
+        assert_eq!(progress.last().map(|(_, t)| *t), Some(Some(total)));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn catalog_ids_are_unique_and_files_are_safe() {
         let models = catalog();
         let mut ids: Vec<&String> = models.iter().map(|m| &m.id).collect();
         let total = ids.len();
@@ -551,11 +625,17 @@ mod tests {
         assert_eq!(ids.len(), total);
 
         for spec in &models {
-            assert!(safe_relative_path(&spec.path).is_ok());
-            assert!(safe_relative_path(&spec.file_name).is_ok());
+            assert!(!spec.repo.is_empty());
+            assert!(!spec.files.is_empty(), "模型应有至少一个文件：{}", spec.id);
+            for file in &spec.files {
+                assert!(safe_relative_path(&file.local_name).is_ok());
+                assert!(!file.remote_path.is_empty());
+                assert!(!file.remote_path.contains(".."), "remote_path 不应包含目录穿越");
+            }
         }
         assert!(safe_relative_path("../escape.bin").is_err());
         assert!(find_spec("asr-paraformer-zh").is_some());
+        assert!(find_spec("bge-m3").is_some());
         assert!(find_spec("unknown").is_none());
     }
 
@@ -566,14 +646,18 @@ mod tests {
         let status = list_status(&dir);
         assert!(status.iter().all(|s| !s.installed));
 
-        // 伪造一个已安装文件与一个半成品
-        let installed = model_file_path(&dir, &spec).expect("path");
-        std::fs::create_dir_all(installed.parent().expect("parent")).expect("mkdir");
-        std::fs::write(&installed, b"x").expect("write");
+        // 伪造一个已安装模型（所有文件存在）
+        let model_dir = model_dir_path(&dir, &spec).expect("dir");
+        std::fs::create_dir_all(&model_dir).expect("mkdir");
+        for file in &spec.files {
+            std::fs::write(model_dir.join(&file.local_name), b"x").expect("write");
+        }
+
+        // 伪造 ASR 模型的一个半成品
         let asr = find_spec("asr-paraformer-zh").expect("asr");
-        let asr_path = model_file_path(&dir, &asr).expect("asr path");
-        std::fs::create_dir_all(asr_path.parent().expect("parent")).expect("mkdir");
-        std::fs::write(part_file_path(&asr_path), b"12345").expect("part");
+        let asr_dir = model_dir_path(&dir, &asr).expect("asr dir");
+        std::fs::create_dir_all(&asr_dir).expect("mkdir");
+        std::fs::write(part_file_path(&asr_dir.join("model.int8.onnx")), b"12345").expect("part");
 
         let status = list_status(&dir);
         let installed_status = status.iter().find(|s| s.spec.id == spec.id).expect("entry");
@@ -585,68 +669,17 @@ mod tests {
     }
 
     #[test]
-    fn probe_url_reports_unconfigured_mirror() {
-        let probe = probe_url("", "embedding/minilm-zh.onnx");
-        assert!(!probe.ok);
-        assert!(probe.message.contains("未配置"), "{}", probe.message);
-        assert_eq!(probe.status, None);
-    }
-
-    #[test]
-    fn probe_url_reports_unreachable_host() {
-        // 127.0.0.1:1 通常无监听，应报告不可达而非 panic
-        let probe = probe_url("http://127.0.0.1:1", "vad/silero_vad.onnx");
-        assert!(!probe.ok);
-        assert!(!probe.message.is_empty());
-    }
-
-    #[test]
-    fn probe_url_detects_ok_and_range_support() {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
-        let addr = listener.local_addr().expect("addr");
-        let handle = thread::spawn(move || {
-            for stream in listener.incoming().take(1) {
-                let Ok(mut stream) = stream else { continue };
-                let mut buffer = [0u8; 1024];
-                let _ = stream.read(&mut buffer);
-                let header = "HTTP/1.1 200 OK\r\nContent-Length: 2048\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n";
-                let _ = stream.write_all(header.as_bytes());
-                let _ = stream.flush();
-            }
-        });
-
-        let probe = probe_url(&format!("http://{addr}"), "x/y.onnx");
-        assert!(probe.ok, "应为可达：{}", probe.message);
-        assert_eq!(probe.status, Some(200));
-        assert_eq!(probe.content_length, Some(2048));
-        assert!(probe.supports_range);
-
-        handle.join().ok();
-    }
-
-    #[test]
-    fn resolve_mirror_prefers_configured_over_env() {
-        // 配置值优先于环境变量
-        let resolved = resolve_mirror(Some("https://cfg.example.com/ai"));
-        assert_eq!(resolved, "https://cfg.example.com/ai");
-
-        // 空白配置视为未配置，回退环境变量
-        let resolved = resolve_mirror(Some("   "));
-        assert_eq!(resolved, std::env::var("AIA_MODEL_MIRROR").unwrap_or_default());
-    }
-
-    #[test]
-    fn delete_model_removes_both_files() {
+    fn delete_model_removes_model_dir() {
         let dir = temp_dir("delete");
         let spec = catalog().into_iter().next().expect("spec");
-        let target = model_file_path(&dir, &spec).expect("path");
-        std::fs::create_dir_all(target.parent().expect("parent")).expect("mkdir");
-        std::fs::write(&target, b"data").expect("write");
-        std::fs::write(part_file_path(&target), b"part").expect("write part");
+        let model_dir = model_dir_path(&dir, &spec).expect("dir");
+        std::fs::create_dir_all(&model_dir).expect("mkdir");
+        for file in &spec.files {
+            std::fs::write(model_dir.join(&file.local_name), b"data").expect("write");
+        }
 
         assert!(delete_model(&dir, &spec).expect("delete"));
-        assert!(!target.exists());
-        assert!(!part_file_path(&target).exists());
+        assert!(!model_dir.exists());
         assert!(!delete_model(&dir, &spec).expect("delete twice"));
 
         std::fs::remove_dir_all(&dir).ok();

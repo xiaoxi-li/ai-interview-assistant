@@ -9,7 +9,7 @@
 //! * [`ReplayEngine`]：确定性回放引擎，仅用于单元/集成测试与「演示模式」，
 //!   绝不用于生产识别。
 
-use crate::models::{find_spec, model_file_path};
+use crate::models::{find_spec, model_dir_path};
 use crate::providers::types::{ProviderError, ProviderResult};
 use std::path::{Path, PathBuf};
 
@@ -49,11 +49,13 @@ impl SherpaOnnxEngine {
     pub fn new(models_dir: &Path, language: &str) -> ProviderResult<Self> {
         let spec = find_spec(LOCAL_ASR_MODEL_ID)
             .ok_or_else(|| ProviderError::Other("模型清单中缺少本地 ASR 模型定义".into()))?;
-        let model_path = model_file_path(models_dir, &spec).map_err(ProviderError::Other)?;
+        let model_path = model_dir_path(models_dir, &spec).map_err(ProviderError::Other)?;
 
-        if !model_path.exists() {
+        let onnx = model_path.join("model.int8.onnx");
+        let tokens = model_path.join("tokens.txt");
+        if !onnx.exists() || !tokens.exists() {
             return Err(ProviderError::Other(format!(
-                "本地 ASR 模型尚未下载：{}。请前往「设置 → 模型管理」下载「{}」后重试。",
+                "本地 ASR 模型尚未下载（缺少 model.int8.onnx 或 tokens.txt）：{}。请前往「设置 → 模型管理」下载「{}」后重试。",
                 model_path.display(),
                 spec.name
             )));
@@ -202,11 +204,12 @@ mod tests {
         let db = Db::open_in_memory().expect("db");
         let _ = db; // 仅确保存储层可初始化（模型路径不依赖 DB）
 
-        // 伪造模型文件
+        // 伪造模型文件（onnx + tokens）
         let spec = find_spec(LOCAL_ASR_MODEL_ID).expect("spec");
-        let path = model_file_path(&dir, &spec).expect("path");
-        std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
-        std::fs::write(&path, b"fake-model").expect("write");
+        let model_dir = model_dir_path(&dir, &spec).expect("path");
+        std::fs::create_dir_all(&model_dir).expect("mkdir");
+        std::fs::write(model_dir.join("model.int8.onnx"), b"fake-model").expect("write");
+        std::fs::write(model_dir.join("tokens.txt"), b"tokens").expect("write");
 
         let engine = SherpaOnnxEngine::new(&dir, "zh-CN").expect("engine");
         assert_eq!(engine.name(), "sherpa-onnx");
@@ -227,9 +230,10 @@ mod tests {
     fn sherpa_engine_returns_none_for_empty_audio() {
         let dir = temp_dir("empty");
         let spec = find_spec(LOCAL_ASR_MODEL_ID).expect("spec");
-        let path = model_file_path(&dir, &spec).expect("path");
-        std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
-        std::fs::write(&path, b"x").expect("write");
+        let model_dir = model_dir_path(&dir, &spec).expect("path");
+        std::fs::create_dir_all(&model_dir).expect("mkdir");
+        std::fs::write(model_dir.join("model.int8.onnx"), b"x").expect("write");
+        std::fs::write(model_dir.join("tokens.txt"), b"x").expect("write");
 
         let mut engine = SherpaOnnxEngine::new(&dir, "zh-CN").expect("engine");
         assert!(engine.transcribe_segment(&[], true).expect("ok").is_none());

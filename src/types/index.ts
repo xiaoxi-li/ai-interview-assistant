@@ -319,25 +319,6 @@ export interface KnowledgeConfig {
   dbPath: string | null;
   modelsDir: string | null;
   embeddingModel: string;
-  /** 模型镜像源根地址（null 表示未配置） */
-  modelMirror: string | null;
-}
-
-/** 模型镜像源连通性检查结果 */
-export interface MirrorCheckResult {
-  mirror: string;
-  configured: boolean;
-  probes: ModelMirrorProbe[];
-}
-
-/** 单个模型文件的镜像探测结果 */
-export interface ModelMirrorProbe {
-  id: string;
-  name: string;
-  ok: boolean;
-  message: string;
-  contentLength: number | null;
-  supportsRange: boolean;
 }
 
 /** 当前生效的存储路径 */
@@ -348,15 +329,27 @@ export interface StoragePaths {
 
 export type ModelKind = "embedding" | "vad" | "asr";
 
+/** 模型内的单个文件 */
+export interface ModelFile {
+  /** 模型仓库内的相对路径（用于拼接 resolve/master/{remotePath} 直链） */
+  remotePath: string;
+  /** 本地落地文件名 */
+  localName: string;
+  /** 期望的 SHA256（空表示跳过校验） */
+  sha256: string;
+  /** 期望大小（字节） */
+  sizeBytes: number;
+}
+
 /** 本地模型清单条目 */
 export interface ModelSpec {
   id: string;
   name: string;
   kind: ModelKind;
-  fileName: string;
-  path: string;
-  sha256: string;
-  sizeBytes: number;
+  /** ModelScope 仓库 ID（namespace/model） */
+  repo: string;
+  /** 需要下载的文件列表 */
+  files: ModelFile[];
   description: string;
   requiredForLocalAsr: boolean;
 }

@@ -21,7 +21,7 @@ use crate::knowledge::{GroupDto, ImportOutcome, NoteDto, NoteVersionDto, TagDto}
 use crate::providers::types::{AsrMode, ChatDelta, ChatRequest, Speaker, TranscriptEvent};
 use crate::providers::AiProvider;
 use crate::retrieval::SearchHit;
-use crate::state::AppState;
+use crate::state::{AppState, MiniWindowSnapshot};
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{self, RecvTimeoutError};
@@ -418,101 +418,30 @@ pub async fn download_model(
     let spec = crate::models::find_spec(&id)
         .ok_or_else(|| format!("未知模型：{id}"))?;
 
-    // 解析镜像源；未配置时给出可操作的错误（避免「点了没反应」）
-    let base = {
-        let conn = state.lock()?;
-        let config =
-            crate::config::knowledge::load_knowledge_config(&conn).map_err(|e| e.to_string())?;
-        crate::models::resolve_mirror(config.model_mirror.as_deref())
-    };
-    if base.trim().is_empty() {
-        return Err(
-            "模型镜像源未配置。请到「设置 → 知识库」填写镜像源地址，或设置环境变量 AIA_MODEL_MIRROR 后重试。"
-                .into(),
-        );
-    }
-
     let models_dir = state.models_dir.clone();
     let model_id = spec.id.clone();
 
     let joined = tauri::async_runtime::spawn_blocking(move || {
-        crate::models::download_model(&models_dir, &spec, &base, &mut |downloaded, total| {
-            let _ = app.emit(
-                "model://progress",
-                serde_json::json!({
-                    "id": model_id,
-                    "downloaded": downloaded,
-                    "total": total,
-                }),
-            );
-        })
+        crate::models::download_model(
+            &models_dir,
+            &spec,
+            crate::models::MODELSCOPE_BASE,
+            &mut |downloaded, total| {
+                let _ = app.emit(
+                    "model://progress",
+                    serde_json::json!({
+                        "id": model_id,
+                        "downloaded": downloaded,
+                        "total": total,
+                    }),
+                );
+            },
+        )
     })
     .await
     .map_err(|e| format!("下载任务异常：{e}"))?;
 
     joined.map(|path| path.display().to_string())
-}
-
-/// 模型镜像源连通性检查结果
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MirrorCheckResult {
-    /// 实际生效的镜像根地址（可能为空）
-    pub mirror: String,
-    pub configured: bool,
-    pub probes: Vec<ModelMirrorProbeDto>,
-}
-
-/// 单个模型文件的镜像探测结果
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelMirrorProbeDto {
-    pub id: String,
-    pub name: String,
-    pub ok: bool,
-    pub message: String,
-    pub content_length: Option<u64>,
-    pub supports_range: bool,
-}
-
-/// 检查模型镜像源连通性：逐个模型做 HEAD 探测（不下载正文）
-#[tauri::command]
-pub async fn check_model_mirror(
-    state: State<'_, AppState>,
-) -> Result<MirrorCheckResult, String> {
-    let base = {
-        let conn = state.lock()?;
-        let config =
-            crate::config::knowledge::load_knowledge_config(&conn).map_err(|e| e.to_string())?;
-        crate::models::resolve_mirror(config.model_mirror.as_deref())
-    };
-    let configured = !base.trim().is_empty();
-    let base_for_probe = base.clone();
-
-    let probes = tauri::async_runtime::spawn_blocking(move || {
-        crate::models::catalog()
-            .into_iter()
-            .map(|spec| {
-                let probe = crate::models::probe_url(&base_for_probe, &spec.path);
-                ModelMirrorProbeDto {
-                    id: spec.id,
-                    name: spec.name,
-                    ok: probe.ok,
-                    message: probe.message,
-                    content_length: probe.content_length,
-                    supports_range: probe.supports_range,
-                }
-            })
-            .collect::<Vec<_>>()
-    })
-    .await
-    .map_err(|e| format!("探测任务异常：{e}"))?;
-
-    Ok(MirrorCheckResult {
-        mirror: base,
-        configured,
-        probes,
-    })
 }
 
 /// 删除已安装模型
@@ -1871,59 +1800,155 @@ pub fn start_demo_session(
     })
 }
 
-// ==================== 迷你模式（IA-13） ====================
+// ==================== 迷你模式（IA-13，就地模式） ====================
 
-/// 迷你浮窗标签（前端据此渲染迷你视图）
-pub const MINI_WINDOW_LABEL: &str = "mini";
+/// 主窗口标签（迷你模式操作对象）
+const MAIN_WINDOW_LABEL: &str = "main";
+/// 迷你模式下主窗口尺寸（逻辑像素，便签式小窗）
+const MINI_SIZE: (f64, f64) = (420.0, 340.0);
+/// 迷你模式下主窗口最小尺寸（逻辑像素）
+const MINI_MIN_SIZE: (f64, f64) = (320.0, 200.0);
+/// 完整界面下主窗口最小尺寸（逻辑像素，与 tauri.conf.json 一致）
+const FULL_MIN_SIZE: (f64, f64) = (960.0, 640.0);
+/// 完整界面默认尺寸（无快照可还原时的兜底，逻辑像素）
+const FULL_DEFAULT_SIZE: (f64, f64) = (1280.0, 800.0);
 
-/// 打开迷你浮窗：独立无边框置顶小窗，仅展示当前问题与 AI 回答
+/// 进入迷你模式：记录主窗口几何快照，并切换为小尺寸置顶浮窗
+///
+/// 幂等：已处于迷你模式时不重复记录快照，仅确保尺寸与置顶生效。
 #[tauri::command]
-pub fn open_mini_window(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+pub fn enter_mini_mode(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    use tauri::{LogicalSize, Manager, Size};
 
-    // 已存在则聚焦复用（懒创建：关闭即销毁）
-    if let Some(window) = app.get_webview_window(MINI_WINDOW_LABEL) {
-        let _ = window.show();
-        let _ = window.set_focus();
-        return Ok(());
+    let window = app
+        .get_webview_window(MAIN_WINDOW_LABEL)
+        .ok_or_else(|| "主窗口不存在".to_string())?;
+
+    {
+        let mut slot = state.mini_snapshot_lock()?;
+        if slot.is_none() {
+            let size = window.outer_size().map_err(|e| e.to_string())?;
+            let position = window.outer_position().map_err(|e| e.to_string())?;
+            *slot = Some(MiniWindowSnapshot {
+                width: size.width,
+                height: size.height,
+                x: position.x,
+                y: position.y,
+                always_on_top: window.is_always_on_top().unwrap_or(false),
+                maximized: window.is_maximized().unwrap_or(false),
+            });
+            tracing::debug!(
+                "迷你模式：已记录窗口快照 {}x{} @({},{})",
+                size.width,
+                size.height,
+                position.x,
+                position.y
+            );
+        }
     }
 
-    WebviewWindowBuilder::new(
-        &app,
-        MINI_WINDOW_LABEL,
-        WebviewUrl::App("index.html".into()),
-    )
-    .title("AI 面试助手 · 迷你")
-    .inner_size(420.0, 340.0)
-    .min_inner_size(320.0, 200.0)
-    .decorations(false)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .resizable(true)
-    .build()
-    .map_err(|e| format!("创建迷你浮窗失败：{e}"))?;
+    // 最大化窗口无法直接缩放，先退出最大化
+    if window.is_maximized().unwrap_or(false) {
+        let _ = window.unmaximize();
+    }
+
+    window
+        .set_min_size(Some(Size::Logical(LogicalSize::new(
+            MINI_MIN_SIZE.0,
+            MINI_MIN_SIZE.1,
+        ))))
+        .map_err(|e| format!("设置迷你窗最小尺寸失败：{e}"))?;
+    window
+        .set_size(Size::Logical(LogicalSize::new(MINI_SIZE.0, MINI_SIZE.1)))
+        .map_err(|e| format!("设置迷你窗尺寸失败：{e}"))?;
+    clamp_window_to_monitor(&window);
+    window
+        .set_always_on_top(true)
+        .map_err(|e| format!("设置迷你窗置顶失败：{e}"))?;
+    let _ = window.set_focus();
 
     Ok(())
 }
 
-/// 关闭迷你浮窗（关闭即销毁，释放 WebView 内存）
+/// 退出迷你模式：按快照还原主窗口尺寸/位置/最大化与置顶状态
 #[tauri::command]
-pub fn close_mini_window(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::Manager;
+pub fn exit_mini_mode(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    use tauri::{LogicalSize, Manager, PhysicalPosition, PhysicalSize, Position, Size};
 
-    if let Some(window) = app.get_webview_window(MINI_WINDOW_LABEL) {
-        window.close().map_err(|e| e.to_string())?;
-        return Ok(());
+    let window = app
+        .get_webview_window(MAIN_WINDOW_LABEL)
+        .ok_or_else(|| "主窗口不存在".to_string())?;
+
+    let snapshot = state.mini_snapshot_lock()?.take();
+
+    // 先放宽最小尺寸限制，否则完整界面尺寸会被迷你最小尺寸卡住
+    window
+        .set_min_size(Some(Size::Logical(LogicalSize::new(
+            FULL_MIN_SIZE.0,
+            FULL_MIN_SIZE.1,
+        ))))
+        .map_err(|e| format!("还原主窗口最小尺寸失败：{e}"))?;
+
+    match snapshot {
+        Some(snap) => {
+            window
+                .set_size(Size::Physical(PhysicalSize::new(snap.width, snap.height)))
+                .map_err(|e| format!("还原主窗口尺寸失败：{e}"))?;
+            window
+                .set_position(Position::Physical(PhysicalPosition::new(snap.x, snap.y)))
+                .map_err(|e| format!("还原主窗口位置失败：{e}"))?;
+            window
+                .set_always_on_top(snap.always_on_top)
+                .map_err(|e| format!("还原主窗口置顶状态失败：{e}"))?;
+            if snap.maximized {
+                window
+                    .maximize()
+                    .map_err(|e| format!("还原最大化状态失败：{e}"))?;
+            }
+        }
+        // 无快照（异常路径）：退化为默认尺寸居中，置顶还原为界面配置
+        None => {
+            let _ = window.set_size(Size::Logical(LogicalSize::new(
+                FULL_DEFAULT_SIZE.0,
+                FULL_DEFAULT_SIZE.1,
+            )));
+            let _ = window.center();
+            let always_on_top = state
+                .lock()
+                .ok()
+                .and_then(|conn| crate::config::interface::load_interface_config(&conn).ok())
+                .map(|config| config.always_on_top)
+                .unwrap_or(false);
+            let _ = window.set_always_on_top(always_on_top);
+        }
     }
-    // 兼容从迷你窗自身调用：直接关闭当前窗口
+
+    let _ = window.set_focus();
     Ok(())
 }
 
-/// 迷你浮窗是否已打开
-#[tauri::command]
-pub fn mini_window_open(app: tauri::AppHandle) -> bool {
-    use tauri::Manager;
-    app.get_webview_window(MINI_WINDOW_LABEL).is_some()
+/// 缩放后若窗口超出当前显示器可见区域，则平移回可见范围内，保证迷你窗始终可见
+fn clamp_window_to_monitor(window: &tauri::WebviewWindow) {
+    use tauri::{PhysicalPosition, Position};
+
+    let (Ok(Some(monitor)), Ok(win_pos), Ok(win_size)) = (
+        window.current_monitor(),
+        window.outer_position(),
+        window.outer_size(),
+    ) else {
+        return;
+    };
+
+    let mon_pos = monitor.position();
+    let mon_size = monitor.size();
+    let max_x = mon_pos.x + mon_size.width as i32 - win_size.width as i32;
+    let max_y = mon_pos.y + mon_size.height as i32 - win_size.height as i32;
+
+    let x = win_pos.x.clamp(mon_pos.x, max_x.max(mon_pos.x));
+    let y = win_pos.y.clamp(mon_pos.y, max_y.max(mon_pos.y));
+    if x != win_pos.x || y != win_pos.y {
+        let _ = window.set_position(Position::Physical(PhysicalPosition::new(x, y)));
+    }
 }
 
 /// 读取单条问答记录（含已生成的回答与引用来源）

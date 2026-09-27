@@ -10,7 +10,7 @@ export async function mockInvoke<T>(
 ): Promise<T> {
   switch (command) {
     case "app_info":
-      return { name: "AI 面试助手", version: "0.1.0-mock" } as T;
+      return { name: "轻松面试", version: "0.1.0-mock" } as T;
 
     case "list_groups":
       return MOCK_GROUPS as T;
@@ -98,54 +98,40 @@ export async function mockInvoke<T>(
       return {
         dbPath: null,
         modelsDir: null,
-        embeddingModel: "embedding-minilm-zh",
-        modelMirror: null,
+        embeddingModel: "bge-m3",
       } as T;
 
     case "save_knowledge_config":
       return (args?.config ?? null) as T;
 
-    case "check_model_mirror":
-      return {
-        mirror: "",
-        configured: false,
-        probes: [
-          {
-            id: "embedding-minilm-zh",
-            name: "中文嵌入模型（MiniLM）",
-            ok: false,
-            message: "镜像源未配置",
-            contentLength: null,
-            supportsRange: false,
-          },
-        ],
-      } as T;
-
     case "list_models":
       return [
         {
-          id: "embedding-minilm-zh",
-          name: "中文嵌入模型（MiniLM）",
+          id: "bge-m3",
+          name: "嵌入模型（BGE-M3）",
           kind: "embedding",
-          fileName: "embedding-minilm-zh.onnx",
-          path: "embedding/minilm-zh.onnx",
-          sha256: "",
-          sizeBytes: 94371840,
-          description: "本地向量检索使用的轻量嵌入模型，约 90MB",
+          repo: "BAAI/bge-m3",
+          files: [
+            { remotePath: "onnx/model.onnx", localName: "model.onnx", sha256: "", sizeBytes: 724923 },
+            { remotePath: "onnx/model.onnx_data", localName: "model.onnx_data", sha256: "", sizeBytes: 2266820608 },
+            { remotePath: "onnx/tokenizer.json", localName: "tokenizer.json", sha256: "", sizeBytes: 17082821 },
+            { remotePath: "onnx/config.json", localName: "config.json", sha256: "", sizeBytes: 698 },
+          ],
+          description: "本地向量检索使用的多语言嵌入模型（1024 维），约 2.1GB",
           requiredForLocalAsr: false,
           installed: true,
-          resolvedPath: "C:\\Users\\demo\\AppData\\Roaming\\ai\\models\\embedding\\minilm-zh.onnx",
+          resolvedPath: "C:\\Users\\demo\\AppData\\Roaming\\ai\\models\\bge-m3",
           partialBytes: 0,
         },
         {
           id: "vad-silero",
           name: "Silero VAD",
           kind: "vad",
-          fileName: "silero_vad.onnx",
-          path: "vad/silero_vad.onnx",
-          sha256: "",
-          sizeBytes: 2097152,
-          description: "语音活动检测模型，用于静音过滤与自动分段，约 2MB",
+          repo: "pengzhendong/silero-vad",
+          files: [
+            { remotePath: "silero_vad.onnx", localName: "silero_vad.onnx", sha256: "", sizeBytes: 2327524 },
+          ],
+          description: "语音活动检测模型，用于静音过滤与自动分段，约 2.3MB",
           requiredForLocalAsr: false,
           installed: false,
           resolvedPath: null,
@@ -155,11 +141,13 @@ export async function mockInvoke<T>(
           id: "asr-paraformer-zh",
           name: "本地 ASR（Paraformer 中文）",
           kind: "asr",
-          fileName: "sherpa-onnx-paraformer-zh.tar.bz2",
-          path: "asr/sherpa-onnx-paraformer-zh.tar.bz2",
-          sha256: "",
-          sizeBytes: 209715200,
-          description: "本地语音识别模型，仅在选择本地 ASR 模式时需要，约 200MB",
+          repo: "pengzhendong/sherpa-onnx-paraformer-zh",
+          files: [
+            { remotePath: "model.int8.onnx", localName: "model.int8.onnx", sha256: "90bc03034ae1bef9575f8cc798cd1519c8be8aa9e8b458a033e32017ff4d584c", sizeBytes: 227330205 },
+            { remotePath: "tokens.txt", localName: "tokens.txt", sha256: "6c0e3b35cece259829e6cb5b8d90d13db88f61ea3a2953d11898e4b2bfd7a2e2", sizeBytes: 75354 },
+            { remotePath: "configuration.json", localName: "configuration.json", sha256: "", sizeBytes: 56 },
+          ],
+          description: "本地语音识别模型，仅在选择本地 ASR 模式时需要，约 217MB",
           requiredForLocalAsr: true,
           installed: false,
           resolvedPath: null,
@@ -347,11 +335,8 @@ export async function mockInvoke<T>(
     case "apply_global_hotkeys":
       return [] as T;
 
-    case "mini_window_open":
-      return false as T;
-
-    case "open_mini_window":
-    case "close_mini_window":
+    case "enter_mini_mode":
+    case "exit_mini_mode":
       return null as T;
 
     case "start_demo_session":

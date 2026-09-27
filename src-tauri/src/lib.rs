@@ -31,7 +31,7 @@ pub struct AppInfo {
 #[tauri::command]
 fn app_info() -> AppInfo {
     AppInfo {
-        name: "AI 面试助手".into(),
+        name: "轻松面试".into(),
         version: env!("CARGO_PKG_VERSION").into(),
     }
 }
@@ -73,13 +73,28 @@ pub fn run() {
             let models_dir = data_dir.join("models");
             std::fs::create_dir_all(&models_dir)?;
             let db = storage::Db::open(&db_path)?;
+            let did_rebuild_embedding = db.did_rebuild_embedding();
             // P0 使用确定性 Mock 嵌入；真实本地 ONNX 模型在模型管理中台接入后替换
             let embedding: Arc<dyn providers::EmbeddingProvider> =
                 Arc::new(providers::MockEmbeddingProvider::default());
             let secrets: Arc<dyn security::SecretStore> =
                 Arc::new(security::KeyringStore::new(security::SERVICE_NAME));
+            let conn = db.into_shared_conn();
+
+            // 嵌入维度迁移后触发全量向量重索引（尽力而为，失败仅告警不阻断启动）
+            if did_rebuild_embedding {
+                match conn.lock() {
+                    Ok(guard) => {
+                        if let Err(err) = retrieval::index::reindex_all(&guard, embedding.as_ref()) {
+                            tracing::warn!("嵌入维度迁移后全量重索引失败：{err}");
+                        }
+                    }
+                    Err(err) => tracing::warn!("嵌入维度迁移后获取连接失败：{err}"),
+                }
+            }
+
             app.manage(state::AppState::new(
-                db.into_shared_conn(),
+                conn,
                 db_path,
                 models_dir,
                 embedding,
@@ -161,9 +176,8 @@ pub fn run() {
             commands::stop_audio_capture,
             commands::asr_session_status,
             commands::set_asr_paused,
-            commands::open_mini_window,
-            commands::close_mini_window,
-            commands::mini_window_open,
+            commands::enter_mini_mode,
+            commands::exit_mini_mode,
             commands::list_asr_engines,
             commands::start_asr_session,
             commands::start_dual_asr_session,
@@ -195,7 +209,6 @@ pub fn run() {
             commands::save_knowledge_config,
             commands::list_models,
             commands::download_model,
-            commands::check_model_mirror,
             commands::delete_model,
             commands::export_notes_markdown,
             commands::export_backup_json,
@@ -218,9 +231,6 @@ pub fn run() {
         .on_window_event(|window, event| {
             use tauri::Manager;
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == commands::MINI_WINDOW_LABEL {
-                    return;
-                }
                 let handle = window.app_handle();
                 let behavior = handle
                     .try_state::<state::AppState>()
@@ -246,7 +256,7 @@ mod tests {
     #[test]
     fn app_info_contains_name_and_version() {
         let info = app_info();
-        assert_eq!(info.name, "AI 面试助手");
+        assert_eq!(info.name, "轻松面试");
         assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
     }
 

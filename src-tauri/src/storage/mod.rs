@@ -10,14 +10,20 @@ use rusqlite::{ffi::sqlite3_auto_extension, Connection, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex, Once};
 
-/// 嵌入向量维度（需与 `migrations/001_init.sql` 中 `vec_chunks` 声明一致）
-pub const EMBEDDING_DIM: usize = 384;
+/// 嵌入向量维度（需与最新迁移中 `vec_chunks` 声明一致）
+pub const EMBEDDING_DIM: usize = 1024;
 
 /// 当前 schema 版本（最后一条迁移的版本号）
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
+
+/// 触发嵌入向量全量重索引的迁移版本（维度变更 384 → 1024）
+pub const EMBEDDING_DIM_MIGRATION_VERSION: i64 = 2;
 
 /// 迁移列表：(目标版本号, SQL 内容)
-const MIGRATIONS: &[(i64, &str)] = &[(1, include_str!("../../migrations/001_init.sql"))];
+const MIGRATIONS: &[(i64, &str)] = &[
+    (1, include_str!("../../migrations/001_init.sql")),
+    (2, include_str!("../../migrations/002_embedding_1024.sql")),
+];
 
 /// 注册 sqlite-vec 扩展（进程级，只需一次）
 pub fn register_vec_extension() {
@@ -48,6 +54,8 @@ pub fn blob_to_vec(blob: &[u8]) -> Vec<f32> {
 /// 数据库句柄
 pub struct Db {
     conn: Connection,
+    /// 本次打开时是否执行了嵌入维度迁移（需触发全量向量重索引）
+    embedding_rebuilt: bool,
 }
 
 impl Db {
@@ -56,6 +64,7 @@ impl Db {
         register_vec_extension();
         let mut db = Self {
             conn: Connection::open_in_memory()?,
+            embedding_rebuilt: false,
         };
         db.configure()?;
         db.migrate()?;
@@ -74,6 +83,7 @@ impl Db {
         }
         let mut db = Self {
             conn: Connection::open(path)?,
+            embedding_rebuilt: false,
         };
         db.configure()?;
         db.migrate()?;
@@ -99,6 +109,11 @@ impl Db {
             .query_row("PRAGMA user_version", [], |row| row.get(0))
     }
 
+    /// 本次打开是否执行了嵌入维度迁移（调用方据此触发全量向量重索引）
+    pub fn did_rebuild_embedding(&self) -> bool {
+        self.embedding_rebuilt
+    }
+
     /// 连接级配置
     fn configure(&self) -> Result<()> {
         self.conn.execute_batch(
@@ -120,6 +135,9 @@ impl Db {
                 tx.execute_batch(sql)?;
                 tx.pragma_update(None, "user_version", version)?;
                 tx.commit()?;
+                if *version == EMBEDDING_DIM_MIGRATION_VERSION {
+                    self.embedding_rebuilt = true;
+                }
             }
         }
         Ok(())

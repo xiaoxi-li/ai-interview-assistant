@@ -10,7 +10,6 @@ import type {
   ConnectionTest,
   InterfaceConfig,
   KnowledgeConfig,
-  MirrorCheckResult,
   ModelProgress,
   ModelStatus,
   PlatformPreset,
@@ -89,16 +88,11 @@ interface SettingsState {
   downloadingId: string | null;
   /** 各模型最近一次下载失败信息（内联展示 + 重试） */
   modelErrors: Record<string, string>;
-  /** 镜像源连通性检查结果 */
-  mirrorCheck: MirrorCheckResult | null;
-  /** 连通性检查进行中 */
-  mirrorChecking: boolean;
   loadModels: () => Promise<void>;
   downloadModel: (id: string) => Promise<void>;
   deleteModel: (id: string) => Promise<void>;
   applyModelProgress: (progress: ModelProgress) => void;
   clearModelError: (id: string) => void;
-  checkModelMirror: () => Promise<void>;
   /** 隐私配置 */
   privacyConfig: PrivacyConfig | null;
   /** 清除本地数据中 */
@@ -169,8 +163,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     modelProgress: {},
     downloadingId: null,
     modelErrors: {},
-    mirrorCheck: null,
-    mirrorChecking: false,
 
     loadKnowledgeSettings: () =>
       Promise.all([
@@ -242,19 +234,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
         delete modelErrors[id];
         return { modelErrors };
       }),
-
-    checkModelMirror: () => {
-      set({ mirrorChecking: true });
-      return ipc<MirrorCheckResult>("check_model_mirror")
-        .then((mirrorCheck) => set({ mirrorCheck, mirrorChecking: false }))
-        .catch((err) => {
-          console.error("检查镜像源失败:", err);
-          set({
-            mirrorChecking: false,
-            mirrorCheck: { mirror: "", configured: false, probes: [] },
-          });
-        });
-    },
 
     deleteModel: (id) =>
       ipc<boolean>("delete_model", { id })

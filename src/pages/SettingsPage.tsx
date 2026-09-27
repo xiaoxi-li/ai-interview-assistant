@@ -58,9 +58,6 @@ export default function SettingsPage() {
   const deleteModel = useSettingsStore((s) => s.deleteModel);
   const applyModelProgress = useSettingsStore((s) => s.applyModelProgress);
   const modelErrors = useSettingsStore((s) => s.modelErrors);
-  const mirrorCheck = useSettingsStore((s) => s.mirrorCheck);
-  const mirrorChecking = useSettingsStore((s) => s.mirrorChecking);
-  const checkModelMirror = useSettingsStore((s) => s.checkModelMirror);
   const knowledgeConfig = useSettingsStore((s) => s.knowledgeConfig);
   const storagePaths = useSettingsStore((s) => s.storagePaths);
   const loadKnowledgeSettings = useSettingsStore((s) => s.loadKnowledgeSettings);
@@ -181,17 +178,6 @@ export default function SettingsPage() {
               downloadingId={downloadingId}
               onDownload={downloadModel}
               onDelete={deleteModel}
-              mirror={knowledgeConfig?.modelMirror ?? ""}
-              onSaveMirror={(url) =>
-                knowledgeConfig &&
-                saveKnowledgeConfig({
-                  ...knowledgeConfig,
-                  modelMirror: url || null,
-                })
-              }
-              onCheckMirror={checkModelMirror}
-              mirrorChecking={mirrorChecking}
-              mirrorCheck={mirrorCheck}
               errors={modelErrors}
             />
           )}

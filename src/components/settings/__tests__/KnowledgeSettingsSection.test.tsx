@@ -13,10 +13,10 @@ function makeModel(id: string, kind: ModelStatus["kind"], installed: boolean): M
     id,
     name: id,
     kind,
-    fileName: `${id}.bin`,
-    path: `${id}.bin`,
-    sha256: "",
-    sizeBytes: 0,
+    repo: "test/repo",
+    files: [
+      { remotePath: `${id}.bin`, localName: `${id}.bin`, sha256: "", sizeBytes: 0 },
+    ],
     description: "",
     requiredForLocalAsr: false,
     installed,
@@ -26,7 +26,7 @@ function makeModel(id: string, kind: ModelStatus["kind"], installed: boolean): M
 }
 
 const models: ModelStatus[] = [
-  makeModel("embedding-minilm-zh", "embedding", true),
+  makeModel("bge-m3", "embedding", true),
   makeModel("embedding-bge-small", "embedding", false),
   makeModel("vad-silero", "vad", false),
 ];
@@ -34,8 +34,7 @@ const models: ModelStatus[] = [
 const config: KnowledgeConfig = {
   dbPath: null,
   modelsDir: null,
-  embeddingModel: "embedding-minilm-zh",
-  modelMirror: null,
+  embeddingModel: "bge-m3",
 };
 
 function setup(overrides: Partial<Parameters<typeof KnowledgeSettingsSection>[0]> = {}) {
@@ -64,7 +63,7 @@ describe("KnowledgeSettingsSection", () => {
     const select = screen.getByLabelText("嵌入模型") as HTMLSelectElement;
     const labels = Array.from(select.options).map((o) => o.textContent);
     expect(labels).toEqual([
-      "embedding-minilm-zh（已安装）",
+      "bge-m3（已安装）",
       "embedding-bge-small（未下载）",
     ]);
   });
@@ -91,7 +90,6 @@ describe("KnowledgeSettingsSection", () => {
       dbPath: "D:/data/ai.db",
       modelsDir: null,
       embeddingModel: "embedding-bge-small",
-      modelMirror: null,
     });
   });
 

@@ -150,6 +150,23 @@ pub fn indexed_chunk_count(conn: &Connection) -> ProviderResult<usize> {
     Ok(count as usize)
 }
 
+/// 全量重建向量索引（嵌入维度变更后调用）：清空既有分块与向量，重新索引全部笔记。
+///
+/// 返回重新索引的分块总数。
+pub fn reindex_all(conn: &Connection, provider: &dyn EmbeddingProvider) -> ProviderResult<usize> {
+    let tx = conn.unchecked_transaction()?;
+    tx.execute("DELETE FROM vec_chunks", [])?;
+    tx.execute("DELETE FROM chunks", [])?;
+    tx.commit()?;
+
+    let notes = crate::knowledge::store::NotesRepo::new(conn).list(true)?;
+    let mut total = 0usize;
+    for note in &notes {
+        total += reindex_note(conn, provider, note)?;
+    }
+    Ok(total)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

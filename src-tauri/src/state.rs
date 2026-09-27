@@ -57,6 +57,26 @@ impl CaptureManager {
     }
 }
 
+/// 迷你模式进入前的主窗口几何快照（IA-13，就地迷你模式）
+///
+/// 尺寸与位置采用**物理像素**保存，退出时原样回填，避免逻辑/物理换算误差；
+/// 置顶与最大化状态一并记录，保证「恢复」后与进入前完全一致。
+#[derive(Debug, Clone, Copy)]
+pub struct MiniWindowSnapshot {
+    /// 窗口外部尺寸（宽，物理像素）
+    pub width: u32,
+    /// 窗口外部尺寸（高，物理像素）
+    pub height: u32,
+    /// 窗口左上角 X（物理像素）
+    pub x: i32,
+    /// 窗口左上角 Y（物理像素）
+    pub y: i32,
+    /// 进入迷你模式前的置顶状态（来自界面配置）
+    pub always_on_top: bool,
+    /// 进入迷你模式前是否处于最大化
+    pub maximized: bool,
+}
+
 /// 由 Tauri 托管的应用状态
 pub struct AppState {
     /// 共享数据库连接（WAL 模式下支持多读单写）
@@ -77,6 +97,8 @@ pub struct AppState {
     pub answer_generation: Arc<std::sync::atomic::AtomicU64>,
     /// 采集暂停标记（IA-12）：置位后采集泵丢弃音频帧，但会话保持
     pub asr_paused: Arc<std::sync::atomic::AtomicBool>,
+    /// 迷你模式窗口快照（IA-13）：`None` 表示当前不在迷你模式
+    pub mini_snapshot: Mutex<Option<MiniWindowSnapshot>>,
 }
 
 impl AppState {
@@ -97,12 +119,20 @@ impl AppState {
             asr: Mutex::new(crate::asr::AsrRuntime::default()),
             answer_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             asr_paused: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            mini_snapshot: Mutex::new(None),
         }
     }
 
     /// 获取 ASR 运行时锁
     pub fn asr_lock(&self) -> Result<MutexGuard<'_, crate::asr::AsrRuntime>, String> {
         self.asr.lock().map_err(|e| format!("ASR 锁已中毒：{e}"))
+    }
+
+    /// 获取迷你模式窗口快照锁（IA-13）
+    pub fn mini_snapshot_lock(&self) -> Result<MutexGuard<'_, Option<MiniWindowSnapshot>>, String> {
+        self.mini_snapshot
+            .lock()
+            .map_err(|e| format!("迷你模式快照锁已中毒：{e}"))
     }
 
     /// 获取采集管理锁
