@@ -39,9 +39,19 @@ export default {
         warning: "#F5A623",
       },
       borderRadius: {
-        lg: "12px",
-        md: "8px",
         sm: "6px",
+        DEFAULT: "6px",
+        md: "8px",
+        lg: "10px",
+        xl: "12px",
+        "2xl": "16px",
+      },
+      boxShadow: {
+        card: "0 1px 2px rgba(0, 0, 0, 0.28), 0 8px 24px -12px rgba(0, 0, 0, 0.55)",
+        "card-hover":
+          "0 2px 6px rgba(0, 0, 0, 0.3), 0 12px 32px -12px rgba(0, 0, 0, 0.6)",
+        popover: "0 12px 40px -8px rgba(0, 0, 0, 0.7)",
+        brand: "0 6px 20px -6px rgba(79, 107, 237, 0.45)",
       },
       keyframes: {
         "fade-in": {

@@ -70,7 +70,7 @@ export default function TranscriptPanel() {
     speaker === "interviewer" ? t("面试官") : t("我");
 
   return (
-    <section className="glass flex min-h-0 flex-col rounded-xl p-4">
+    <section className="glass flex min-h-0 flex-col rounded-xl p-4 shadow-card">
       <header className="mb-3 flex items-center gap-2">
         <Mic className="h-4 w-4 text-primary-3" />
         <h2 className="text-[13px] font-semibold">{t("实时转写")}</h2>
@@ -97,7 +97,7 @@ export default function TranscriptPanel() {
             <button
             title={t("清空当前转写显示")}
           onClick={clearTranscript}
-          className="ml-auto cursor-pointer rounded p-1 text-text-subtle transition-colors hover:bg-white/10 hover:text-text"
+          className="focus-ring ml-auto cursor-pointer rounded p-1 text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
         >
           <Eraser className="h-3.5 w-3.5" />
         </button>
@@ -117,7 +117,7 @@ export default function TranscriptPanel() {
             disabled={running}
             onClick={() => setMode(key)}
             className={cn(
-              "flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+              "focus-ring flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-60",
               mode === key
                 ? "border-primary/40 bg-primary/15 text-primary-3"
                 : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
@@ -131,13 +131,13 @@ export default function TranscriptPanel() {
 
       {/* 引擎就绪提示 */}
       {engineBlocked && !asrError && (
-        <p className="mb-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[10px] leading-relaxed text-warning">
+        <p className="mb-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[10px] leading-relaxed text-warning">
           {engine?.detail}
         </p>
       )}
 
       {asrError && (
-        <p className="mb-3 flex items-start gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[10px] leading-relaxed text-danger">
+        <p className="mb-3 flex items-start gap-1.5 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[10px] leading-relaxed text-danger">
           <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
           <span>{asrError}</span>
         </p>
@@ -146,7 +146,7 @@ export default function TranscriptPanel() {
       {/* 转写列表 */}
       <div
         ref={listRef}
-        className="min-h-[140px] flex-1 overflow-y-auto rounded-lg border border-white/[0.06] bg-background-3/30 p-2"
+        className="min-h-[140px] flex-1 overflow-y-auto rounded-md border border-white/[0.06] bg-background-3/30 p-2"
       >
         {transcript.length === 0 && !partial ? (
           <p className="px-1 py-6 text-center text-[11px] leading-relaxed text-text-subtle">
@@ -189,7 +189,7 @@ export default function TranscriptPanel() {
         onClick={() => (running ? stopTranscription() : start())}
         disabled={startingAsr}
         className={cn(
-          "mt-3 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-4 py-2 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+          "focus-ring mt-3 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-4 py-2 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-50",
           running
             ? "border-danger/40 bg-danger/15 text-danger hover:bg-danger/25"
             : "border-primary/40 bg-primary/15 text-primary-3 hover:bg-primary/25"

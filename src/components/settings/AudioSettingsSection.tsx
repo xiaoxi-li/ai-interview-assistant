@@ -4,7 +4,7 @@ import { cn } from "../../lib/utils";
 import type { AudioConfig, AudioDevice } from "../../types";
 
 const FIELD =
-  "w-full cursor-pointer rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors focus:border-primary/50";
+  "focus-ring w-full cursor-pointer rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors focus:border-primary/50";
 const LABEL = "mb-1.5 block text-[11px] text-text-muted";
 
 interface AudioSettingsSectionProps {
@@ -74,7 +74,7 @@ export default function AudioSettingsSection({
   const outputs = devices.filter((d) => d.kind === "output");
 
   return (
-    <section className="glass rounded-xl p-4">
+    <section className="glass rounded-xl p-4 shadow-card">
       <header className="mb-4 flex items-center gap-2">
         <h2 className="text-[13px] font-semibold">音频设备</h2>
         <span className="text-[11px] text-text-subtle">
@@ -83,7 +83,7 @@ export default function AudioSettingsSection({
         <button
           onClick={onRefresh}
           title="重新枚举设备"
-          className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:border-primary/40 hover:text-text"
+          className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:border-primary/40 hover:text-text"
         >
           <RefreshCw className="h-3 w-3" />
           刷新设备
@@ -124,7 +124,7 @@ export default function AudioSettingsSection({
         </span>
         <button
           onClick={() => onSave(draft)}
-          className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25"
+          className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25"
         >
           <Save className="h-3.5 w-3.5" />
           保存配置

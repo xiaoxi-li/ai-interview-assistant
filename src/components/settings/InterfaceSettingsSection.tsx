@@ -32,7 +32,7 @@ export default function InterfaceSettingsSection({
     draft.hotkeys.find((binding) => binding.action === action)?.accelerator ?? "";
 
   return (
-    <section className="glass rounded-xl p-4">
+    <section className="glass rounded-xl p-4 shadow-card">
       <header className="mb-4 flex items-center gap-2">
         <h2 className="text-[13px] font-semibold">界面与快捷键</h2>
         <span className="text-[11px] text-text-subtle">
@@ -54,7 +54,7 @@ export default function InterfaceSettingsSection({
               key={theme}
               onClick={() => setDraft({ ...draft, theme })}
               className={cn(
-                "flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] transition-colors",
+                "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] transition-colors",
                 draft.theme === theme
                   ? "border-primary/40 bg-primary/15 text-primary-3"
                   : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
@@ -97,7 +97,7 @@ export default function InterfaceSettingsSection({
 
       {/* 启动与托盘 */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-white/[0.06] bg-background-3/40 p-3">
+        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-white/[0.06] bg-background-3/40 p-3">
           <Power className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" />
           <span className="min-w-0 flex-1">
             <span className="block text-[12px] font-medium text-text">开机自启</span>
@@ -111,7 +111,7 @@ export default function InterfaceSettingsSection({
             type="checkbox"
             checked={autoStartEnabled}
             onChange={(e) => onToggleAutoStart(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#4F6BED]"
+            className="focus-ring mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded accent-[#4F6BED]"
           />
         </label>
 
@@ -131,7 +131,7 @@ export default function InterfaceSettingsSection({
                 trayBehavior: e.target.value as InterfaceConfig["trayBehavior"],
               })
             }
-            className="w-full cursor-pointer rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none focus:border-primary/50"
+            className="focus-ring w-full cursor-pointer rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none focus:border-primary/50"
           >
             <option value="minimize">最小化到系统托盘（保留捕获）</option>
             <option value="quit">直接退出应用</option>
@@ -149,7 +149,7 @@ export default function InterfaceSettingsSection({
         <button
           onClick={() => onSave(draft)}
           disabled={Boolean(hotkeyError)}
-          className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40"
+          className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Save className="h-3.5 w-3.5" />
           保存配置

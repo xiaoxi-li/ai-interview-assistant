@@ -4,7 +4,7 @@ import { NOTE_DRAG_TYPE } from "../../lib/dnd";
 import type { Note, SearchHit } from "../../types";
 
 const ICON_BTN =
-  "flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors";
+  "focus-ring flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors";
 
 interface NoteListProps {
   notes: Note[];
@@ -80,11 +80,11 @@ export default function NoteList({
                 if (e.key === "Enter" && mode === "all") onSelect(note.id);
               }}
               className={cn(
-                "group w-full rounded-lg border px-3 py-2 text-left transition-all duration-150",
+                "focus-ring group w-full rounded-lg border px-3 py-2 text-left transition-all duration-150",
                 mode === "all" ? "cursor-pointer" : "cursor-default opacity-90",
                 active
                   ? "border-primary/40 bg-primary/12"
-                  : "border-transparent hover:border-white/10 hover:bg-white/[0.04]"
+                  : "border-transparent hover:border-white/10 hover:bg-white/[0.06]"
               )}
             >
               <div className="flex items-center gap-2">

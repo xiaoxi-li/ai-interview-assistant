@@ -60,7 +60,7 @@ export default function MiniView() {
   };
 
   const iconButton =
-    "flex h-6 w-7 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-white/10 hover:text-text";
+    "focus-ring flex h-6 w-7 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text";
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden rounded-xl border border-primary/25 bg-background text-text">
@@ -88,7 +88,7 @@ export default function MiniView() {
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2.5">
         {/* 当前问题 */}
-        <div className="rounded-lg border border-primary/25 bg-primary/[0.07] px-2.5 py-2">
+        <div className="rounded-md border border-primary/25 bg-primary/[0.07] px-2.5 py-2">
           <p className="text-[10px] text-text-subtle">当前问题</p>
           <p className="mt-0.5 text-[12.5px] font-medium leading-relaxed">
             {currentQuestion?.text ?? "等待识别面试官问题…"}
@@ -96,7 +96,7 @@ export default function MiniView() {
         </div>
 
         {/* AI 回答 */}
-        <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-white/[0.06] bg-background-3/30 px-2.5 py-2">
+        <div className="flex min-h-0 flex-1 flex-col rounded-md border border-white/[0.06] bg-background-3/30 px-2.5 py-2">
           {answerError ? (
             <p className="text-[11.5px] leading-relaxed text-danger">{answerError}</p>
           ) : answerText ? (

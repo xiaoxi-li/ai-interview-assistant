@@ -29,9 +29,9 @@ import { cn } from "../lib/utils";
 import type { Note, ViewMode } from "../types";
 
 const ACTION_BTN =
-  "flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:border-primary/40 hover:text-text disabled:cursor-not-allowed disabled:opacity-50";
+  "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:border-primary/40 hover:text-text disabled:cursor-not-allowed disabled:opacity-50";
 const PRIMARY_BTN =
-  "flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-3 py-1.5 text-[12px] text-primary-3 transition-colors hover:bg-primary/25";
+  "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-3 py-1.5 text-[12px] text-primary-3 transition-colors hover:bg-primary/25";
 
 export default function KnowledgePage() {
   const notes = useKnowledgeStore((s) => s.notes);
@@ -181,7 +181,7 @@ export default function KnowledgePage() {
   return (
     <div className="relative flex h-full flex-col">
       {/* 页头 */}
-      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/5 px-4">
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/[0.06] px-4">
         <BookOpen className="h-4 w-4 text-primary-3" />
         <h1 className="text-[15px] font-semibold">知识库</h1>
         <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] text-text-muted">
@@ -189,7 +189,7 @@ export default function KnowledgePage() {
         </span>
 
         <div className="ml-auto flex items-center gap-2">
-          <div className="flex w-56 items-center gap-2 rounded-lg border border-white/[0.08] bg-background-3/60 px-3 py-1.5">
+          <div className="focus-ring flex w-56 items-center gap-2 rounded-lg border border-white/10 bg-background-3/60 px-3 py-1.5">
             <Search className="h-3.5 w-3.5 shrink-0 text-text-subtle" />
             <input
               value={keyword}
@@ -211,7 +211,7 @@ export default function KnowledgePage() {
               onClick={() => setSearchMode("keyword")}
               title="关键词检索（FTS5 + 中文分词）"
               className={cn(
-                "cursor-pointer rounded-md px-2 py-1 text-[11px] transition-colors",
+                "focus-ring cursor-pointer rounded-md px-2 py-1 text-[11px] transition-colors",
                 searchMode === "keyword"
                   ? "bg-primary/20 text-primary-3"
                   : "text-text-subtle hover:text-text-muted"
@@ -223,7 +223,7 @@ export default function KnowledgePage() {
               onClick={() => setSearchMode("semantic")}
               title="语义检索（向量相似度）"
               className={cn(
-                "cursor-pointer rounded-md px-2 py-1 text-[11px] transition-colors",
+                "focus-ring cursor-pointer rounded-md px-2 py-1 text-[11px] transition-colors",
                 searchMode === "semantic"
                   ? "bg-primary/20 text-primary-3"
                   : "text-text-subtle hover:text-text-muted"
@@ -235,7 +235,7 @@ export default function KnowledgePage() {
               onClick={() => setSearchMode("hybrid")}
               title="混合检索（BM25 + 向量 RRF 融合）"
               className={cn(
-                "cursor-pointer rounded-md px-2 py-1 text-[11px] transition-colors",
+                "focus-ring cursor-pointer rounded-md px-2 py-1 text-[11px] transition-colors",
                 searchMode === "hybrid"
                   ? "bg-primary/20 text-primary-3"
                   : "text-text-subtle hover:text-text-muted"
@@ -274,28 +274,28 @@ export default function KnowledgePage() {
             <button
               title="导出全部笔记为 Markdown"
               onClick={handleExportMarkdown}
-              className="cursor-pointer rounded-md px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/10 hover:text-text"
+              className="focus-ring cursor-pointer rounded px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
             >
               <FileDown className="h-3.5 w-3.5" />
             </button>
             <button
               title="导出 JSON 备份"
               onClick={handleExportJson}
-              className="cursor-pointer rounded-md px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/10 hover:text-text"
+              className="focus-ring cursor-pointer rounded px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
             >
               <FileJson className="h-3.5 w-3.5" />
             </button>
             <button
               title="备份数据库文件"
               onClick={handleBackupDatabase}
-              className="cursor-pointer rounded-md px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/10 hover:text-text"
+              className="focus-ring cursor-pointer rounded px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
             >
               <Database className="h-3.5 w-3.5" />
             </button>
             <button
               title="从 JSON 备份恢复"
               onClick={handleRestore}
-              className="cursor-pointer rounded-md px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/10 hover:text-text"
+              className="focus-ring cursor-pointer rounded px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
             >
               <Upload className="h-3.5 w-3.5" />
             </button>
@@ -325,12 +325,12 @@ export default function KnowledgePage() {
 
       <div className="flex min-h-0 flex-1">
         {/* 侧栏 */}
-        <aside className="flex w-64 shrink-0 flex-col border-r border-white/5">
+        <aside className="flex w-64 shrink-0 flex-col border-r border-white/[0.06]">
           <div className="flex items-center gap-1 px-2 pt-2">
             <button
               onClick={() => setView("all")}
               className={cn(
-                "flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] transition-colors",
+                "focus-ring flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] transition-colors",
                 !isTrash
                   ? "bg-primary/15 text-primary-3"
                   : "text-text-subtle hover:text-text-muted"
@@ -342,7 +342,7 @@ export default function KnowledgePage() {
             <button
               onClick={() => setView("trash")}
               className={cn(
-                "flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] transition-colors",
+                "focus-ring flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] transition-colors",
                 isTrash
                   ? "bg-danger/15 text-danger"
                   : "text-text-subtle hover:text-text-muted"
@@ -356,7 +356,7 @@ export default function KnowledgePage() {
           {isTrash && trashNotes.length > 0 && (
             <button
               onClick={emptyTrash}
-              className="mx-2 mt-2 cursor-pointer rounded-md border border-danger/30 bg-danger/10 py-1 text-[11px] text-danger transition-colors hover:bg-danger/20"
+              className="focus-ring mx-2 mt-2 cursor-pointer rounded-lg border border-danger/30 bg-danger/10 py-1 text-[11px] text-danger transition-colors hover:bg-danger/20"
             >
               清空回收站
             </button>
@@ -403,7 +403,7 @@ export default function KnowledgePage() {
                         key={tag.id}
                         onClick={() => setSelectedTag(active ? null : tag.name)}
                         className={cn(
-                          "cursor-pointer rounded-full border px-2 py-0.5 text-[11px] transition-colors",
+                          "focus-ring cursor-pointer rounded-full border px-2 py-0.5 text-[11px] transition-colors",
                           active
                             ? "border-primary/40 bg-primary/20 text-primary-3"
                             : "border-white/10 bg-white/[0.04] text-text-subtle hover:text-text-muted"
@@ -446,8 +446,8 @@ export default function KnowledgePage() {
           <div className="min-w-0 flex-1">
           {isTrash ? (
             <div className="flex h-full items-center justify-center">
-              <div className="glass flex max-w-md flex-col items-center gap-3 rounded-xl px-10 py-12 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-danger/15">
+              <div className="glass flex max-w-md flex-col items-center gap-3 rounded-2xl px-8 py-10 text-center shadow-card">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-danger/15">
                   <Trash2 className="h-6 w-6 text-danger" />
                 </div>
                 <h2 className="text-[15px] font-semibold">回收站</h2>
@@ -481,8 +481,8 @@ export default function KnowledgePage() {
             />
           ) : (
             <div className="flex h-full items-center justify-center">
-              <div className="glass flex max-w-md flex-col items-center gap-3 rounded-xl px-10 py-12 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-3 shadow-lg shadow-primary/25">
+              <div className="glass flex max-w-md flex-col items-center gap-3 rounded-2xl px-8 py-10 text-center shadow-card">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-3 shadow-brand">
                   <FileText className="h-6 w-6 text-white" />
                 </div>
                 <h2 className="text-[15px] font-semibold">知识库尚空</h2>
@@ -507,7 +507,7 @@ export default function KnowledgePage() {
       {/* 拖拽导入提示 */}
       {isDragging && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-primary/50 bg-background-2/60 px-14 py-10">
+          <div className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-primary/50 bg-background-2/60 px-10 py-8">
             <FilePlus2 className="h-8 w-8 text-primary-3" />
             <p className="text-[13px] text-text">释放以导入 Markdown 文件</p>
             <p className="text-[11px] text-text-subtle">支持单文件与整个文件夹</p>

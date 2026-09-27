@@ -14,7 +14,7 @@ import { buildGroupTree, reorderSiblings, type GroupNode } from "../../lib/group
 import type { Group } from "../../types";
 
 const ICON_BTN =
-  "flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors";
+  "focus-ring flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors";
 
 interface GroupTreeProps {
   groups: Group[];
@@ -131,10 +131,10 @@ export default function GroupTree({
           onKeyDown={(e) => e.key === "Enter" && onSelect(node.id)}
           style={{ paddingLeft: 6 + node.depth * 14 }}
           className={cn(
-            "group flex cursor-pointer items-center gap-1 rounded-md py-1 pr-1.5 text-[12px] transition-colors",
+            "focus-ring group flex cursor-pointer items-center gap-1 rounded-md py-1 pr-1.5 text-[12px] transition-colors",
             selected
               ? "bg-primary/15 text-primary-3"
-              : "text-text-muted hover:bg-white/[0.04] hover:text-text"
+              : "text-text-muted hover:bg-white/[0.06] hover:text-text"
           )}
         >
           {hasChildren ? (
@@ -191,7 +191,7 @@ export default function GroupTree({
                 setEditing({ id: node.id, parentId: node.parentId });
                 setDraft(node.name);
               }}
-              className={cn(ICON_BTN, "hover:bg-white/10 hover:text-text")}
+              className={cn(ICON_BTN, "hover:bg-white/[0.06] hover:text-text")}
             >
               <Pencil className="h-3 w-3" />
             </button>
@@ -232,10 +232,10 @@ export default function GroupTree({
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => handleDrop(e, value === undefined ? null : value)}
         className={cn(
-          "flex cursor-pointer items-center gap-1.5 rounded-md py-1 pl-3 pr-2 text-[12px] transition-colors",
+          "focus-ring flex cursor-pointer items-center gap-1.5 rounded-md py-1 pl-3 pr-2 text-[12px] transition-colors",
           selected
             ? "bg-primary/15 text-primary-3"
-            : "text-text-muted hover:bg-white/[0.04] hover:text-text"
+            : "text-text-muted hover:bg-white/[0.06] hover:text-text"
         )}
       >
         <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -279,7 +279,7 @@ export default function GroupTree({
       <div
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => handleDrop(e, null)}
-        className="mt-1 rounded-md border border-dashed border-white/10 py-1.5 text-center text-[10px] text-text-subtle"
+        className="mt-1 rounded-lg border border-dashed border-white/10 py-1.5 text-center text-[10px] text-text-subtle"
       >
         拖到此处移到根级
       </div>

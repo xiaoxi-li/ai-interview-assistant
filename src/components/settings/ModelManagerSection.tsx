@@ -34,7 +34,7 @@ export default function ModelManagerSection({
   errors = {},
 }: ModelManagerSectionProps) {
   return (
-    <section className="glass rounded-xl p-4">
+    <section className="glass rounded-xl p-4 shadow-card">
       <header className="mb-4 flex items-center gap-2">
         <h2 className="text-[13px] font-semibold">模型管理</h2>
         <span className="text-[11px] text-text-subtle">
@@ -57,7 +57,7 @@ export default function ModelManagerSection({
           return (
             <li
               key={model.id}
-              className="rounded-lg border border-white/[0.06] bg-background-3/40 p-3"
+              className="rounded-md border border-white/[0.06] bg-background-3/40 p-3"
             >
               <div className="flex items-start gap-3">
                 <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary-3" />
@@ -94,7 +94,7 @@ export default function ModelManagerSection({
                   <button
                     onClick={() => onDownload(model.id)}
                     disabled={downloading}
-                    className="cursor-pointer rounded-lg border border-primary/40 bg-primary/15 px-3 py-1.5 text-[11px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="focus-ring cursor-pointer rounded-lg border border-primary/40 bg-primary/15 px-3 py-1.5 text-[11px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {downloading ? "下载中…" : model.installed ? "重新下载" : "下载"}
                   </button>
@@ -102,7 +102,7 @@ export default function ModelManagerSection({
                     <button
                       title="删除本地文件"
                       onClick={() => onDelete(model.id)}
-                      className="cursor-pointer rounded-lg border border-white/10 p-1.5 text-text-subtle transition-colors hover:border-danger/40 hover:text-danger"
+                      className="focus-ring cursor-pointer rounded-lg border border-white/10 p-1.5 text-text-subtle transition-colors hover:border-danger/40 hover:text-danger"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -131,7 +131,7 @@ export default function ModelManagerSection({
               )}
 
               {error && !downloading && (
-                <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[11px] leading-relaxed text-danger">
+                <p className="mt-2 flex items-start gap-1.5 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[11px] leading-relaxed text-danger">
                   <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
                   <span>{error}</span>
                 </p>

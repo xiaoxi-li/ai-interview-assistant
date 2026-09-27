@@ -46,9 +46,9 @@ export default function DemoCard() {
   };
 
   return (
-    <section className="glass rounded-xl border-primary/20 p-4">
+    <section className="glass rounded-xl border-primary/20 p-4 shadow-card">
       <header className="mb-2 flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-3 shadow-lg shadow-primary/25">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-3 shadow-brand">
           <Sparkles className="h-4 w-4 text-white" />
         </div>
         <div className="min-w-0">
@@ -60,7 +60,7 @@ export default function DemoCard() {
         <button
           onClick={start}
           disabled={starting || startingAsr}
-          className="ml-auto flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-3.5 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-50"
+          className="focus-ring ml-auto flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-3 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {starting || startingAsr ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -92,7 +92,7 @@ export default function DemoCard() {
       </p>
 
       {asrError && (
-        <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[11px] leading-relaxed text-danger">
+        <p className="mt-2 flex items-start gap-1.5 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[11px] leading-relaxed text-danger">
           <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
           <span>{asrError}</span>
         </p>

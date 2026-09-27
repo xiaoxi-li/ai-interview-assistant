@@ -40,7 +40,7 @@ export default function AudioCapturePanel() {
   };
 
   return (
-    <section className="glass rounded-xl p-4">
+    <section className="glass rounded-xl p-4 shadow-card">
       <header className="mb-3 flex items-center gap-2">
         <Waves className="h-4 w-4 text-primary-3" />
         <h2 className="text-[13px] font-semibold">音频采集</h2>
@@ -75,7 +75,7 @@ export default function AudioCapturePanel() {
             disabled={running}
             onClick={() => setSource(key)}
             className={cn(
-              "flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+              "focus-ring flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-60",
               source === key
                 ? "border-primary/40 bg-primary/15 text-primary-3"
                 : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
@@ -94,7 +94,7 @@ export default function AudioCapturePanel() {
           value={deviceId}
           disabled={running}
           onChange={(e) => setDeviceId(e.target.value)}
-          className="w-full cursor-pointer rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text outline-none focus:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="focus-ring w-full cursor-pointer rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text outline-none focus:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <option value="">使用系统默认设备</option>
           {inputDevices.map((device) => (
@@ -131,14 +131,14 @@ export default function AudioCapturePanel() {
       </div>
 
       {source === "system" && status && !status.loopbackAvailable && (
-        <p className="mb-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[10px] leading-relaxed text-warning">
+        <p className="mb-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[10px] leading-relaxed text-warning">
           未检测到系统音频回环设备。Windows 请在「声音设置 → 录制」中启用「立体声混音」；
           macOS 需安装 BlackHole 等虚拟音频设备后重启应用。
         </p>
       )}
 
       {error && (
-        <p className="mb-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[10px] text-danger">
+        <p className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[10px] text-danger">
           {error}
         </p>
       )}
@@ -147,7 +147,7 @@ export default function AudioCapturePanel() {
         onClick={handleToggle}
         disabled={starting}
         className={cn(
-          "flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-4 py-2 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+          "focus-ring flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-4 py-2 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-50",
           running
             ? "border-danger/40 bg-danger/15 text-danger hover:bg-danger/25"
             : "border-primary/40 bg-primary/15 text-primary-3 hover:bg-primary/25"

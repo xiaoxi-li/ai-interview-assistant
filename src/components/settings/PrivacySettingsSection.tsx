@@ -35,7 +35,7 @@ function SwitchRow({
     <label
       htmlFor={id}
       className={cn(
-        "flex cursor-pointer items-start gap-3 rounded-lg border border-white/[0.06] bg-background-3/40 p-3 transition-colors",
+        "flex cursor-pointer items-start gap-3 rounded-md border border-white/[0.06] bg-background-3/40 p-3 transition-colors",
         disabled ? "cursor-not-allowed opacity-60" : "hover:border-primary/30"
       )}
     >
@@ -58,7 +58,7 @@ function SwitchRow({
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#4F6BED]"
+        className="focus-ring mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded accent-[#4F6BED]"
       />
     </label>
   );
@@ -79,7 +79,7 @@ export default function PrivacySettingsSection({
   }, [config]);
 
   return (
-    <section className="glass rounded-xl p-4">
+    <section className="glass rounded-xl p-4 shadow-card">
       <header className="mb-4 flex items-center gap-2">
         <h2 className="text-[13px] font-semibold">隐私与安全</h2>
         <span className="text-[11px] text-text-subtle">
@@ -116,7 +116,7 @@ export default function PrivacySettingsSection({
       <div className="mt-3 flex items-center gap-3">
         <button
           onClick={() => onSave(draft)}
-          className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25"
+          className="focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25"
         >
           <Save className="h-3.5 w-3.5" />
           保存配置
@@ -124,7 +124,7 @@ export default function PrivacySettingsSection({
       </div>
 
       {/* 数据清理 */}
-      <div className="mt-4 rounded-lg border border-danger/25 bg-danger/[0.06] p-3">
+      <div className="mt-4 rounded-md border border-danger/25 bg-danger/[0.06] p-3">
         <div className="flex items-center gap-2">
           <Trash2 className="h-4 w-4 text-danger" />
           <span className="text-[12px] font-medium text-danger">清除本地数据</span>
@@ -142,14 +142,14 @@ export default function PrivacySettingsSection({
                 setConfirming(false);
               }}
               disabled={clearing}
-              className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-danger/50 bg-danger/20 px-3 py-1.5 text-[11px] text-danger transition-colors hover:bg-danger/30 disabled:cursor-not-allowed disabled:opacity-50"
+              className="focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-danger/50 bg-danger/20 px-3 py-1.5 text-[11px] text-danger transition-colors hover:bg-danger/30 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {clearing && <Loader2 className="h-3 w-3 animate-spin" />}
               确认清除
             </button>
             <button
               onClick={() => setConfirming(false)}
-              className="cursor-pointer rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text"
+              className="focus-ring cursor-pointer rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text"
             >
               取消
             </button>
@@ -157,7 +157,7 @@ export default function PrivacySettingsSection({
         ) : (
           <button
             onClick={() => setConfirming(true)}
-            className="mt-2 cursor-pointer rounded-lg border border-danger/40 px-3 py-1.5 text-[11px] text-danger transition-colors hover:bg-danger/15"
+            className="focus-ring mt-2 cursor-pointer rounded-lg border border-danger/40 px-3 py-1.5 text-[11px] text-danger transition-colors hover:bg-danger/15"
           >
             清除数据…
           </button>

@@ -42,7 +42,7 @@ export default function HotkeyInput({ id, value, invalid, onChange }: HotkeyInpu
         }
       }}
       className={cn(
-        "flex min-w-[150px] cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-2 font-mono text-[12px] transition-colors",
+        "focus-ring flex min-w-[150px] cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-2 font-mono text-[12px] transition-colors",
         invalid
           ? "border-danger/50 bg-danger/10 text-danger"
           : recording

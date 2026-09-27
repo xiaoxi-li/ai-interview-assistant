@@ -82,7 +82,7 @@ export default function App() {
         className="flex h-11 shrink-0 items-center justify-between border-b border-white/[0.06] bg-background-2/70 px-3 backdrop-blur-xl"
       >
         <div data-tauri-drag-region className="flex items-center gap-2.5">
-          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary to-primary-3 shadow-md shadow-primary/30">
+          <div className="flex h-6 w-6 items-center justify-center rounded bg-gradient-to-br from-primary to-primary-3 shadow-brand">
             <Mic className="h-3.5 w-3.5 text-white" />
           </div>
           <span className="text-[13px] font-medium tracking-wide">
@@ -97,28 +97,28 @@ export default function App() {
           <button
             title={t("迷你模式（仅显示当前问题与 AI 回答）")}
             onClick={enterMiniMode}
-            className="flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-primary/20 hover:text-primary-3"
+            className="focus-ring flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-primary/25 hover:text-primary-3"
           >
             <Minimize2 className="h-3.5 w-3.5" />
           </button>
           <button
             title={t("最小化")}
             onClick={() => controlWindow("minimize")}
-            className="flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-white/5 hover:text-text"
+            className="focus-ring flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
           <button
             title={t("最大化")}
             onClick={() => controlWindow("toggleMaximize")}
-            className="flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-white/5 hover:text-text"
+            className="focus-ring flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
           >
             <Square className="h-3 w-3" />
           </button>
           <button
             title={t("关闭")}
             onClick={() => controlWindow("close")}
-            className="flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-danger/80 hover:text-white"
+            className="focus-ring flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-danger/80 hover:text-white"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -133,10 +133,10 @@ export default function App() {
               key={key}
               onClick={() => setCurrentPage(key)}
               className={cn(
-                "group flex w-[60px] cursor-pointer flex-col items-center gap-1 rounded-lg py-2.5 text-[11px] transition-all duration-200",
+                "focus-ring group flex w-[60px] cursor-pointer flex-col items-center gap-1 rounded-lg py-2.5 text-[11px] transition-all duration-200",
                 currentPage === key
                   ? "bg-primary/15 text-primary-3"
-                  : "text-text-subtle hover:bg-white/[0.04] hover:text-text-muted"
+                  : "text-text-subtle hover:bg-white/[0.06] hover:text-text-muted"
               )}
             >
               <Icon className="h-[18px] w-[18px]" />

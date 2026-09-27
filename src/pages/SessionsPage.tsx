@@ -52,11 +52,11 @@ export default function SessionsPage() {
   };
 
   const iconButton =
-    "flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:border-primary/30 hover:text-primary-3 disabled:cursor-not-allowed disabled:opacity-40";
+    "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:border-primary/30 hover:text-primary-3 disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/5 px-4">
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/[0.06] px-4">
         <History className="h-4 w-4 text-primary-3" />
         <h1 className="text-[15px] font-semibold">{t("会话历史")}</h1>
         <span className="text-[11px] text-text-subtle">
@@ -65,7 +65,7 @@ export default function SessionsPage() {
         <button
           onClick={() => loadSessions()}
           disabled={loading}
-          className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-text-muted transition-colors hover:text-text disabled:opacity-50"
+          className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-text-muted transition-colors hover:text-text disabled:opacity-50"
         >
           {loading ? (
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -79,7 +79,7 @@ export default function SessionsPage() {
       {notice && (
         <div
           className={cn(
-            "mx-4 mt-3 flex items-start gap-1.5 rounded-lg border px-3 py-2 text-[11px] leading-relaxed",
+            "mx-4 mt-3 flex items-start gap-1.5 rounded-md border px-3 py-2 text-[11px] leading-relaxed",
             notice.kind === "success"
               ? "border-success/30 bg-success/10 text-success"
               : "border-danger/30 bg-danger/10 text-danger"
@@ -105,7 +105,7 @@ export default function SessionsPage() {
         {/* 会话列表 */}
         <aside className="flex w-72 shrink-0 flex-col gap-2 overflow-y-auto">
           {sessions.length === 0 ? (
-            <p className="glass rounded-xl px-3 py-6 text-center text-[11px] leading-relaxed text-text-subtle">
+            <p className="glass rounded-xl px-3 py-6 text-center text-[11px] leading-relaxed text-text-subtle shadow-card">
               暂无面试会话。
               <br />
               在「面试辅助」中开始转写后，会话会自动记录在此。
@@ -116,10 +116,10 @@ export default function SessionsPage() {
                 key={session.id}
                 onClick={() => select(session.id)}
                 className={cn(
-                  "glass cursor-pointer rounded-xl p-3 text-left transition-colors",
+                  "glass cursor-pointer rounded-xl p-3 text-left shadow-card transition-colors",
                   selectedId === session.id
                     ? "border-primary/40 bg-primary/[0.08]"
-                    : "hover:bg-white/[0.04]"
+                    : "hover:bg-white/[0.06]"
                 )}
               >
                 <div className="truncate text-[12px] font-medium text-text">
@@ -142,7 +142,7 @@ export default function SessionsPage() {
         </aside>
 
         {/* 会话详情（回放） */}
-        <section className="glass flex min-h-0 min-w-0 flex-1 flex-col rounded-xl p-4">
+        <section className="glass flex min-h-0 min-w-0 flex-1 flex-col rounded-xl p-4 shadow-card">
           {!detail ? (
             <p className="m-auto text-[12px] text-text-subtle">
               {detailLoading ? "正在加载会话详情…" : "选择左侧会话查看完整回放"}
@@ -193,7 +193,7 @@ export default function SessionsPage() {
                   转写时间线（{detail.segments.length} 条）
                 </h3>
                 {detail.segments.length === 0 ? (
-                  <p className="rounded-lg border border-white/[0.06] bg-background-3/30 px-3 py-4 text-[11px] text-text-subtle">
+                  <p className="rounded-md border border-white/[0.06] bg-background-3/30 px-3 py-4 text-[11px] text-text-subtle">
                     该会话没有转写记录
                   </p>
                 ) : (
@@ -226,7 +226,7 @@ export default function SessionsPage() {
                   问答记录（{detail.qa.length} 组）
                 </h3>
                 {detail.qa.length === 0 ? (
-                  <p className="rounded-lg border border-white/[0.06] bg-background-3/30 px-3 py-4 text-[11px] text-text-subtle">
+                  <p className="rounded-md border border-white/[0.06] bg-background-3/30 px-3 py-4 text-[11px] text-text-subtle">
                     该会话没有识别到问题
                   </p>
                 ) : (
@@ -234,7 +234,7 @@ export default function SessionsPage() {
                     {detail.qa.map((pair, index) => (
                       <li
                         key={pair.id}
-                        className="rounded-lg border border-white/[0.06] bg-background-3/30 p-3"
+                        className="rounded-md border border-white/[0.06] bg-background-3/30 p-3"
                       >
                         <div className="flex items-start gap-2">
                           <span className="shrink-0 text-[10px] text-text-subtle">

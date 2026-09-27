@@ -44,7 +44,7 @@
   }
   ::-webkit-scrollbar-thumb {
     background: #2a3448;
-    border-radius: 8px;
+    border-radius: 6px;
   }
   ::-webkit-scrollbar-thumb:hover {
     background: #38435a;
@@ -64,6 +64,10 @@
     background: rgba(15, 20, 32, 0.85);
     backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  /* 统一键盘聚焦可见环（可交互元素通用） */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1 focus-visible:ring-offset-background;
   }
 }
 
@@ -106,7 +110,7 @@
 .markdown-body code {
   background: #1e2739;
   padding: 0.15em 0.4em;
-  border-radius: 4px;
+  border-radius: 6px;
   font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
   font-size: 0.9em;
 }

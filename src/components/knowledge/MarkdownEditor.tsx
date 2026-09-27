@@ -77,7 +77,7 @@ export default function MarkdownEditor({
           <div
             className={cn(
               "min-w-0 overflow-hidden",
-              viewMode === "split" ? "w-1/2 border-r border-white/5" : "flex-1"
+              viewMode === "split" ? "w-1/2 border-r border-white/[0.06]" : "flex-1"
             )}
           >
             <CodeMirror

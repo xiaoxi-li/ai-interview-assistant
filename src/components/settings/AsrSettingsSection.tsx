@@ -10,7 +10,7 @@ import {
 import type { ASRConfig, AsrCredentialStatus, AsrProviderPreset } from "../../types";
 
 const FIELD =
-  "w-full rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
+  "focus-ring w-full rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
 const LABEL = "mb-1.5 block text-[11px] text-text-muted";
 
 interface AsrSettingsSectionProps {
@@ -59,7 +59,7 @@ export default function AsrSettingsSection({
   };
 
   return (
-    <section className="glass rounded-xl p-4">
+    <section className="glass rounded-xl p-4 shadow-card">
       <header className="mb-4 flex items-center gap-2">
         <h2 className="text-[13px] font-semibold">语音识别（ASR）</h2>
         <span className="text-[11px] text-text-subtle">
@@ -79,7 +79,7 @@ export default function AsrSettingsSection({
             key={mode}
             onClick={() => setDraft({ ...draft, mode })}
             className={cn(
-              "flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] transition-colors",
+              "focus-ring flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] transition-colors",
               draft.mode === mode
                 ? "border-primary/40 bg-primary/15 text-primary-3"
                 : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
@@ -107,7 +107,7 @@ export default function AsrSettingsSection({
                   onProviderChange?.(provider.provider);
                 }}
                 className={cn(
-                  "cursor-pointer rounded-lg border px-3 py-1.5 text-[12px] transition-colors",
+                  "focus-ring cursor-pointer rounded-lg border px-3 py-1.5 text-[12px] transition-colors",
                   draft.cloudProvider === provider.provider
                     ? "border-primary/40 bg-primary/15 text-primary-3"
                     : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
@@ -166,7 +166,7 @@ export default function AsrSettingsSection({
                     <button
                       onClick={() => saveCredential(field)}
                       disabled={!(credentialInputs[field] ?? "").trim()}
-                      className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-3 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-3 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <Check className="h-3.5 w-3.5" />
                       保存
@@ -177,7 +177,7 @@ export default function AsrSettingsSection({
             </div>
             <button
               onClick={() => onDeleteCredentials(draft.cloudProvider)}
-              className="mt-2 flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:border-danger/40 hover:text-danger"
+              className="focus-ring mt-2 flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:border-danger/40 hover:text-danger"
             >
               <Trash2 className="h-3 w-3" />
               清空该服务商全部凭证
@@ -253,7 +253,7 @@ export default function AsrSettingsSection({
         <button
           onClick={() => onSaveConfig(draft)}
           disabled={Boolean(validationError)}
-          className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40"
+          className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Save className="h-3.5 w-3.5" />
           保存配置

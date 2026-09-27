@@ -5,7 +5,7 @@ import { pickDirectory } from "../../lib/dialog";
 import type { KnowledgeConfig, ModelStatus, StoragePaths } from "../../types";
 
 const FIELD =
-  "w-full rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
+  "focus-ring w-full rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
 const LABEL = "mb-1.5 block text-[11px] text-text-muted";
 
 interface KnowledgeSettingsSectionProps {
@@ -50,7 +50,7 @@ export default function KnowledgeSettingsSection({
   };
 
   return (
-    <section className="glass rounded-xl p-4">
+    <section className="glass rounded-xl p-4 shadow-card">
       <header className="mb-4 flex items-center gap-2">
         <h2 className="text-[13px] font-semibold">知识库</h2>
         <span className="text-[11px] text-text-subtle">
@@ -80,7 +80,7 @@ export default function KnowledgeSettingsSection({
             <button
               onClick={() => browse("dbPath")}
               title="选择目录"
-              className="cursor-pointer rounded-lg border border-white/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:border-primary/40 hover:text-text"
+              className="focus-ring cursor-pointer rounded-lg border border-white/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:border-primary/40 hover:text-text"
             >
               <FolderOpen className="h-3.5 w-3.5" />
             </button>
@@ -88,7 +88,7 @@ export default function KnowledgeSettingsSection({
               <button
                 onClick={() => resetPath("dbPath")}
                 title="恢复默认路径"
-                className="cursor-pointer rounded-lg border border-white/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:text-text"
+                className="focus-ring cursor-pointer rounded-lg border border-white/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:text-text"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
               </button>
@@ -117,7 +117,7 @@ export default function KnowledgeSettingsSection({
             <button
               onClick={() => browse("modelsDir")}
               title="选择目录"
-              className="cursor-pointer rounded-lg border border-white/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:border-primary/40 hover:text-text"
+              className="focus-ring cursor-pointer rounded-lg border border-white/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:border-primary/40 hover:text-text"
             >
               <FolderOpen className="h-3.5 w-3.5" />
             </button>
@@ -125,7 +125,7 @@ export default function KnowledgeSettingsSection({
               <button
                 onClick={() => resetPath("modelsDir")}
                 title="恢复默认路径"
-                className="cursor-pointer rounded-lg border border-white/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:text-text"
+                className="focus-ring cursor-pointer rounded-lg border border-white/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:text-text"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
               </button>
@@ -163,7 +163,7 @@ export default function KnowledgeSettingsSection({
       </div>
 
       {pathChanged && (
-        <p className="mt-3 flex items-center gap-1.5 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] text-warning">
+        <p className="mt-3 flex items-center gap-1.5 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] text-warning">
           <AlertCircle className="h-3 w-3 shrink-0" />
           路径变更需重启应用后生效，现有数据不会自动迁移
         </p>
@@ -172,7 +172,7 @@ export default function KnowledgeSettingsSection({
       <div className="mt-4 flex justify-end">
         <button
           onClick={() => onSave(draft)}
-          className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25"
+          className="focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25"
         >
           <Save className="h-3.5 w-3.5" />
           保存配置

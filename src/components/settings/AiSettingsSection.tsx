@@ -14,7 +14,7 @@ import type { AIConfig, ConnectionTest, PlatformPreset } from "../../types";
 import type { ApiKeyStatus } from "../../stores/settingsStore";
 
 const FIELD =
-  "w-full rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
+  "focus-ring w-full rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
 const LABEL = "mb-1.5 block text-[11px] text-text-muted";
 
 interface AiSettingsSectionProps {
@@ -70,7 +70,7 @@ export default function AiSettingsSection({
   };
 
   return (
-    <section className="glass rounded-xl p-4">
+    <section className="glass rounded-xl p-4 shadow-card">
       <header className="mb-4 flex items-center gap-2">
         <h2 className="text-[13px] font-semibold">AI 平台</h2>
         <span className="text-[11px] text-text-subtle">
@@ -85,7 +85,7 @@ export default function AiSettingsSection({
             key={preset.platform}
             onClick={() => applyPreset(preset.platform)}
             className={cn(
-              "cursor-pointer rounded-lg border px-3 py-1.5 text-[12px] transition-colors",
+              "focus-ring cursor-pointer rounded-lg border px-3 py-1.5 text-[12px] transition-colors",
               draft.platform === preset.platform
                 ? "border-primary/40 bg-primary/15 text-primary-3"
                 : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
@@ -147,7 +147,7 @@ export default function AiSettingsSection({
               type="checkbox"
               checked={draft.stream}
               onChange={(e) => setDraft({ ...draft, stream: e.target.checked })}
-              className="h-3.5 w-3.5 cursor-pointer accent-[#4F6BED]"
+              className="focus-ring h-3.5 w-3.5 cursor-pointer rounded accent-[#4F6BED]"
             />
             流式输出（降低首字延迟）
           </label>
@@ -178,7 +178,7 @@ export default function AiSettingsSection({
           <button
             onClick={saveKey}
             disabled={!apiKey.trim()}
-            className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-3 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40"
+            className="focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-3 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Check className="h-3.5 w-3.5" />
             保存
@@ -186,7 +186,7 @@ export default function AiSettingsSection({
           <button
             onClick={() => onDeleteApiKey(draft.platform)}
             title="清除已保存的密钥"
-            className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:border-danger/40 hover:text-danger"
+            className="focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:border-danger/40 hover:text-danger"
           >
             <Trash2 className="h-3.5 w-3.5" />
             清除
@@ -197,7 +197,7 @@ export default function AiSettingsSection({
       {testResult && (
         <div
           className={cn(
-            "mt-2 flex items-center gap-2 rounded-lg border px-3 py-2 text-[11px]",
+            "mt-2 flex items-center gap-2 rounded-md border px-3 py-2 text-[11px]",
             testResult.ok
               ? "border-success/30 bg-success/10 text-success"
               : "border-danger/30 bg-danger/10 text-danger"
@@ -225,7 +225,7 @@ export default function AiSettingsSection({
           <button
             onClick={onTestConnection}
             disabled={testing || Boolean(validationError)}
-            className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:border-primary/40 hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+            className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:border-primary/40 hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
           >
             {testing ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -240,7 +240,7 @@ export default function AiSettingsSection({
           onClick={() => onSaveConfig(draft)}
           disabled={Boolean(validationError)}
           className={cn(
-            "flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40",
+            "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:opacity-40",
             !onTestConnection && "ml-auto"
           )}
         >
