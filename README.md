@@ -82,9 +82,10 @@ npm run tauri build -- --features local-asr-native --config src-tauri/tauri.loca
 
 - 冒烟自检（需要真实凭证，默认 `#[ignore]`）：
   ```powershell
-  $env:DASHSCOPE_API_KEY="sk-xxx"; cargo test --lib -- --ignored real_aliyun
+  $env:DASHSCOPE_API_KEY="sk-xxx"; cargo test --lib -- --ignored real_aliyun --nocapture
   ```
-  仅验证「建连 + 鉴权 + `task-started` 握手」，不发音频、不产生费用（按服务商计费口径可能仍计一次调用）。
+  三个用例：**握手鉴权**（建连 + `task-started`）、**音频通路**（按实时率投递音频 → `finish-task` 正常收尾）、**错误凭证**（HTTP 401 → 可操作鉴权提示）。默认用合成音频验证协议通路；如需真实语音识别，追加 `$env:ASR_SAMPLE_WAV="<16k 单声道 WAV 路径>"`（该用例会断言识别出非空文本）。
+- **已验证（2026-09-28）**：真实凭证握手与音频通路均通过，无效 Key 报 `鉴权失败（HTTP 401）…`；合成音频不产出文本属预期，真实中文语音文本待用麦克风/WAV 在 GUI 复核。
 - 协议与实现要点见 `ai-doc/技术方案.md` 6.3.2；讯飞 / 腾讯 / OpenAI 兼容通路见 `ai-doc/需求分析.md` 5.5 待办 TODO-10 / TODO-11。
 
 ---

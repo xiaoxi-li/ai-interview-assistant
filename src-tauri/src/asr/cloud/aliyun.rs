@@ -483,6 +483,23 @@ fn emit_error(events: &std_mpsc::Sender<WorkerEvent>, message: String) {
     let _ = events.send(WorkerEvent::Error(message));
 }
 
+/// 握手失败的错误映射：鉴权类 HTTP 状态码给出**可操作**提示
+fn map_handshake_error(err: tokio_tungstenite::tungstenite::Error) -> String {
+    use tokio_tungstenite::tungstenite::http::StatusCode;
+
+    if let tokio_tungstenite::tungstenite::Error::Http(ref response) = err {
+        let status = response.status();
+        if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
+            return format!(
+                "鉴权失败（HTTP {}）：请检查「设置 → 语音识别」中的 API Key 是否正确、是否已过期",
+                status.as_u16()
+            );
+        }
+        return format!("连接云端 ASR 失败：HTTP {}", status.as_u16());
+    }
+    format!("连接云端 ASR 失败：{err}")
+}
+
 /// 建立连接并等待 `task-started`
 async fn connect_and_start(url: &str, api_key: &str, run_task: &str) -> Result<WsStream, String> {
     // 注意：必须用 `into_client_request()` 生成请求，它负责补齐 WebSocket 握手头
@@ -498,7 +515,7 @@ async fn connect_and_start(url: &str, api_key: &str, run_task: &str) -> Result<W
 
     let (mut ws, _response) = tokio_tungstenite::connect_async(request)
         .await
-        .map_err(|err| format!("连接云端 ASR 失败：{err}"))?;
+        .map_err(map_handshake_error)?;
 
     ws.send(Message::text(run_task))
         .await
@@ -716,6 +733,120 @@ mod tests {
         assert_eq!(engine.name(), ENGINE_NAME);
         // 立即结束任务，回收连接
         let _ = engine.finish().expect("结束任务");
+    }
+
+    /// 真实凭证 + 真实音频链路联调（默认 `#[ignore]`）。
+    ///
+    /// 运行：
+    /// ```powershell
+    /// $env:DASHSCOPE_API_KEY="sk-xxx"
+    /// # 可选：给一段 16k 单声道 WAV 做真实语音识别
+    /// $env:ASR_SAMPLE_WAV="D:\sample-16k.wav"
+    /// cargo test --lib -- --ignored real_aliyun --nocapture
+    /// ```
+    /// 断言：音频帧投递、结果拉取与 `finish-task` 收尾**均无错误**；
+    /// 提供 `ASR_SAMPLE_WAV` 时进一步断言能识别出非空文本（否则只验证协议通路，
+    /// 因合成音频不保证被识别为有效语音）。
+    #[test]
+    #[ignore = "需要真实 DASHSCOPE_API_KEY（cargo test -- --ignored real_aliyun）"]
+    fn real_aliyun_audio_round_trip_sends_audio_and_finishes_cleanly() {
+        let api_key = std::env::var("DASHSCOPE_API_KEY")
+            .expect("请先设置环境变量 DASHSCOPE_API_KEY 再运行该联调用例");
+        let mut engine = connect_ok(spec(
+            CloudAsrProvider::Aliyun.default_base_url(),
+            &api_key,
+        ));
+
+        let sample_path = std::env::var("ASR_SAMPLE_WAV").ok();
+        let samples: Vec<f32> = match sample_path.as_deref() {
+            Some(path) => {
+                crate::audio::wav::read_wav_as_16k_mono(std::path::Path::new(path))
+                    .expect("读取样例 WAV 失败")
+            }
+            // 合成 1.2s 正弦（仅用于打通音频帧 → 服务端的协议通路）
+            None => (0..crate::audio::TARGET_SAMPLE_RATE as usize * 12 / 10)
+                .map(|index| 0.2 * ((index as f32) * 0.08).sin())
+                .collect(),
+        };
+
+        let mut transcripts = Vec::new();
+        for frame in samples.chunks(crate::audio::FRAME_SAMPLES) {
+            engine.feed(frame).expect("投递音频失败");
+            transcripts.extend(engine.drain().expect("拉取识别结果失败"));
+            // 按实时率节流：服务端实时识别不适合过快灌入
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        transcripts.extend(engine.finish().expect("结束任务失败"));
+
+        let finals: Vec<&str> = transcripts
+            .iter()
+            .filter(|transcript| transcript.is_final)
+            .map(|transcript| transcript.text.as_str())
+            .collect();
+        eprintln!(
+            "[联调] 结果 {} 条（final {} 条）：{:?}",
+            transcripts.len(),
+            finals.len(),
+            finals
+        );
+
+        if sample_path.is_some() {
+            assert!(
+                !finals.is_empty() && finals.iter().any(|text| !text.trim().is_empty()),
+                "提供真实语音样例时应识别出非空文本"
+            );
+        }
+    }
+
+    /// 错误凭证 / 无效地址必须得到**可操作错误**，而不是静默成功（默认 `#[ignore]`）。
+    #[test]
+    #[ignore = "需要外网（cargo test -- --ignored real_aliyun）"]
+    fn real_aliyun_invalid_key_is_rejected() {
+        let message = connect_error(spec(
+            CloudAsrProvider::Aliyun.default_base_url(),
+            "sk-invalid-key-for-error-path-test",
+        ));
+        eprintln!("[联调] 无效凭证的错误文案：{message}");
+        assert!(
+            message.contains("鉴权失败") || message.contains("服务端拒绝任务"),
+            "应给出可操作的鉴权错误：{message}"
+        );
+    }
+
+    #[test]
+    fn handshake_error_maps_auth_failures_to_actionable_message() {
+        use tokio_tungstenite::tungstenite::http::Response;
+        use tokio_tungstenite::tungstenite::Error;
+
+        let unauthorized = Error::Http(
+            Response::builder()
+                .status(401)
+                .body(None::<Vec<u8>>)
+                .expect("response"),
+        );
+        let message = map_handshake_error(unauthorized);
+        assert!(message.contains("鉴权失败"), "{message}");
+        assert!(message.contains("401"), "{message}");
+        assert!(message.contains("API Key"), "应给出可操作引导：{message}");
+        assert!(message.contains("设置"), "{message}");
+
+        let forbidden = Error::Http(
+            Response::builder()
+                .status(403)
+                .body(None::<Vec<u8>>)
+                .expect("response"),
+        );
+        assert!(map_handshake_error(forbidden).contains("鉴权失败"));
+
+        let server_error = Error::Http(
+            Response::builder()
+                .status(503)
+                .body(None::<Vec<u8>>)
+                .expect("response"),
+        );
+        let message = map_handshake_error(server_error);
+        assert!(message.contains("503"), "{message}");
+        assert!(!message.contains("鉴权失败"), "{message}");
     }
 
     /// 中途断连：以错误事件上报，而不是静默停止
