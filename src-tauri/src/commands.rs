@@ -700,13 +700,23 @@ pub fn list_asr_engines(state: State<'_, AppState>) -> Vec<AsrEngineInfo> {
         .unwrap_or_else(|| "zh-CN".to_string());
 
     let (ready, detail) = match SherpaOnnxEngine::new(&state.models_dir, &language) {
-        Ok(engine) => (
-            false,
-            format!(
-                "模型已就绪（{}）；native 推理尚未接入",
-                engine.model_path().display()
-            ),
-        ),
+        Ok(engine) => {
+            // IA-15：Windows 已具备 native 推理代码，但需在构建时启用 `local-asr-native` 特性
+            #[cfg(all(windows, feature = "local-asr-native"))]
+            let (ready, note) = (true, "本地识别已接入");
+            #[cfg(all(windows, not(feature = "local-asr-native")))]
+            let (ready, note) = (
+                false,
+                "本地识别代码已就绪，但本次构建未启用（需构建机安装 libclang 后以 --features local-asr-native 构建，见 README）",
+            );
+            #[cfg(not(windows))]
+            let (ready, note) = (false, "本平台本地识别待接入（见 ai-doc 的 IA-15 待办）");
+
+            (
+                ready,
+                format!("模型已就绪（{}）；{note}", engine.model_path().display()),
+            )
+        }
         Err(err) => (false, err.to_string()),
     };
 

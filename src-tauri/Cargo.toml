@@ -13,6 +13,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+[features]
+default = []
+# IA-15：本地 ASR 原生推理（sherpa-onnx 中文 paraformer）。
+# 启用后构建机需安装 libclang（bindgen 依赖），见 README「本地 ASR 原生推理的构建前置」。
+# 启用方式：npm run tauri dev -- --features local-asr-native
+local-asr-native = ["dep:sherpa-rs"]
+
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
@@ -35,6 +42,10 @@ tracing-appender = "0.2"
 # IA-14：Windows 系统音频走 WASAPI 端点级回环（cpal 无此能力），仅 Windows 目标引入
 [target.'cfg(windows)'.dependencies]
 wasapi = "0.24"
+# IA-15：Windows 本地 ASR 推理（sherpa-onnx 中文 paraformer），由特性 `local-asr-native` 控制启用。
+# 原生库（sherpa-onnx-c-api + onnxruntime）由 sherpa-rs-sys 按 target triple 下载预编译包；
+# 关闭默认的 tts 特性以减小体积。macOS 接入见 ai-doc/需求分析.md 的 IA-15 待办。
+sherpa-rs = { version = "0.6", optional = true, default-features = false, features = ["download-binaries"] }
 
 [profile.release]
 panic = "abort"

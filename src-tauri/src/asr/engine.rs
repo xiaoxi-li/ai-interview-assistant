@@ -4,11 +4,18 @@
 //! VAD 负责切段，段内可反复调用以产出 partial，段结束调用一次产出 final。
 //!
 //! 可用的引擎实现：
-//! * [`SherpaOnnxEngine`]：目标引擎（sherpa-onnx 中文 paraformer）。模型由 ST-10
-//!   模型管理器下载；native 推理接入点即 `transcribe_segment`。
+//! * [`SherpaOnnxEngine`]：生产引擎（sherpa-onnx 中文 paraformer）。模型由 ST-10
+//!   模型管理器下载；**Windows 已接入 native 推理**（IA-15），识别器按需懒加载、
+//!   `finish()` 释放。
+//!
+//!   ⚠️ 该通路由 cargo 特性 `local-asr-native` 控制（默认关闭）：启用后构建机需安装
+//!   `libclang`（bindgen 依赖，见 README「本地 ASR 原生推理的构建前置」）。
+//!   未启用时保持显式报错，不静默降级。macOS 接入见需求分析文档的 IA-15 待办。
 //! * [`ReplayEngine`]：确定性回放引擎，仅用于单元/集成测试与「演示模式」，
 //!   绝不用于生产识别。
 
+#[cfg(all(windows, feature = "local-asr-native"))]
+use crate::asr::sherpa::ParaformerEngine;
 use crate::models::{find_spec, model_dir_path};
 use crate::providers::types::{ProviderError, ProviderResult};
 use std::path::{Path, PathBuf};
@@ -42,6 +49,9 @@ pub trait LocalAsrEngine: Send {
 pub struct SherpaOnnxEngine {
     model_path: PathBuf,
     language: String,
+    /// Windows + `local-asr-native`：懒加载的 paraformer 识别器（首次识别才加载模型，`finish()` 释放）
+    #[cfg(all(windows, feature = "local-asr-native"))]
+    recognizer: Option<ParaformerEngine>,
 }
 
 impl SherpaOnnxEngine {
@@ -64,6 +74,8 @@ impl SherpaOnnxEngine {
         Ok(Self {
             model_path,
             language: language.to_string(),
+            #[cfg(all(windows, feature = "local-asr-native"))]
+            recognizer: None,
         })
     }
 
@@ -74,6 +86,19 @@ impl SherpaOnnxEngine {
     pub fn language(&self) -> &str {
         &self.language
     }
+
+    /// 懒加载识别器：避免仅仅查询状态就占用数百 MB 内存
+    #[cfg(all(windows, feature = "local-asr-native"))]
+    fn ensure_recognizer(&mut self) -> ProviderResult<&mut ParaformerEngine> {
+        if self.recognizer.is_none() {
+            let onnx = self.model_path.join("model.int8.onnx");
+            let tokens = self.model_path.join("tokens.txt");
+            self.recognizer = Some(ParaformerEngine::load(&onnx, &tokens)?);
+        }
+        self.recognizer
+            .as_mut()
+            .ok_or_else(|| ProviderError::Other("本地 ASR 识别器初始化失败".into()))
+    }
 }
 
 impl LocalAsrEngine for SherpaOnnxEngine {
@@ -81,6 +106,7 @@ impl LocalAsrEngine for SherpaOnnxEngine {
         "sherpa-onnx"
     }
 
+    #[cfg(all(windows, feature = "local-asr-native"))]
     fn transcribe_segment(
         &mut self,
         samples: &[f32],
@@ -89,15 +115,38 @@ impl LocalAsrEngine for SherpaOnnxEngine {
         if samples.is_empty() {
             return Ok(None);
         }
-        // native 推理（sherpa-onnx / ONNX Runtime）在此接入。
-        // 当前显式返回错误而非静默降级：宁可不产出文本，也不伪造转写结果。
+        // paraformer 为非流式模型：partial 由上层对累积音频反复整体解码得到
+        self.ensure_recognizer()?.transcribe(samples)
+    }
+
+    #[cfg(not(all(windows, feature = "local-asr-native")))]
+    fn transcribe_segment(
+        &mut self,
+        samples: &[f32],
+        _is_final: bool,
+    ) -> ProviderResult<Option<String>> {
+        if samples.is_empty() {
+            return Ok(None);
+        }
+        // 未启用原生推理：显式报错而非静默降级（宁可不产出文本，也不伪造）
+        #[cfg(windows)]
+        let reason = "当前构建未启用本地 ASR 原生推理：请在安装 libclang 的构建机上用 `--features local-asr-native` 重新构建（见 README）";
+        #[cfg(not(windows))]
+        let reason =
+            "当前平台的本地 ASR 推理待接入：Windows 已支持（IA-15），macOS 计划见 ai-doc/需求分析.md 的 IA-15 待办";
+
         Err(ProviderError::Other(format!(
-            "本地 ASR 推理引擎尚未接入（模型已就绪：{}）。请完成 sherpa-onnx/ONNX Runtime 接入后使用。",
+            "{reason}（模型已就绪：{}）。",
             self.model_path.display()
         )))
     }
 
     fn finish(&mut self) -> ProviderResult<Option<String>> {
+        // 释放识别器，回收模型占用（int8 约 200MB）
+        #[cfg(all(windows, feature = "local-asr-native"))]
+        {
+            self.recognizer = None;
+        }
         Ok(None)
     }
 }
@@ -216,12 +265,27 @@ mod tests {
         assert_eq!(engine.language(), "zh-CN");
         assert!(engine.model_path().exists());
 
-        // 推理未接入时应明确报错，而不是返回空文本
+        // 伪造的模型文件无法被真正加载：应给出可操作的错误，而不是返回空文本
         let mut engine = engine;
         let error = engine
             .transcribe_segment(&vec![0.1; 320], true)
-            .expect_err("推理未接入应报错");
-        assert!(error.to_string().contains("推理引擎尚未接入"), "{error}");
+            .expect_err("伪造模型应报错");
+        let message = error.to_string();
+        // 启用原生推理时：伪造模型应报「加载失败」并引导重下；否则应报「未启用/待接入」
+        #[cfg(all(windows, feature = "local-asr-native"))]
+        assert!(
+            message.contains("加载本地 ASR 模型失败") && message.contains("重新下载"),
+            "启用原生推理时应报模型加载失败并引导重下：{message}"
+        );
+        #[cfg(not(all(windows, feature = "local-asr-native")))]
+        assert!(
+            message.contains("未启用") || message.contains("待接入"),
+            "{message}"
+        );
+
+        // finish 应可重复调用（幂等），且不产出文本
+        assert!(engine.finish().expect("finish").is_none());
+        assert!(engine.finish().expect("finish again").is_none());
 
         std::fs::remove_dir_all(&dir).ok();
     }

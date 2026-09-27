@@ -6,6 +6,9 @@
 pub mod dual;
 pub mod engine;
 pub mod pipeline;
+/// Windows 原生推理封装（IA-15）；由 cargo 特性 `local-asr-native` 控制启用
+#[cfg(all(windows, feature = "local-asr-native"))]
+pub mod sherpa;
 pub mod store;
 
 pub use dual::{DualChannelSession, REFERENCE_WINDOW_MS};
