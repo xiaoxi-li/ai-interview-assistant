@@ -43,7 +43,9 @@ export default function InterviewPage() {
           <AudioCapturePanel />
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto">
+        {/* 右列是「按内容排布 + 整体滚动」的容器：子面板一律不参与压缩（shrink-0），
+            否则内容超出可视高度时会被压扁，内容溢出并压到下一个面板上（视觉重叠）。 */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto [&>*]:shrink-0">
           {/* 未开始时提供「零准备」演示入口 */}
           {!running && <DemoCard />}
           <ShortcutBar />

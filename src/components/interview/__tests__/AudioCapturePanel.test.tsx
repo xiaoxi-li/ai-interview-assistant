@@ -139,6 +139,12 @@ describe("AudioCapturePanel", () => {
     expect(screen.queryByText(/未检测到可用的系统音频来源/)).toBeNull();
   });
 
+  it("说明此处仅试听电平、不产生转写", () => {
+    render(<AudioCapturePanel />);
+    expect(screen.getByText(/不产生转写文本/)).toBeTruthy();
+    expect(screen.getByText(/开始转写/)).toBeTruthy();
+  });
+
   it("电平百分比随 store 更新", () => {
     resetStore({ level: 0.42 });
     render(<AudioCapturePanel />);

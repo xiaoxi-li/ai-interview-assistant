@@ -70,7 +70,7 @@ export default function TranscriptPanel() {
     speaker === "interviewer" ? t("面试官") : t("我");
 
   return (
-    <section className="glass flex min-h-0 flex-col rounded-xl p-4 shadow-card">
+    <section className="glass flex shrink-0 grow flex-col rounded-xl p-4 shadow-card">
       <header className="mb-3 flex items-center gap-2">
         <Mic className="h-4 w-4 text-primary-3" />
         <h2 className="text-[13px] font-semibold">{t("实时转写")}</h2>
