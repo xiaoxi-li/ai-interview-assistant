@@ -13,6 +13,7 @@ import {
   Waves,
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import logoMark from "../assets/logo-mark.png";
 import { useModelProgress } from "../hooks/useModelProgress";
 import { useAppStore } from "../stores/appStore";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -89,9 +90,12 @@ export default function OnboardingPage() {
       <div className="glass flex w-full max-w-3xl flex-col rounded-2xl p-6 shadow-card">
         {/* 步骤指示 */}
         <header className="mb-5 flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-3 shadow-brand">
-            <Sparkles className="h-4 w-4 text-white" />
-          </div>
+          <img
+            src={logoMark}
+            alt=""
+            draggable={false}
+            className="h-9 w-9 select-none"
+          />
           <div>
             <h1 className="text-[15px] font-semibold">欢迎使用轻松面试</h1>
             <p className="text-[11px] text-text-subtle">

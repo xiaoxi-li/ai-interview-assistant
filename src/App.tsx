@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { cn, isTauri } from "./lib/utils";
+import logoMark from "./assets/logo-mark.png";
 import { useT } from "./hooks/useT";
 import { useThemeSync } from "./hooks/useThemeSync";
 import { useAppStore, type PageKey } from "./stores/appStore";
@@ -86,9 +87,12 @@ export default function App() {
         className="flex h-11 shrink-0 items-center justify-between border-b border-ghost/[0.06] bg-background-2/70 px-3 backdrop-blur-xl"
       >
         <div data-tauri-drag-region className="flex items-center gap-2.5">
-          <div className="flex h-6 w-6 items-center justify-center rounded bg-gradient-to-br from-primary to-primary-3 shadow-brand">
-            <Mic className="h-3.5 w-3.5 text-white" />
-          </div>
+          <img
+            src={logoMark}
+            alt=""
+            draggable={false}
+            className="h-6 w-6 select-none"
+          />
           <span className="text-[13px] font-medium tracking-wide">
             {t("轻松面试")}
           </span>

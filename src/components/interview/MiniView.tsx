@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Maximize2, Power, Sparkles } from "lucide-react";
+import { Maximize2, Power } from "lucide-react";
 import { cn, isTauri } from "../../lib/utils";
+import logoMark from "../../assets/logo-mark.png";
 import { ipc } from "../../lib/ipc";
 import { useAnswerEvents } from "../../hooks/useAnswerEvents";
 import { useInterviewShortcuts } from "../../hooks/useInterviewShortcuts";
@@ -68,7 +69,7 @@ export default function MiniView() {
         data-tauri-drag-region
         className="flex h-8 shrink-0 items-center gap-2 border-b border-ghost/[0.06] bg-background-2/80 px-2.5"
       >
-        <Sparkles className="h-3.5 w-3.5 text-primary-3" />
+        <img src={logoMark} alt="" draggable={false} className="h-3.5 w-3.5 select-none" />
         <span data-tauri-drag-region className="text-[11px] font-medium">
           {t("轻松面试")} · {t("迷你")}
         </span>
