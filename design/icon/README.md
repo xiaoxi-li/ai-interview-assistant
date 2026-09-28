@@ -58,3 +58,10 @@ Copy-Item design/icon/final/tauri-icons/* src-tauri/icons/ -Force
 
 覆盖前请关闭运行中的 `easy-interview.exe`（否则文件被占用）。
 图标替换属客户端变更：须同步 `ai-doc/技术方案.md` 15.6 并单独提交。
+
+## 六、现行素材与弃用说明（2026-09-28 定稿）
+
+- **现行**：`final/rebuilt/`（由 `rebuild_logo.py` 按设计稿 1:1 复刻）→ 覆盖 `src-tauri/icons/` 与 `src/assets/logo-mark.png`。
+  复刻只做上采样、边缘锐化与去白底，**形状 / 比例 / 位置 / 蓝底渐变全部取自设计稿像素**，不重新设计。
+- **已弃用**：`final/brand/`、`final/tauri-icons/` 为波浪形标记，**与设计稿形状不符，勿再使用**。
+- 几何特征（取自设计稿）：三条**向右上倾斜**的圆角横杠（倾斜约 15°），左端对齐，杠粗约 1/5 图标宽；应用图标底色自上而下 `(39,167,254) → (9,98,250)`。
