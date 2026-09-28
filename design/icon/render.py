@@ -51,6 +51,35 @@ BARS = [
     (ARM_LONG[0], Y2, ARM_LONG[1], Y2 + BAR_H),           # 下横
 ]
 
+# 嵌套版：中横再缩短，给下开口腾出「asy」的位置
+BARS_NESTED = [
+    BARS[0],
+    BARS[1],
+    (ARM_MID[0], Y1, 620, Y1 + BAR_H),
+    BARS[3],
+]
+
+# 「asy」小字字体候选（Windows）
+FONT_CANDIDATES = [
+    r"C:\Windows\Fonts\seguisb.ttf",   # Segoe UI Semibold
+    r"C:\Windows\Fonts\segoeui.ttf",
+    r"C:\Windows\Fonts\Verdana.ttf",
+    r"C:\Windows\Fonts\arial.ttf",
+    r"C:\Windows\Fonts\msyh.ttc",
+]
+
+
+def load_font(px):
+    from PIL import ImageFont
+
+    for path in FONT_CANDIDATES:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, px)
+            except OSError:
+                continue
+    return ImageFont.load_default()
+
 
 def lerp(c0, c1, t):
     return tuple(int(round(c0[i] + (c1[i] - c0[i]) * t)) for i in range(3))
@@ -86,11 +115,11 @@ def squircle_mask(size=S, radius_ratio=0.2237):
     return mask.resize((size, size), Image.Resampling.LANCZOS)
 
 
-def scaled_bars(scale, size=S, center=None):
+def scaled_bars(scale, size=S, center=None, bars=None):
     cx, cy = center or (S / 2, S / 2)
     k = scale * (size / S)
     out = []
-    for x0, y0, x1, y1 in BARS:
+    for x0, y0, x1, y1 in (bars or BARS):
         out.append(
             (
                 cx * (size / S) + (x0 - S / 2) * k,
@@ -103,9 +132,9 @@ def scaled_bars(scale, size=S, center=None):
 
 
 def draw_mark(size=S, scale=1.0, c0=(255, 255, 255), c1=(233, 238, 255),
-              shadow=None, shadow_offset=12, shadow_blur=22, center=None):
+              shadow=None, shadow_offset=12, shadow_blur=22, center=None, bars=None):
     """绘制「E」标记，返回 RGBA 图层（尺寸 = size）。"""
-    marks = scaled_bars(scale, size, center)
+    marks = scaled_bars(scale, size, center, bars)
     radius = RADIUS * scale * (size / S)
 
     high = Image.new("L", (size * SS, size * SS), 0)
@@ -152,8 +181,51 @@ def radial_glow(size, center, radius, strength):
     return gl.resize((size, size), Image.Resampling.BILINEAR)
 
 
+def draw_word_lockup(e_scale=0.90, font_px=168, gap=38,
+                     c0=(255, 255, 255), c1=(232, 238, 255), c_asy=None,
+                     shadow=None, shadow_offset=14, shadow_blur=26):
+    """方案 A：大「E」居左，小字「asy」贴在其右侧并垂直居中于 E。"""
+    size = S
+    font = load_font(font_px)
+    bb = font.getbbox("asy")
+    asy_w, asy_h = bb[2] - bb[0], bb[3] - bb[1]
+    e_w = (ARM_LONG[1] - STEM_X[0]) * e_scale
+    e_h = (Y3 - Y0) * e_scale
+    ox = (size - (e_w + gap + asy_w)) / 2
+    oy = (size - e_h) / 2
+    layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    layer = Image.alpha_composite(layer, draw_mark(
+        size, e_scale, c0, c1, center=(ox + e_w / 2, oy + e_h / 2),
+        shadow=shadow, shadow_offset=shadow_offset, shadow_blur=shadow_blur))
+    baseline = oy + e_h / 2 - (bb[1] + bb[3]) / 2
+    txt = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    ImageDraw.Draw(txt).text((ox + e_w + gap - bb[0], baseline), "asy",
+                             font=font, fill=(c_asy or c0) + (255,))
+    return Image.alpha_composite(layer, txt)
+
+
+def draw_word_nested(font_px=126, c0=(255, 255, 255), c1=(232, 238, 255), c_asy=None,
+                     shadow=None, shadow_offset=14, shadow_blur=26):
+    """方案 B：满幅大「E」，小字「asy」嵌进中横与下横之间的开口。"""
+    size = S
+    font = load_font(font_px)
+    bb = font.getbbox("asy")
+    asy_w, asy_h = bb[2] - bb[0], bb[3] - bb[1]
+    layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    layer = Image.alpha_composite(layer, draw_mark(
+        size, 1.0, c0, c1, bars=BARS_NESTED,
+        shadow=shadow, shadow_offset=shadow_offset, shadow_blur=shadow_blur))
+    top, bottom = Y1 + BAR_H, Y2
+    baseline = top + (bottom - top - asy_h) / 2 - bb[1]
+    ox = STEM_X[1] + (ARM_LONG[1] - STEM_X[1] - asy_w) / 2
+    txt = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    ImageDraw.Draw(txt).text((ox - bb[0], baseline), "asy",
+                             font=font, fill=(c_asy or c0) + (255,))
+    return Image.alpha_composite(layer, txt)
+
+
 def compose(bg_theme, mark_scale=1.0, mark_theme="light", glow=False, sheen_on=True,
-            shadow=None):
+            shadow=None, mark_layer=None):
     size = S
     if bg_theme == "brand":
         bg = diagonal_gradient((size, size), BRAND_LIGHT, BRAND_DEEP)
@@ -174,49 +246,12 @@ def compose(bg_theme, mark_scale=1.0, mark_theme="light", glow=False, sheen_on=T
     if sheen_on:
         canvas = Image.alpha_composite(canvas, sheen(size))
 
-    if mark_theme == "light":
+    if mark_layer is not None:
+        mark = mark_layer
+    elif mark_theme == "light":
         mark = draw_mark(size, mark_scale, (255, 255, 255), (232, 238, 255), shadow)
     else:
         mark = draw_mark(size, mark_scale, (176, 197, 255), BRAND_LIGHT, shadow)
-    canvas = Image.alpha_composite(canvas, mark)
-
-    canvas.putalpha(squircle_mask(size))
-    return canvas
-
-
-def compose_bubble():
-    """方案 B：对话气泡 + 挖空「E」，表达「听问题 → 给答案」。"""
-    size = S
-    canvas = diagonal_gradient((size, size), BRAND_LIGHT, BRAND_DEEP).convert("RGBA")
-    canvas = Image.alpha_composite(canvas, sheen(size))
-
-    n = size * SS
-    high = Image.new("L", (n, n), 0)
-    d = ImageDraw.Draw(high)
-    # 气泡主体
-    d.rounded_rectangle([236 * SS, 244 * SS, 788 * SS, 692 * SS],
-                        radius=104 * SS, fill=255)
-    # 尾巴：粗线段 + 圆头
-    d.line([348 * SS, 636 * SS, 300 * SS, 792 * SS], fill=255, width=84 * SS)
-    for px, py in ((348, 636), (300, 792)):
-        d.ellipse([(px - 42) * SS, (py - 42) * SS, (px + 42) * SS, (py + 42) * SS],
-                  fill=255)
-    bubble_alpha = high.resize((size, size), Image.Resampling.LANCZOS)
-
-    bubble = vertical_gradient((size, size), (255, 255, 255), (234, 240, 255))
-    bubble = bubble.convert("RGBA")
-    bubble.putalpha(bubble_alpha)
-
-    shadow = Image.new("L", (size, size), 0)
-    shadow.paste(bubble_alpha, (0, 16))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(30))
-    shadow = shadow.point(lambda v: int(v * 52 / 255))
-    shadow_layer = Image.new("RGBA", (size, size), (6, 14, 50, 255))
-    shadow_layer.putalpha(shadow)
-    canvas = Image.alpha_composite(canvas, shadow_layer)
-    canvas = Image.alpha_composite(canvas, bubble)
-
-    mark = draw_mark(size, 0.56, BRAND_DEEP, BRAND_PRIMARY, center=(512, 464))
     canvas = Image.alpha_composite(canvas, mark)
 
     canvas.putalpha(squircle_mask(size))
@@ -264,7 +299,7 @@ def save_icns(candidates, path):
     print("wrote", os.path.relpath(path, BASE), len(body) + 8, "bytes")
 
 
-def build_preview(primary, dark, flat, bubble, mark_white):
+def build_preview(primary, nested, dark, flat, mark_white):
     """生成一张方案对比图，便于评审。"""
     from PIL import ImageFont
 
@@ -284,14 +319,14 @@ def build_preview(primary, dark, flat, bubble, mark_white):
 
     d = ImageDraw.Draw(sheet)
     d.text((80, 48), "轻松面试 Easy Interview · Logo 方案", font=title, fill=(240, 243, 255))
-    d.text((80, 100), "色板：#5B7CFA → #2B46C4（品牌主色 #4F6BED）｜圆角 22.4%｜笔画 104/1024",
+    d.text((80, 100), "色板：#5B7CFA → #2B46C4（品牌主色 #4F6BED）｜圆角 22.4%｜大 E + 小 asy",
            font=label, fill=(150, 158, 180))
 
     items = [
-        ("主方案 A：E + 声波（推荐）", primary),
-        ("方案 B：深色主题", dark),
-        ("方案 C：扁平无投影", flat),
-        ("方案 D：对话气泡", bubble),
+        ("A 大 E + 小 asy（推荐）", primary),
+        ("B E 内含小 asy", nested),
+        ("C 深色主题", dark),
+        ("D 扁平无投影", flat),
     ]
     big = 256
     gap = 56
@@ -327,23 +362,24 @@ def main():
     os.makedirs(FINAL, exist_ok=True)
     os.makedirs(TAURI_ICONS, exist_ok=True)
 
-    # 1) 主标志：品牌渐变 + 白色 E + 柔和投影
-    primary = compose("brand", mark_scale=0.98, mark_theme="light", shadow=50)
-    # 2) 深色主题版本：深蓝底 + 发光蓝 E
-    dark = compose("dark", mark_scale=0.98, mark_theme="brand", glow=True, shadow=40)
-    # 3) 扁平版：无投影无高光
-    flat = compose("brand", mark_scale=1.0, mark_theme="light",
-                   sheen_on=False, shadow=None)
-    # 4) 小尺寸优化版：无投影、标记略放大
-    small_src = compose("brand", mark_scale=1.06, mark_theme="light",
+    # 1) 主方案 A：大 E 居左 + 右侧小字 asy（垂直居中）
+    primary = compose("brand", mark_layer=draw_word_lockup(shadow=50))
+    # 2) 方案 B：满幅大 E，小字 asy 嵌进中横与下横之间的开口
+    nested = compose("brand", mark_layer=draw_word_nested(shadow=50))
+    # 3) 深色主题版本
+    dark = compose("dark", glow=True, mark_layer=draw_word_lockup(
+        c0=(176, 197, 255), c1=BRAND_LIGHT, c_asy=(168, 190, 255), shadow=40))
+    # 4) 扁平版：无投影无高光
+    flat = compose("brand", sheen_on=False,
+                   mark_layer=draw_word_lockup(shadow=None))
+    # 5) 小尺寸优化版：只保留大 E（asy 缩小后会糊），标记放大
+    small_src = compose("brand", mark_scale=1.22, mark_theme="light",
                         sheen_on=False, shadow=None)
 
-    bubble = compose_bubble()
-
     for name, img in (("logo-primary-1024.png", primary),
+                      ("logo-nested-1024.png", nested),
                       ("logo-dark-1024.png", dark),
-                      ("logo-flat-1024.png", flat),
-                      ("logo-bubble-1024.png", bubble)):
+                      ("logo-flat-1024.png", flat)):
         save(img, os.path.join(FINAL, name))
     for size in (512, 256, 128, 64, 32):
         save(primary, os.path.join(FINAL, f"logo-primary-{size}.png"), size)
@@ -377,7 +413,7 @@ def main():
     save_icns(keyed, os.path.join(TAURI_ICONS, "icon.icns"))
 
     # 7) 方案对比图
-    build_preview(primary, dark, flat, bubble, mark)
+    build_preview(primary, nested, dark, flat, mark)
 
 
 if __name__ == "__main__":
