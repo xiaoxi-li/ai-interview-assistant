@@ -44,6 +44,7 @@
         "language": "zh-CN"
       },
       "nsis": {
+        "installerIcon": "icons/icon.ico",
         "languages": ["SimpChinese", "English"],
         "displayLanguageSelector": false
       }
