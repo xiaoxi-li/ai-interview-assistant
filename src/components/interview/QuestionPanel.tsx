@@ -90,23 +90,6 @@ export default function QuestionPanel() {
         </p>
       )}
 
-      {questions.length > 1 && (
-        <ul className="mt-3 flex max-h-32 flex-col gap-1 overflow-y-auto">
-          {questions
-            .slice(-4)
-            .reverse()
-            .map((pair) => (
-              <li
-                key={pair.id}
-                className="truncate rounded-md border border-ghost/[0.06] bg-background-3/30 px-2 py-1 text-[11px] text-text-muted"
-                title={pair.question}
-              >
-                {pair.question}
-              </li>
-            ))}
-        </ul>
-      )}
-
       <button
         onClick={() => triggerQuestion()}
         disabled={!asrStatus?.running}

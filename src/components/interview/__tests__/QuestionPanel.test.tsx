@@ -121,8 +121,9 @@ describe("QuestionPanel", () => {
     expect(loadQuestions).toHaveBeenCalledWith("s-1");
   });
 
-  it("展示近期识别的问题列表", () => {
+  it("不再展示历史问题列表，仅保留已识别计数", () => {
     resetStore({
+      currentQuestion: question,
       questions: [
         qaPair({ id: "q1", question: "第一个问题" }),
         qaPair({ id: "q2", question: "第二个问题" }),
@@ -130,8 +131,9 @@ describe("QuestionPanel", () => {
     });
     render(<QuestionPanel />);
 
-    expect(screen.getByText("第一个问题")).toBeTruthy();
-    expect(screen.getByText("第二个问题")).toBeTruthy();
+    expect(screen.getByText("已识别 2 个问题")).toBeTruthy();
+    expect(screen.queryByText("第一个问题")).toBeNull();
+    expect(screen.queryByText("第二个问题")).toBeNull();
   });
 
   it("不再展示知识库召回相关内容（IA-07 变更，统一由引用来源呈现）", () => {
