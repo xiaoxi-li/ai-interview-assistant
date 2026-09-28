@@ -69,7 +69,7 @@ export default function MiniView() {
         data-tauri-drag-region
         className="flex h-8 shrink-0 items-center gap-2 border-b border-ghost/[0.06] bg-background-2/80 px-2.5"
       >
-        <img src={logoMark} alt="" draggable={false} className="h-3.5 w-3.5 select-none" />
+        <img src={logoMark} alt="" draggable={false} className="h-3.5 w-auto select-none" />
         <span data-tauri-drag-region className="text-[11px] font-medium">
           {t("轻松面试")} · {t("迷你")}
         </span>

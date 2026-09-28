@@ -94,7 +94,7 @@ export default function OnboardingPage() {
             src={logoMark}
             alt=""
             draggable={false}
-            className="h-9 w-9 select-none"
+            className="h-9 w-auto select-none"
           />
           <div>
             <h1 className="text-[15px] font-semibold">欢迎使用轻松面试</h1>

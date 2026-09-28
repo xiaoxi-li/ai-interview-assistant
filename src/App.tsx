@@ -91,7 +91,7 @@ export default function App() {
             src={logoMark}
             alt=""
             draggable={false}
-            className="h-6 w-6 select-none"
+            className="h-6 w-auto select-none"
           />
           <span className="text-[13px] font-medium tracking-wide">
             {t("轻松面试")}
