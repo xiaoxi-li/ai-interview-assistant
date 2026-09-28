@@ -181,7 +181,7 @@ def radial_glow(size, center, radius, strength):
     return gl.resize((size, size), Image.Resampling.BILINEAR)
 
 
-def draw_word_lockup(e_scale=0.90, font_px=205, gap=18,
+def draw_word_lockup(e_scale=0.82, font_px=240, gap=18,
                      c0=(255, 255, 255), c1=(232, 238, 255), c_asy=None,
                      shadow=None, shadow_offset=14, shadow_blur=26):
     """主方案：大「E」居左，小字「asy」接在下横杠末端。
@@ -333,7 +333,7 @@ def build_preview(primary, nested, dark, flat, mark_white):
            font=label, fill=(150, 158, 180))
 
     items = [
-        ("A 大 E + 小 asy（推荐）", primary),
+        ("A 大 E + 尾接 asy（推荐）", primary),
         ("B E 内含小 asy", nested),
         ("C 深色主题", dark),
         ("D 扁平无投影", flat),
