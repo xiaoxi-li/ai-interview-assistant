@@ -32,8 +32,24 @@ export function isAiConfigDirty(draft: AIConfig, saved: AIConfig | null): boolea
     draft.baseUrl !== saved.baseUrl ||
     draft.model !== saved.model ||
     draft.stream !== saved.stream ||
-    draft.temperature !== saved.temperature
+    draft.temperature !== saved.temperature ||
+    draft.thinking !== saved.thinking
   );
+}
+
+/**
+ * 说明当前平台如何下发「思考 / 非思考」（ST-12）。
+ *
+ * 平台能力由后端 `PlatformPreset.thinkingParam` 单向下发，前端不重复维护映射表。
+ */
+export function thinkingParamHint(preset: PlatformPreset | undefined): string {
+  if (!preset || !preset.thinkingParam) {
+    return "该平台没有思考开关参数，不下发任何字段；如需切换思考能力，请改用对应的模型名";
+  }
+  if (preset.thinkingParam === "thinking") {
+    return "已按 thinking.type 下发（enabled / disabled）";
+  }
+  return `已按 ${preset.thinkingParam} 下发（true / false）`;
 }
 
 /** 平台显示名（找不到预设时回退到平台标识） */

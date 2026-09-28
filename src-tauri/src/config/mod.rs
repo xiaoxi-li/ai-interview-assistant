@@ -77,30 +77,39 @@ impl AiPlatform {
 
     /// 平台预设（Base URL 与默认模型）
     pub fn preset(self) -> PlatformPreset {
-        let (label, base_url, model) = match self {
-            AiPlatform::Deepseek => ("DeepSeek", "https://api.deepseek.com/v1", "deepseek-chat"),
+        let (label, base_url, model, thinking_param) = match self {
+            AiPlatform::Deepseek => (
+                "DeepSeek",
+                "https://api.deepseek.com/v1",
+                "deepseek-chat",
+                None,
+            ),
             AiPlatform::Qwen => (
                 "通义千问 Qwen",
                 "https://dashscope.aliyuncs.com/compatible-mode/v1",
                 "qwen-plus",
+                Some("enable_thinking"),
             ),
             AiPlatform::Glm => (
                 "智谱 GLM",
                 "https://open.bigmodel.cn/api/paas/v4",
                 "glm-4-plus",
+                Some("thinking"),
             ),
             AiPlatform::Siliconflow => (
                 "硅基流动 SiliconFlow",
                 "https://api.siliconflow.cn/v1",
                 "deepseek-ai/DeepSeek-V3",
+                Some("enable_thinking"),
             ),
-            AiPlatform::Openai => ("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini"),
+            AiPlatform::Openai => ("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini", None),
         };
         PlatformPreset {
             platform: self,
             label: label.to_string(),
             default_base_url: base_url.to_string(),
             default_model: model.to_string(),
+            thinking_param: thinking_param.map(str::to_string),
         }
     }
 }
@@ -113,6 +122,29 @@ pub struct PlatformPreset {
     pub label: String,
     pub default_base_url: String,
     pub default_model: String,
+    /// 该平台控制思考模式的请求参数键；`None` 表示平台无开关参数（需用模型名区分）
+    pub thinking_param: Option<String>,
+}
+
+/// 思考 / 非思考模式（ST-12）
+///
+/// 默认 [`ThinkingMode::NonThinking`]：面试实时作答以低首字延迟优先。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ThinkingMode {
+    /// 思考模式：先深度推理再作答，质量更高但首字明显更慢
+    Thinking,
+    /// 非思考模式（默认）：直接作答，首字更快
+    #[default]
+    #[serde(alias = "nonthinking", alias = "non_thinking")]
+    NonThinking,
+}
+
+impl ThinkingMode {
+    /// 是否开启思考
+    pub fn is_thinking(self) -> bool {
+        matches!(self, ThinkingMode::Thinking)
+    }
 }
 
 /// 全部平台预设
@@ -138,6 +170,9 @@ pub struct AiConfig {
     pub model: String,
     pub stream: bool,
     pub temperature: f32,
+    /// 思考 / 非思考模式（ST-12）；旧配置缺失该字段时按非思考处理
+    #[serde(default)]
+    pub thinking: ThinkingMode,
 }
 
 impl AiConfig {
@@ -150,6 +185,7 @@ impl AiConfig {
             model: preset.default_model,
             stream: true,
             temperature: 0.7,
+            thinking: ThinkingMode::default(),
         }
     }
 
@@ -271,6 +307,66 @@ mod tests {
     }
 
     #[test]
+    fn preset_declares_thinking_param_support() {
+        let by_platform = |platform: AiPlatform| {
+            all_presets()
+                .into_iter()
+                .find(|preset| preset.platform == platform)
+                .expect("preset exists")
+                .thinking_param
+        };
+
+        assert_eq!(
+            by_platform(AiPlatform::Qwen).as_deref(),
+            Some("enable_thinking")
+        );
+        assert_eq!(
+            by_platform(AiPlatform::Siliconflow).as_deref(),
+            Some("enable_thinking")
+        );
+        assert_eq!(by_platform(AiPlatform::Glm).as_deref(), Some("thinking"));
+        assert_eq!(by_platform(AiPlatform::Deepseek), None);
+        assert_eq!(by_platform(AiPlatform::Openai), None);
+    }
+
+    #[test]
+    fn thinking_mode_defaults_to_non_thinking() {
+        assert_eq!(ThinkingMode::default(), ThinkingMode::NonThinking);
+        assert!(!ThinkingMode::NonThinking.is_thinking());
+        assert!(ThinkingMode::Thinking.is_thinking());
+        assert_eq!(AiConfig::default().thinking, ThinkingMode::NonThinking);
+    }
+
+    #[test]
+    fn legacy_config_without_thinking_falls_back_to_non_thinking() {
+        let legacy = serde_json::json!({
+            "platform": "qwen",
+            "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "model": "qwen3.8-flash",
+            "stream": true,
+            "temperature": 0.7,
+        });
+        let config: AiConfig = serde_json::from_value(legacy).expect("legacy config parses");
+        assert_eq!(config.thinking, ThinkingMode::NonThinking);
+    }
+
+    #[test]
+    fn thinking_mode_round_trips_as_camel_case() {
+        let config = AiConfig {
+            thinking: ThinkingMode::Thinking,
+            ..AiConfig::from_preset(AiPlatform::Qwen)
+        };
+        let json = serde_json::to_value(&config).expect("serialize");
+        assert_eq!(json["thinking"], "thinking");
+        assert_eq!(
+            serde_json::from_value::<AiConfig>(json)
+                .expect("deserialize")
+                .thinking,
+            ThinkingMode::Thinking
+        );
+    }
+
+    #[test]
     fn platform_parse_is_case_insensitive() {
         assert_eq!(AiPlatform::parse("DeepSeek"), Some(AiPlatform::Deepseek));
         assert_eq!(AiPlatform::parse("GLM"), Some(AiPlatform::Glm));
@@ -310,6 +406,7 @@ mod tests {
                 model: "glm-4-plus".into(),
                 stream: false,
                 temperature: 0.3,
+                thinking: ThinkingMode::Thinking,
             };
             save_ai_config(conn, &config).expect("save");
             let loaded = load_ai_config(conn).expect("load");

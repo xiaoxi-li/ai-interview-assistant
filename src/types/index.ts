@@ -79,12 +79,16 @@ export interface Session {
 
 export type AIPlatform = "deepseek" | "qwen" | "glm" | "siliconflow" | "openai";
 
+/** 思考 / 非思考模式（ST-12）：默认非思考 */
+export type ThinkingMode = "thinking" | "nonThinking";
+
 export interface AIConfig {
   platform: AIPlatform;
   baseUrl: string;
   model: string;
   stream: boolean;
   temperature: number;
+  thinking: ThinkingMode;
 }
 
 /** 本地 ASR 转写事件（与后端 TranscriptEvent 对应） */
@@ -381,6 +385,8 @@ export interface PlatformPreset {
   label: string;
   defaultBaseUrl: string;
   defaultModel: string;
+  /** 该平台控制思考模式的请求参数键；null 表示平台无开关参数（用模型名区分） */
+  thinkingParam: string | null;
 }
 
 export type ASRMode = "cloud" | "local";

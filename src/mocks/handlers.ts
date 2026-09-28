@@ -32,30 +32,35 @@ export async function mockInvoke<T>(
           label: "DeepSeek",
           defaultBaseUrl: "https://api.deepseek.com/v1",
           defaultModel: "deepseek-chat",
+          thinkingParam: null,
         },
         {
           platform: "qwen",
           label: "通义千问 Qwen",
           defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
           defaultModel: "qwen-plus",
+          thinkingParam: "enable_thinking",
         },
         {
           platform: "glm",
           label: "智谱 GLM",
           defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
           defaultModel: "glm-4-plus",
+          thinkingParam: "thinking",
         },
         {
           platform: "siliconflow",
           label: "硅基流动 SiliconFlow",
           defaultBaseUrl: "https://api.siliconflow.cn/v1",
           defaultModel: "deepseek-ai/DeepSeek-V3",
+          thinkingParam: "enable_thinking",
         },
         {
           platform: "openai",
           label: "OpenAI",
           defaultBaseUrl: "https://api.openai.com/v1",
           defaultModel: "gpt-4o-mini",
+          thinkingParam: null,
         },
       ] as T;
 
@@ -66,6 +71,7 @@ export async function mockInvoke<T>(
         model: "deepseek-chat",
         stream: true,
         temperature: 0.7,
+        thinking: "nonThinking",
       } as T;
 
     case "save_ai_config":

@@ -10,13 +10,28 @@ import {
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { SaveFeedback } from "./SaveFeedback";
-import { isAiConfigDirty, validateAiConfig } from "../../lib/aiConfig";
-import type { AIConfig, ConnectionTest, PlatformPreset } from "../../types";
+import {
+  isAiConfigDirty,
+  thinkingParamHint,
+  validateAiConfig,
+} from "../../lib/aiConfig";
+import type {
+  AIConfig,
+  ConnectionTest,
+  PlatformPreset,
+  ThinkingMode,
+} from "../../types";
 import type { ApiKeyStatus } from "../../stores/settingsStore";
 
 const FIELD =
   "focus-ring w-full rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
 const LABEL = "mb-1.5 block text-[11px] text-text-muted";
+
+/** 回答模式选项（ST-12）：默认非思考 */
+const THINKING_OPTIONS: { value: ThinkingMode; label: string }[] = [
+  { value: "nonThinking", label: "非思考" },
+  { value: "thinking", label: "思考" },
+];
 
 interface AiSettingsSectionProps {
   config: AIConfig;
@@ -47,6 +62,7 @@ export default function AiSettingsSection({
 
   const validationError = useMemo(() => validateAiConfig(draft), [draft]);
   const dirty = isAiConfigDirty(draft, config);
+  const activePreset = presets.find((preset) => preset.platform === draft.platform);
 
   // 外部配置变化（如首次加载）时同步草稿
   useEffect(() => {
@@ -153,6 +169,37 @@ export default function AiSettingsSection({
             流式输出（降低首字延迟）
           </label>
         </div>
+      </div>
+
+      {/* 思考 / 非思考模式（ST-12） */}
+      <div className="mt-4">
+        <span className={LABEL}>回答模式</span>
+        <div
+          role="group"
+          aria-label="回答模式"
+          className="flex flex-wrap items-center gap-1.5"
+        >
+          {THINKING_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={draft.thinking === option.value}
+              onClick={() => setDraft({ ...draft, thinking: option.value })}
+              className={cn(
+                "focus-ring cursor-pointer rounded-lg border px-3 py-1.5 text-[12px] transition-colors",
+                draft.thinking === option.value
+                  ? "border-primary/40 bg-primary/15 text-primary-3"
+                  : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+          <span className="ml-1 text-[11px] text-text-subtle">{thinkingParamHint(activePreset)}</span>
+        </div>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-text-subtle">
+          非思考（默认）：直接作答，首字更快，适合面试实时场景。思考：先推理再作答，质量更高，但首字延迟明显增加（百炼上 qwen3.5 ~ qwen3.8 系列默认开启思考）。
+        </p>
       </div>
 
       {/* API Key */}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isAiConfigDirty,
   platformLabel,
+  thinkingParamHint,
   validateAiConfig,
 } from "../aiConfig";
 import type { AIConfig, PlatformPreset } from "../../types";
@@ -12,6 +13,7 @@ const base: AIConfig = {
   model: "deepseek-chat",
   stream: true,
   temperature: 0.7,
+  thinking: "nonThinking",
 };
 
 describe("validateAiConfig", () => {
@@ -54,6 +56,34 @@ describe("isAiConfigDirty", () => {
     expect(isAiConfigDirty({ ...base, model: "x" }, base)).toBe(true);
     expect(isAiConfigDirty({ ...base, stream: false }, base)).toBe(true);
     expect(isAiConfigDirty({ ...base, temperature: 1 }, base)).toBe(true);
+    expect(isAiConfigDirty({ ...base, thinking: "thinking" }, base)).toBe(true);
+  });
+});
+
+describe("thinkingParamHint（ST-12）", () => {
+  const preset = (thinkingParam: string | null): PlatformPreset => ({
+    platform: "qwen",
+    label: "通义千问 Qwen",
+    defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    defaultModel: "qwen-plus",
+    thinkingParam,
+  });
+
+  it("顶层布尔参数平台说明 enable_thinking", () => {
+    expect(thinkingParamHint(preset("enable_thinking"))).toContain(
+      "已按 enable_thinking 下发"
+    );
+  });
+
+  it("嵌套参数平台说明 thinking.type", () => {
+    expect(thinkingParamHint(preset("thinking"))).toContain(
+      "已按 thinking.type 下发"
+    );
+  });
+
+  it("无开关参数的平台提示改用模型名", () => {
+    expect(thinkingParamHint(preset(null))).toContain("没有思考开关参数");
+    expect(thinkingParamHint(undefined)).toContain("没有思考开关参数");
   });
 });
 
@@ -64,6 +94,7 @@ describe("platformLabel", () => {
       label: "智谱 GLM",
       defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
       defaultModel: "glm-4-plus",
+      thinkingParam: "thinking",
     },
   ];
 

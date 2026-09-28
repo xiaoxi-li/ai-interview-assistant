@@ -188,6 +188,7 @@ describe("settingsStore 设置保存反馈（ST-11）", () => {
     model: "deepseek-chat",
     stream: true,
     temperature: 0.7,
+    thinking: "nonThinking",
   };
   const asrConfig: ASRConfig = {
     mode: "local",

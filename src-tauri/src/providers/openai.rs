@@ -1,9 +1,11 @@
 //! OpenAI 兼容 Provider：覆盖 DeepSeek / Qwen / GLM / 硅基流动 / OpenAI。
 //!
 //! * 连接测试走轻量的 `GET /models`，失败时回退提示；
-//! * 流式对话走 `POST /chat/completions`（`stream: true`），按 SSE 解析增量。
+//! * 流式对话走 `POST /chat/completions`（`stream: true`），按 SSE 解析增量；
+//! * 思考 / 非思考模式（ST-12）由 [`super::thinking`] 按平台下发，上游拒绝该参数时去参重试一次。
 
 use super::ai::{AiProvider, ChatStream};
+use super::thinking;
 use super::types::{
     ChatDelta, ChatMessage, ChatRequest, ConnectionTest, ProviderError, ProviderResult, Role,
 };
@@ -53,6 +55,50 @@ impl OpenAiCompatProvider {
             Some(key) if !key.is_empty() => request.set("Authorization", &format!("Bearer {key}")),
             _ => request,
         }
+    }
+
+    /// 发送流式对话请求（思考参数的下发与回退由调用方负责）
+    fn send_chat(&self, body: &Value) -> ProviderResult<ureq::Response> {
+        self.apply_auth(self.agent.post(&self.chat_url()))
+            .set("Content-Type", "application/json")
+            .set("Accept", "text/event-stream")
+            .timeout(STREAM_TIMEOUT)
+            .send_json(body)
+            .map_err(http_error)
+    }
+}
+
+/// 把 ureq 错误转换为 `ProviderError`，尽量保留服务端返回的错误详情
+fn http_error(err: ureq::Error) -> ProviderError {
+    match err {
+        ureq::Error::Status(code, response) => {
+            let detail = response
+                .into_json::<Value>()
+                .ok()
+                .and_then(|value| {
+                    value
+                        .get("error")
+                        .and_then(|error| error.get("message"))
+                        .and_then(Value::as_str)
+                        .or_else(|| value.get("message").and_then(Value::as_str))
+                        .map(str::to_string)
+                })
+                .unwrap_or_default();
+            if detail.trim().is_empty() {
+                ProviderError::Network(format!("服务返回 HTTP {code}"))
+            } else {
+                ProviderError::Network(format!("服务返回 HTTP {code}：{detail}"))
+            }
+        }
+        other => ProviderError::Network(other.to_string()),
+    }
+}
+
+/// 判断错误是否由「思考模式参数不被模型支持」引起（决定是否去参重试）
+fn is_thinking_param_error(err: &ProviderError) -> bool {
+    match err {
+        ProviderError::Network(message) => thinking::is_param_rejected(message),
+        _ => false,
     }
 }
 
@@ -180,19 +226,23 @@ impl AiProvider for OpenAiCompatProvider {
     }
 
     fn stream_chat(&self, request: ChatRequest) -> ProviderResult<ChatStream> {
-        let body = build_chat_body(&self.config, &request);
-        let response = self
-            .apply_auth(self.agent.post(&self.chat_url()))
-            .set("Content-Type", "application/json")
-            .set("Accept", "text/event-stream")
-            .timeout(STREAM_TIMEOUT)
-            .send_json(body)
-            .map_err(|err| match err {
-                ureq::Error::Status(code, _) => {
-                    ProviderError::Network(format!("服务返回 HTTP {code}"))
-                }
-                other => ProviderError::Network(other.to_string()),
-            })?;
+        let mut body = build_chat_body(&self.config, &request);
+        let thinking_keys = thinking::apply(&mut body, self.config.platform, self.config.thinking);
+
+        let response = match self.send_chat(&body) {
+            Ok(response) => response,
+            // 模型/网关不支持该思考参数（例如给 qwen-plus 传 enable_thinking）：
+            // 去掉参数重试一次，避免「模式开关」把回答功能整体带崩。
+            Err(err) if !thinking_keys.is_empty() && is_thinking_param_error(&err) => {
+                tracing::warn!(
+                    "上游拒绝思考模式参数，已去掉参数重试（platform={}）：{err}",
+                    self.config.platform.as_str()
+                );
+                thinking::remove(&mut body, &thinking_keys);
+                self.send_chat(&body)?
+            }
+            Err(err) => return Err(err),
+        };
 
         let (tx, rx) = mpsc::channel();
         let reader = BufReader::new(response.into_reader());
@@ -231,13 +281,21 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::TcpListener;
 
+    use crate::config::{AiPlatform, ThinkingMode};
+
     fn config_with(base_url: String) -> AiConfig {
+        config_for(AiPlatform::Deepseek, ThinkingMode::NonThinking, base_url)
+    }
+
+    /// 指定平台与思考模式的配置（思考参数相关用例）
+    fn config_for(platform: AiPlatform, thinking: ThinkingMode, base_url: String) -> AiConfig {
         AiConfig {
-            platform: crate::config::AiPlatform::Deepseek,
+            platform,
             base_url,
             model: "test-model".into(),
             stream: true,
             temperature: 0.5,
+            thinking,
         }
     }
 
@@ -309,6 +367,51 @@ mod tests {
             }
         });
         (format!("http://{addr}"), handle)
+    }
+
+    /// 启动一个可返回多轮响应的极简 HTTP 服务，并回传收到的全部请求明文。
+    /// 用非阻塞 accept + 截止时间，避免调用方少发请求时线程一直阻塞在 accept 上。
+    fn spawn_sequence_server(responses: Vec<String>) -> (String, thread::JoinHandle<Vec<String>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        listener.set_nonblocking(true).expect("nonblocking");
+        let expected = responses.len();
+
+        let handle = thread::spawn(move || {
+            let mut requests: Vec<String> = Vec::new();
+            let deadline = Instant::now() + Duration::from_secs(5);
+
+            while requests.len() < expected && Instant::now() < deadline {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        let _ = stream.set_nonblocking(false);
+                        let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+                        let request = read_full_request(&mut stream);
+                        let index = requests.len();
+                        requests.push(request);
+                        if let Some(response) = responses.get(index) {
+                            let _ = stream.write_all(response.as_bytes());
+                            let _ = stream.flush();
+                        }
+                    }
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(_) => break,
+                }
+            }
+            requests
+        });
+
+        (format!("http://{addr}"), handle)
+    }
+
+    fn error_response(code: u16, message: &str) -> String {
+        let body = serde_json::json!({ "error": { "message": message } }).to_string();
+        format!(
+            "HTTP/1.1 {code} Bad Request\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
     }
 
     fn models_response(_req: &str) -> String {
@@ -442,5 +545,132 @@ mod tests {
         assert!(!result.ok);
         assert!(result.message.contains("invalid api key"));
         handle.join().ok();
+    }
+
+    // ==================== ST-12 思考 / 非思考模式 ====================
+
+    fn collect(provider: &OpenAiCompatProvider) -> Vec<ChatDelta> {
+        provider
+            .stream_chat(request())
+            .expect("stream")
+            .iter()
+            .collect()
+    }
+
+    #[test]
+    fn qwen_non_thinking_sends_disable_flag() {
+        let (base, handle) = spawn_sequence_server(vec![sse_response("")]);
+        let provider = OpenAiCompatProvider::new(
+            config_for(AiPlatform::Qwen, ThinkingMode::NonThinking, base),
+            Some("k".into()),
+        );
+
+        collect(&provider);
+
+        let requests = handle.join().expect("server");
+        assert_eq!(requests.len(), 1);
+        assert!(
+            requests[0].contains(r#""enable_thinking":false"#),
+            "非思考模式应下发 enable_thinking=false：{}",
+            requests[0]
+        );
+    }
+
+    #[test]
+    fn qwen_thinking_sends_enable_flag() {
+        let (base, handle) = spawn_sequence_server(vec![sse_response("")]);
+        let provider = OpenAiCompatProvider::new(
+            config_for(AiPlatform::Qwen, ThinkingMode::Thinking, base),
+            Some("k".into()),
+        );
+
+        collect(&provider);
+
+        let requests = handle.join().expect("server");
+        assert!(
+            requests[0].contains(r#""enable_thinking":true"#),
+            "思考模式应下发 enable_thinking=true：{}",
+            requests[0]
+        );
+    }
+
+    #[test]
+    fn glm_thinking_uses_nested_type_flag() {
+        let (base, handle) = spawn_sequence_server(vec![sse_response("")]);
+        let provider = OpenAiCompatProvider::new(
+            config_for(AiPlatform::Glm, ThinkingMode::Thinking, base),
+            Some("k".into()),
+        );
+
+        collect(&provider);
+
+        let requests = handle.join().expect("server");
+        assert!(
+            requests[0].contains(r#""thinking":{"type":"enabled"}"#),
+            "GLM 应下发 thinking.type=enabled：{}",
+            requests[0]
+        );
+    }
+
+    #[test]
+    fn platforms_without_switch_keep_body_unchanged() {
+        let (base, handle) = spawn_sequence_server(vec![sse_response("")]);
+        let provider = OpenAiCompatProvider::new(
+            config_for(AiPlatform::Deepseek, ThinkingMode::Thinking, base),
+            Some("k".into()),
+        );
+
+        collect(&provider);
+
+        let requests = handle.join().expect("server");
+        assert!(
+            !requests[0].contains("thinking"),
+            "DeepSeek 无思考开关参数，请求体不应出现 thinking：{}",
+            requests[0]
+        );
+    }
+
+    #[test]
+    fn rejected_thinking_param_is_retried_without_it() {
+        let (base, handle) = spawn_sequence_server(vec![
+            error_response(400, "Unsupported parameter: enable_thinking"),
+            sse_response(""),
+        ]);
+        let provider = OpenAiCompatProvider::new(
+            config_for(AiPlatform::Qwen, ThinkingMode::NonThinking, base),
+            Some("k".into()),
+        );
+
+        let deltas = collect(&provider);
+        assert!(
+            deltas
+                .iter()
+                .any(|delta| *delta == ChatDelta::Token { text: "你好".into() }),
+            "去参重试后应正常收到回答：{deltas:?}"
+        );
+
+        let requests = handle.join().expect("server");
+        assert_eq!(requests.len(), 2, "应重试一次");
+        assert!(requests[0].contains("enable_thinking"));
+        assert!(
+            !requests[1].contains("enable_thinking"),
+            "重试请求不应再带思考参数：{}",
+            requests[1]
+        );
+    }
+
+    #[test]
+    fn unrelated_error_is_not_retried() {
+        let (base, handle) = spawn_sequence_server(vec![error_response(400, "Insufficient balance")]);
+        let provider = OpenAiCompatProvider::new(
+            config_for(AiPlatform::Qwen, ThinkingMode::NonThinking, base),
+            Some("k".into()),
+        );
+
+        let err = provider.stream_chat(request()).expect_err("应直接报错");
+        assert!(err.to_string().contains("Insufficient balance"), "{err}");
+
+        let requests = handle.join().expect("server");
+        assert_eq!(requests.len(), 1, "与思考参数无关的错误不应重试");
     }
 }

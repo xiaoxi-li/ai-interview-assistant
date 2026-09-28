@@ -15,12 +15,21 @@ const presets: PlatformPreset[] = [
     label: "DeepSeek",
     defaultBaseUrl: "https://api.deepseek.com/v1",
     defaultModel: "deepseek-chat",
+    thinkingParam: null,
   },
   {
     platform: "glm",
     label: "智谱 GLM",
     defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
     defaultModel: "glm-4-plus",
+    thinkingParam: "thinking",
+  },
+  {
+    platform: "qwen",
+    label: "通义千问 Qwen",
+    defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    defaultModel: "qwen-plus",
+    thinkingParam: "enable_thinking",
   },
 ];
 
@@ -30,6 +39,7 @@ const config: AIConfig = {
   model: "deepseek-chat",
   stream: true,
   temperature: 0.7,
+  thinking: "nonThinking",
 };
 
 function setup(overrides: Partial<Parameters<typeof AiSettingsSection>[0]> = {}) {
@@ -136,6 +146,44 @@ describe("AiSettingsSection", () => {
       target: { value: "deepseek-reasoner" },
     });
     expect(screen.getByText("有未保存的修改")).toBeTruthy();
+  });
+
+  it("默认选中「非思考」并说明当前平台的下发方式（ST-12）", () => {
+    setup();
+    expect(
+      screen.getByRole("button", { name: "非思考" }).getAttribute("aria-pressed")
+    ).toBe("true");
+    expect(
+      screen.getByRole("button", { name: "思考" }).getAttribute("aria-pressed")
+    ).toBe("false");
+    // DeepSeek 无思考开关参数
+    expect(screen.getByText(/没有思考开关参数/)).toBeTruthy();
+  });
+
+  it("切换为思考模式后保存草稿携带 thinking（ST-12）", () => {
+    const h = setup();
+    fireEvent.click(screen.getByRole("button", { name: "思考" }));
+    fireEvent.click(screen.getByText("保存配置"));
+
+    expect(h.onSaveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ thinking: "thinking" })
+    );
+  });
+
+  it("切换平台刷新下发方式提示且不重置回答模式（ST-12）", () => {
+    const h = setup();
+    fireEvent.click(screen.getByRole("button", { name: "思考" }));
+
+    fireEvent.click(screen.getByText("通义千问 Qwen"));
+    expect(screen.getByText(/已按 enable_thinking 下发/)).toBeTruthy();
+
+    fireEvent.click(screen.getByText("智谱 GLM"));
+    expect(screen.getByText(/已按 thinking\.type 下发/)).toBeTruthy();
+
+    fireEvent.click(screen.getByText("保存配置"));
+    expect(h.onSaveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ platform: "glm", thinking: "thinking" })
+    );
   });
 
   it("点击测试连接触发回调", () => {

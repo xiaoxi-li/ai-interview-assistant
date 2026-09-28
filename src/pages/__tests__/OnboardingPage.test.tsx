@@ -15,6 +15,7 @@ const aiConfig: AIConfig = {
   model: "deepseek-chat",
   stream: true,
   temperature: 0.7,
+  thinking: "nonThinking",
 };
 
 const presets: PlatformPreset[] = [
@@ -23,6 +24,7 @@ const presets: PlatformPreset[] = [
     label: "DeepSeek",
     defaultBaseUrl: "https://api.deepseek.com/v1",
     defaultModel: "deepseek-chat",
+    thinkingParam: null,
   },
 ];
 

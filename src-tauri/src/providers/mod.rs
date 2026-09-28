@@ -10,6 +10,7 @@ pub mod ai;
 pub mod asr;
 pub mod embedding;
 pub mod openai;
+pub mod thinking;
 pub mod types;
 pub mod vector;
 
