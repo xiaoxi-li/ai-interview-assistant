@@ -221,7 +221,7 @@ describe("AsrSettingsSection", () => {
     fireEvent.click(screen.getByText("阿里云智能语音"));
 
     expect(
-      screen.getByText(/实时模型示例：qwen-audio-3\.1-asr-flash-streaming/)
+      screen.getByText(/实时模型示例：qwen-audio-3\.0-asr-flash-streaming（默认）/)
     ).toBeTruthy();
     expect(screen.getByText(/不能用于实时转写/)).toBeTruthy();
   });

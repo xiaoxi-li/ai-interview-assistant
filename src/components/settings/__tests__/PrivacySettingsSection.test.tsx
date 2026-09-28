@@ -34,6 +34,24 @@ describe("PrivacySettingsSection", () => {
     expect(screen.getByText(/当前为本地 ASR 模式/)).toBeTruthy();
   });
 
+  it("默认配置（上传已开启）在云端模式下为勾选态", () => {
+    setup({ config: { uploadAudio: true, encryptLocal: false } });
+    const upload = screen.getByLabelText(/允许上传音频至云端 ASR/) as HTMLInputElement;
+    expect(upload.checked).toBe(true);
+  });
+
+  it("本地模式下保存时按未勾选落库（避免后端拒绝本地+上传）", () => {
+    const h = setup({
+      config: { uploadAudio: true, encryptLocal: false },
+      cloudAsrEnabled: false,
+    });
+    const upload = screen.getByLabelText(/允许上传音频至云端 ASR/) as HTMLInputElement;
+    expect(upload.checked).toBe(false);
+
+    fireEvent.click(screen.getByText("保存配置"));
+    expect(h.onSave).toHaveBeenCalledWith({ uploadAudio: false, encryptLocal: false });
+  });
+
   it("切换开关后保存回传草稿", () => {
     const h = setup();
     fireEvent.click(screen.getByLabelText(/本地敏感数据加密/));

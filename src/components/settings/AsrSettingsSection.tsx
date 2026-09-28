@@ -180,14 +180,15 @@ export default function AsrSettingsSection({
                 id="asr-model"
                 value={draft.model}
                 onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-                placeholder="iat"
+                placeholder="qwen-audio-3.0-asr-flash-streaming"
                 className={FIELD}
               />
               {draft.cloudProvider === "aliyun" && (
                 <p className="mt-1 text-[10px] leading-relaxed text-text-subtle">
-                  实时模型示例：qwen-audio-3.1-asr-flash-streaming、fun-asr-realtime、
+                  实时模型示例：qwen-audio-3.0-asr-flash-streaming（默认）、
+                  qwen-audio-3.1-asr-flash-streaming、fun-asr-realtime、
                   paraformer-realtime-v2；非实时（HTTP）模型如
-                  qwen-audio-3.1-asr-flash 不能用于实时转写。
+                  qwen-audio-3.0-asr-flash 不能用于实时转写。
                 </p>
               )}
             </div>

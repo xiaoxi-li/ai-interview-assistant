@@ -154,7 +154,8 @@ export default function OnboardingPage() {
               <ul className="flex flex-col gap-2 text-[12px] leading-relaxed text-text-muted">
                 <li className="flex gap-2">
                   <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />
-                  语音转写在本地完成，面试音频默认<b>不会上传</b>到任何服务器（P0 只提供本地通路）。
+                  默认使用<b>云端语音识别</b>（阿里云百炼）：音频会发送至该服务商；如需音频不出本机，
+                  可在「设置 → 语音识别」切到<b>本地</b>通路，或在「设置 → 隐私与安全」取消上传。
                 </li>
                 <li className="flex gap-2">
                   <Mic className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary-3" />
@@ -175,10 +176,11 @@ export default function OnboardingPage() {
 
           {step === 1 && (
             <div className="flex flex-col gap-3">
-              <h2 className="text-[13px] font-semibold">默认使用本地语音识别</h2>
+              <h2 className="text-[13px] font-semibold">默认使用云端语音识别</h2>
               <p className="text-[12px] leading-relaxed text-text-muted">
-                当前版本只提供<b>本地 ASR 通路</b>（sherpa-onnx 中文模型）：音频不出本机、无需联网。
-                云端识别（讯飞/阿里/腾讯）将在后续版本提供，届时可在「设置 → 语音识别」中切换。
+                开箱默认走<b>云端实时识别</b>（阿里云百炼）：在「设置 → 语音识别」填入百炼 API Key
+                即可开始转写，隐私设置已默认允许上传音频。如需音频不出本机，可改为<b>本地</b>识别
+                （sherpa-onnx 中文模型，需先下载模型）。
               </p>
 
               <div className="rounded-md border border-ghost/[0.06] bg-background-2/40 p-3">
@@ -234,7 +236,8 @@ export default function OnboardingPage() {
               </div>
 
               <p className="text-[11px] leading-relaxed text-text-subtle">
-                提示：模型文件较大，可跳过此步，稍后在使用前于「设置 → 模型管理」下载。
+                提示：本地通路为可选项，模型文件较大，可跳过此步——需要离线识别时再到
+                「设置 → 模型管理」下载即可。
               </p>
             </div>
           )}
@@ -269,7 +272,7 @@ export default function OnboardingPage() {
               <h2 className="text-[13px] font-semibold">准备就绪</h2>
               <ul className="flex flex-col gap-2 text-[12px] leading-relaxed text-text-muted">
                 <li>
-                  · 本地语音识别：
+                  · 本地语音识别（可选）：
                   <b className={asrModel?.installed ? "text-success" : "text-warning"}>
                     {asrModel?.installed ? "模型已就绪" : "尚未下载模型（可稍后下载）"}
                   </b>

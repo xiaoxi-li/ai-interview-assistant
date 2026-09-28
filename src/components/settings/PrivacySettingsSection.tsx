@@ -79,6 +79,11 @@ export default function PrivacySettingsSection({
     setDraft(config);
   }, [config]);
 
+  // ST-14：`uploadAudio` 默认开启（与默认云端 ASR 配套）。本地 ASR 模式下该开关
+  // 无意义且后端会拒绝「本地 + 允许上传」，故展示值与保存值都以「云端模式下的选择」
+  // 为准 —— 开关状态与落库值始终自洽，不会出现「界面勾选但保存报错」。
+  const uploadAudio = cloudAsrEnabled && draft.uploadAudio;
+
   return (
     <section className="glass rounded-xl p-4 shadow-card">
       <header className="mb-4 flex items-center gap-2">
@@ -94,12 +99,12 @@ export default function PrivacySettingsSection({
           icon={UploadCloud}
           title="允许上传音频至云端 ASR"
           desc="开启后面试音频将发送至所选云端服务商进行转写；本地 ASR 模式下无需上传。"
-          checked={draft.uploadAudio}
+          checked={uploadAudio}
           disabled={!cloudAsrEnabled}
           warning={
             cloudAsrEnabled
               ? undefined
-              : "当前为本地 ASR 模式，如需上传请先在 ASR 设置中切换为云端"
+              : "当前为本地 ASR 模式（音频不出本机），无需上传；保存时该开关按未勾选记录"
           }
           onChange={(uploadAudio) => setDraft({ ...draft, uploadAudio })}
         />
@@ -116,7 +121,7 @@ export default function PrivacySettingsSection({
 
       <div className="mt-3 flex items-center gap-3">
         <button
-          onClick={() => onSave(draft)}
+          onClick={() => onSave({ ...draft, uploadAudio })}
           className="focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25"
         >
           <Save className="h-3.5 w-3.5" />

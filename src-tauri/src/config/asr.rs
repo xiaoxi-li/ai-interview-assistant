@@ -61,14 +61,15 @@ impl CloudAsrProvider {
 
     /// 默认流式模型
     ///
-    /// 阿里云默认取 `qwen-audio-3.1-asr-flash-streaming`：官方推荐的实时识别模型
-    /// （Gummy 系已标注「即将下线」）。已实测可用，备选：`fun-asr-realtime`、
-    /// `paraformer-realtime-v2`。注意 **`qwen-audio-3.1-asr-flash`（无 `-streaming`）
-    /// 是非实时 HTTP 模型**，填到实时端点会被拒（ModelNotFound）。
+    /// 阿里云默认取 `qwen-audio-3.0-asr-flash-streaming`（ST-14）：Qwen-Audio-3.0-ASR
+    /// 系列的流式版本，官方实时识别模型。同族实测可用：`qwen-audio-3.1-asr-flash-streaming`；
+    /// 另有 `fun-asr-realtime`、`paraformer-realtime-v2` 可作为备选。注意
+    /// **`qwen-audio-3.0-asr-flash`（无 `-streaming`）是非实时 HTTP 模型**（仅支持
+    /// 5 分钟文件转写），填到实时端点会被拒（ModelNotFound）。
     pub fn default_model(self) -> &'static str {
         match self {
             CloudAsrProvider::Xfyun => "iat",
-            CloudAsrProvider::Aliyun => "qwen-audio-3.1-asr-flash-streaming",
+            CloudAsrProvider::Aliyun => "qwen-audio-3.0-asr-flash-streaming",
             CloudAsrProvider::Tencent => "16k_zh",
             CloudAsrProvider::OpenaiCompat => "whisper-1",
         }
@@ -190,11 +191,15 @@ pub struct AsrConfig {
 
 impl AsrConfig {
     /// 按运行模式构造默认配置
+    ///
+    /// ST-14：云端字段一律取**已接入且开箱可用**的阿里云（本地模式下这些字段只是
+    /// 潜伏值，不参与 [`Self::active_model`]），避免出现「默认云端 + 默认服务商待接入」
+    /// 这种必然被命令层拦下的组合。
     pub fn from_mode(mode: AsrMode) -> Self {
         Self {
             mode,
-            cloud_provider: CloudAsrProvider::Xfyun,
-            model: CloudAsrProvider::Xfyun.default_model().to_string(),
+            cloud_provider: CloudAsrProvider::Aliyun,
+            model: CloudAsrProvider::Aliyun.default_model().to_string(),
             language: "zh-CN".to_string(),
             vad_threshold: 0.5,
             local_model: DEFAULT_LOCAL_MODEL.to_string(),
@@ -267,8 +272,10 @@ impl AsrConfig {
 
 impl Default for AsrConfig {
     fn default() -> Self {
-        // 阶段性决策：P0 只做本地 ASR 通路，默认取本地模式
-        Self::from_mode(AsrMode::Local)
+        // ST-14：开箱默认走云端（阿里云百炼实时识别）——本地通路需先下载模型且
+        // 依赖 `local-asr-native` 特性，作默认会把「首次可用」推迟到一次下载之后。
+        // 默认值只在无 `asr.config` 时生效，不覆盖已有配置。
+        Self::from_mode(AsrMode::Cloud)
     }
 }
 
@@ -304,12 +311,28 @@ mod tests {
     }
 
     #[test]
-    fn default_config_targets_local_with_zh_language() {
+    fn default_config_targets_cloud_aliyun_with_zh_language() {
+        // ST-14：开箱默认云端（阿里云百炼），模型取官方实时模型
         let config = AsrConfig::default();
-        assert_eq!(config.mode, AsrMode::Local, "P0 默认走本地 ASR 通路");
-        assert_eq!(config.cloud_provider, CloudAsrProvider::Xfyun);
+        assert_eq!(config.mode, AsrMode::Cloud, "默认走云端 ASR 通路");
+        assert_eq!(config.cloud_provider, CloudAsrProvider::Aliyun);
+        assert_eq!(config.model, "qwen-audio-3.0-asr-flash-streaming");
         assert_eq!(config.language, "zh-CN");
+        assert_eq!(
+            config.local_model, DEFAULT_LOCAL_MODEL,
+            "本地模型字段保留默认值，仅切到本地模式时生效"
+        );
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn local_mode_keeps_cloud_fields_at_aliyun_default() {
+        // 云端字段在本地模式下只是潜伏值，不应退化为「待接入」服务商
+        let config = AsrConfig::from_mode(AsrMode::Local);
+        assert_eq!(config.mode, AsrMode::Local);
+        assert_eq!(config.active_model(), DEFAULT_LOCAL_MODEL);
+        assert_eq!(config.cloud_provider, CloudAsrProvider::Aliyun);
+        assert_eq!(config.model, CloudAsrProvider::Aliyun.default_model());
     }
 
     #[test]
@@ -395,11 +418,11 @@ mod tests {
     #[test]
     fn active_model_follows_mode() {
         let mut config = AsrConfig::default();
-        // P0 默认本地模式
-        assert_eq!(config.active_model(), DEFAULT_LOCAL_MODEL);
+        // ST-14 默认云端模式
+        assert_eq!(config.active_model(), "qwen-audio-3.0-asr-flash-streaming");
 
-        config.mode = AsrMode::Cloud;
-        assert_eq!(config.active_model(), "iat");
+        config.mode = AsrMode::Local;
+        assert_eq!(config.active_model(), DEFAULT_LOCAL_MODEL);
     }
 
     #[test]

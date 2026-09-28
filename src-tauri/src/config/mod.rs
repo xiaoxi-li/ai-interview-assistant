@@ -87,7 +87,10 @@ impl AiPlatform {
             AiPlatform::Qwen => (
                 "通义千问 Qwen",
                 "https://dashscope.aliyuncs.com/compatible-mode/v1",
-                "qwen-plus",
+                // ST-14：默认模型取 `qwen3.8-flash`；该系列在百炼上 `enable_thinking`
+                // 默认为 true，但思考模式仍默认非思考（ST-12），请求体固定带
+                // `enable_thinking: false`，首字延迟不受影响。
+                "qwen3.8-flash",
                 Some("enable_thinking"),
             ),
             AiPlatform::Glm => (
@@ -209,7 +212,9 @@ impl AiConfig {
 
 impl Default for AiConfig {
     fn default() -> Self {
-        Self::from_preset(AiPlatform::Deepseek)
+        // ST-14：开箱默认走通义千问 Qwen（与默认云端 ASR 共用同一把百炼 API Key，
+        // 首次配置只需填一个 Key）；默认值只在无 `ai.config` 时生效，不覆盖已有配置。
+        Self::from_preset(AiPlatform::Qwen)
     }
 }
 
@@ -390,11 +395,22 @@ mod tests {
     }
 
     #[test]
-    fn default_config_uses_deepseek_preset() {
+    fn default_config_uses_qwen_preset_with_flash_model() {
+        // ST-14：开箱默认平台为通义千问 Qwen，默认模型 qwen3.8-flash
         let config = AiConfig::default();
-        assert_eq!(config.platform, AiPlatform::Deepseek);
-        assert_eq!(config.base_url, "https://api.deepseek.com/v1");
+        assert_eq!(config.platform, AiPlatform::Qwen);
+        assert_eq!(
+            config.base_url,
+            "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        );
+        assert_eq!(config.model, "qwen3.8-flash");
+        assert_eq!(
+            config.model,
+            AiPlatform::Qwen.preset().default_model,
+            "默认模型应与平台预设一致（切换平台即套用同一值）"
+        );
         assert!(config.stream);
+        assert_eq!(config.thinking, ThinkingMode::NonThinking);
     }
 
     #[test]

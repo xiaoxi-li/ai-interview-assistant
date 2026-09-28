@@ -103,7 +103,9 @@ describe("OnboardingPage", () => {
 
     expect(screen.getByText("欢迎使用轻松面试")).toBeTruthy();
     expect(screen.getByText("第 1 / 4 步 · 本地优先与权限")).toBeTruthy();
-    expect(screen.getByText(/不会上传/)).toBeTruthy();
+    // ST-14：默认云端转写，文案需说明音频会发往所选服务商、可切回本地
+    expect(screen.getByText("云端语音识别")).toBeTruthy();
+    expect(screen.getByText(/音频会发送至该服务商/)).toBeTruthy();
   });
 
   it("第一步禁用「上一步」", () => {
@@ -117,7 +119,7 @@ describe("OnboardingPage", () => {
 
     fireEvent.click(screen.getByText("下一步"));
     expect(screen.getByText("第 2 / 4 步 · 语音识别通路")).toBeTruthy();
-    expect(screen.getByText(/默认使用本地语音识别/)).toBeTruthy();
+    expect(screen.getByText(/默认使用云端语音识别/)).toBeTruthy();
 
     fireEvent.click(screen.getByText("下一步"));
     expect(screen.getByText("第 3 / 4 步 · AI 平台配置")).toBeTruthy();

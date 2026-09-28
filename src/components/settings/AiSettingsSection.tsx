@@ -122,7 +122,7 @@ export default function AiSettingsSection({
             id="ai-base-url"
             value={draft.baseUrl}
             onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
-            placeholder="https://api.deepseek.com/v1"
+            placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
             className={FIELD}
           />
         </div>
@@ -135,7 +135,7 @@ export default function AiSettingsSection({
             id="ai-model"
             value={draft.model}
             onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-            placeholder="deepseek-chat"
+            placeholder="qwen3.8-flash"
             className={FIELD}
           />
         </div>

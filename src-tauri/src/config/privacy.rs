@@ -2,6 +2,8 @@
 //!
 //! 说明：`upload_audio` 与 ASR 模式相互约束——云端 ASR 必然需要上传音频；
 //! 本地模式下该开关无实际作用，UI 会据此禁用并提示。
+//! ST-14：默认值为 `true`（与默认云端 ASR 配套，开箱即可转写），仅在无
+//! `privacy.config` 时生效，不覆盖已有配置。
 
 use super::{load_setting, save_setting};
 use rusqlite::Connection;
@@ -23,8 +25,10 @@ pub struct PrivacyConfig {
 impl Default for PrivacyConfig {
     fn default() -> Self {
         Self {
-            // 方案确认：云端 ASR 需用户显式开启，因此默认关闭
-            upload_audio: false,
+            // ST-14：ASR 默认走云端（`AsrConfig::default`），上传同意默认开启才能让
+            // 这条通路开箱可用；用户取消勾选或切到本地模式即回到「不上传」。
+            // 本地模式的组合由前端在保存时自动落为 false（`validate` 语义不放宽）。
+            upload_audio: true,
             encrypt_local: false,
         }
     }
@@ -71,10 +75,15 @@ mod tests {
     }
 
     #[test]
-    fn default_privacy_is_most_conservative() {
+    fn default_privacy_allows_upload_without_local_encryption() {
+        // ST-14：默认允许上传（与默认云端 ASR 一致，开箱即可转写）
         let config = PrivacyConfig::default();
-        assert!(!config.upload_audio, "默认不上传音频");
-        assert!(!config.encrypt_local);
+        assert!(config.upload_audio, "默认允许上传音频至云端 ASR");
+        assert!(!config.encrypt_local, "默认不开启本地字段级加密");
+        assert!(
+            config.validate(true).is_ok(),
+            "默认隐私配置需与默认云端 ASR 兼容"
+        );
     }
 
     #[test]
@@ -116,7 +125,11 @@ mod tests {
 
     #[test]
     fn local_mode_without_upload_is_valid() {
-        let config = PrivacyConfig::default();
+        // 切到本地模式时前端会把上传开关落为 false（ST-14），此时校验必须通过
+        let config = PrivacyConfig {
+            upload_audio: false,
+            encrypt_local: false,
+        };
         assert!(config.validate(false).is_ok());
     }
 }

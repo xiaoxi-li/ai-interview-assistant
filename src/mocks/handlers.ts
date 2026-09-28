@@ -38,7 +38,8 @@ export async function mockInvoke<T>(
           platform: "qwen",
           label: "通义千问 Qwen",
           defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-          defaultModel: "qwen-plus",
+          // ST-14：与后端 `AiPlatform::Qwen.preset()` 保持一致
+          defaultModel: "qwen3.8-flash",
           thinkingParam: "enable_thinking",
         },
         {
@@ -65,10 +66,11 @@ export async function mockInvoke<T>(
       ] as T;
 
     case "get_ai_config":
+      // ST-14：与后端 `AiConfig::default()`（Qwen + qwen3.8-flash）保持一致
       return {
-        platform: "deepseek",
-        baseUrl: "https://api.deepseek.com/v1",
-        model: "deepseek-chat",
+        platform: "qwen",
+        baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        model: "qwen3.8-flash",
         stream: true,
         temperature: 0.7,
         thinking: "nonThinking",
@@ -174,7 +176,8 @@ export async function mockInvoke<T>(
       return true as T;
 
     case "get_privacy_config":
-      return { uploadAudio: false, encryptLocal: false } as T;
+      // ST-14：与后端 `PrivacyConfig::default()`（默认允许上传）保持一致
+      return { uploadAudio: true, encryptLocal: false } as T;
 
     case "save_privacy_config":
       return (args?.config ?? null) as T;
@@ -527,7 +530,8 @@ export async function mockInvoke<T>(
         {
           provider: "aliyun",
           label: "阿里云智能语音",
-          defaultModel: "qwen-audio-3.1-asr-flash-streaming",
+          // ST-14：与后端 `CloudAsrProvider::Aliyun.default_model()` 保持一致
+          defaultModel: "qwen-audio-3.0-asr-flash-streaming",
           credentialFields: ["api_key"],
           defaultBaseUrl: "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
           implemented: true,
@@ -563,10 +567,11 @@ export async function mockInvoke<T>(
       ] as T;
 
     case "get_asr_config":
+      // ST-14：与后端 `AsrConfig::default()`（云端 + 阿里云 + 3.0 流式模型）保持一致
       return {
         mode: "cloud",
-        cloudProvider: "xfyun",
-        model: "iat",
+        cloudProvider: "aliyun",
+        model: "qwen-audio-3.0-asr-flash-streaming",
         language: "zh-CN",
         vadThreshold: 0.5,
         localModel: "sherpa-onnx-paraformer-zh",

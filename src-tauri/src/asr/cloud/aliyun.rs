@@ -512,7 +512,7 @@ fn failed_message(code: &str, message: &str) -> String {
     let mut text = format!("服务端拒绝任务（{code}）：{message}");
     if code.eq_ignore_ascii_case("ModelNotFound") || message.contains("Model not found") {
         text.push_str(
-            "。请检查云端模型名：① 非实时（HTTP 文件转写）模型不能用于实时转写，例如 `qwen-audio-3.1-asr-flash` 的实时版是 `qwen-audio-3.1-asr-flash-streaming`；② 确认模型名拼写正确且在当前地域/账号可用。实测可用的实时模型：qwen-audio-3.1-asr-flash-streaming、fun-asr-realtime、paraformer-realtime-v2",
+            "。请检查云端模型名：① 非实时（HTTP 文件转写）模型不能用于实时转写，例如 `qwen-audio-3.0-asr-flash` 的实时版是 `qwen-audio-3.0-asr-flash-streaming`（旧版 `qwen-audio-3.1-asr-flash` 同理）；② 确认模型名拼写正确且在当前地域/账号可用。实测可用的实时模型：qwen-audio-3.0-asr-flash-streaming、qwen-audio-3.1-asr-flash-streaming、fun-asr-realtime、paraformer-realtime-v2",
         );
     }
     text
@@ -894,10 +894,14 @@ mod tests {
         // 真实踩坑：非实时（HTTP）模型名不能用于实时端点
         let message = failed_message(
             "ModelNotFound",
-            "Model not found (qwen-audio-3.1-asr-flash)!",
+            "Model not found (qwen-audio-3.0-asr-flash)!",
         );
         assert!(message.contains("服务端拒绝任务"), "{message}");
-        assert!(message.contains("qwen-audio-3.1-asr-flash"), "{message}");
+        assert!(message.contains("qwen-audio-3.0-asr-flash"), "{message}");
+        assert!(
+            message.contains("qwen-audio-3.0-asr-flash-streaming"),
+            "应给出 ST-14 的默认实时模型：{message}"
+        );
         assert!(
             message.contains("qwen-audio-3.1-asr-flash-streaming"),
             "应给出可用的实时模型：{message}"
