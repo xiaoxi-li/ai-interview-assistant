@@ -147,7 +147,7 @@ export default function AudioCapturePanel() {
       )}
 
       <p className="mt-2 text-[10px] leading-relaxed text-text-subtle">
-        此处仅用于试听电平与确认设备，不产生转写文本；开始转写请在右侧「实时转写」中
+        此处仅用于试听电平与确认设备，不产生转写文本；开始转写请在下方「实时转写」中
         选择通道后点「开始转写」（转写与试听互斥，开始转写会停止试听）。
       </p>
 

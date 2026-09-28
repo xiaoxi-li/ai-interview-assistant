@@ -39,17 +39,20 @@ export default function InterviewPage() {
       </div>
 
       <div className="flex min-h-0 flex-1 gap-4 overflow-hidden p-4">
-        <div className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto">
-          <AudioCapturePanel />
-        </div>
-
-        {/* 右列是「按内容排布 + 整体滚动」的容器：子面板一律不参与压缩（shrink-0），
-            否则内容超出可视高度时会被压扁，内容溢出并压到下一个面板上（视觉重叠）。 */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto [&>*]:shrink-0">
+        {/* 左列 = 输入链路（演示卡 / 音频采集 / 实时转写），宽度按窗口 45% 自适应。
+            两列都是「按内容排布 + 整体滚动」的容器：直接子面板一律不参与压缩（shrink-0），
+            否则内容超出可视高度时会被压扁，溢出并压到下一个面板上（视觉重叠）；
+            需要伸展的面板用 grow（当前为实时转写：占满剩余高度、列表在面板内部滚动）。 */}
+        <div className="flex min-h-0 w-[45%] shrink-0 flex-col gap-4 overflow-y-auto [&>*]:shrink-0">
           {/* 未开始时提供「零准备」演示入口 */}
           {!running && <DemoCard />}
-          <ShortcutBar />
+          <AudioCapturePanel />
           <TranscriptPanel />
+        </div>
+
+        {/* 右列 = 结果输出（快捷操作 / 问题识别 / AI 回答），滚动约定同左列 */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto [&>*]:shrink-0">
+          <ShortcutBar />
           <QuestionPanel />
           <AnswerPanel />
         </div>
