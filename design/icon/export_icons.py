@@ -8,7 +8,7 @@ from PIL import Image
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(BASE, "..", ".."))
-SRC = os.path.join(BASE, "final", "user", "mark-app-1024.png")
+SRC = os.path.join(BASE, "final", "user", "app-icon-rounded-1024.png")
 OUT = os.path.join(REPO, "src-tauri", "icons")
 
 NAMES = ((32, "32x32.png"), (64, "64x64.png"), (128, "128x128.png"),
