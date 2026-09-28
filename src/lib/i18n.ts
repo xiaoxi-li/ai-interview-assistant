@@ -33,7 +33,6 @@ const EN: Record<string, string> = {
   最大化: "Maximize",
   关闭: "Close",
   "迷你模式（仅显示当前问题与 AI 回答）": "Mini mode (question & answer only)",
-  迷你: "Mini",
   恢复完整界面: "Restore full view",
   退出应用: "Quit app",
 

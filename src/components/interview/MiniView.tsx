@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Maximize2, Power } from "lucide-react";
 import { cn, isTauri } from "../../lib/utils";
@@ -6,27 +6,36 @@ import logoLockupLight from "../../assets/logo-lockup-light.png";
 import logoLockupDark from "../../assets/logo-lockup-dark.png";
 import { ipc } from "../../lib/ipc";
 import { useAnswerEvents } from "../../hooks/useAnswerEvents";
+import { useAnswerPipeline } from "../../hooks/useAnswerPipeline";
 import { useInterviewShortcuts } from "../../hooks/useInterviewShortcuts";
 import { useQuestionEvents } from "../../hooks/useQuestionEvents";
+import { useTranscriptEvents } from "../../hooks/useTranscriptEvents";
 import { useT } from "../../hooks/useT";
 import { useAppStore } from "../../stores/appStore";
 import { useInterviewStore } from "../../stores/interviewStore";
 import type { QaPair } from "../../types";
 
 /**
- * 迷你页视图（IA-13，就地迷你模式）：在主窗口内直接渲染，仅展示当前面试官问题与 AI 回答。
+ * 迷你页视图（IA-13，就地迷你模式）：在主窗口内直接渲染，展示面试官实时转写 / 当前面试官问题与 AI 回答。
  * 由 `useAppStore.miniMode` 控制显隐；进入/退出时由后端调整主窗口尺寸与置顶，
  * 点击「恢复」即回到完整界面并还原窗口几何，因此不存在独立无边框窗口的「空白且无法关闭」问题。
+ *
+ * 链路能力与全屏一致（IA-13.6）：订阅转写/问题/回答三路事件，并经 `useAnswerPipeline`
+ * 自动召回 + 自动生成回答，因此小窗内同样是逐字流式输出。
  */
 export default function MiniView() {
   const asrStatus = useInterviewStore((s) => s.asrStatus);
   const currentQuestion = useInterviewStore((s) => s.currentQuestion);
+  const transcript = useInterviewStore((s) => s.transcript);
+  const partial = useInterviewStore((s) => s.partial);
   const answerText = useInterviewStore((s) => s.answerText);
   const answerStatus = useInterviewStore((s) => s.answerStatus);
   const answerError = useInterviewStore((s) => s.answerError);
   const sources = useInterviewStore((s) => s.sources);
+  const persistedSources = useInterviewStore((s) => s.persistedSources);
   const applyQuestionPush = useInterviewStore((s) => s.applyQuestionPush);
   const applyAnswerPush = useInterviewStore((s) => s.applyAnswerPush);
+  const applyTranscriptPush = useInterviewStore((s) => s.applyTranscriptPush);
   const loadAsrStatus = useInterviewStore((s) => s.loadAsrStatus);
   const hydrateFromPair = useInterviewStore((s) => s.hydrateFromPair);
 
@@ -36,14 +45,18 @@ export default function MiniView() {
 
   // 迷你页内同样响应快捷键与系统全局热键
   useInterviewShortcuts();
+  // 三路事件订阅：转写（面试官实时文字）/ 问题（当前问题）/ 回答（流式 token）
+  useTranscriptEvents(applyTranscriptPush);
   useQuestionEvents(applyQuestionPush);
   useAnswerEvents(applyAnswerPush);
+  // 自动召回 + 自动生成回答（与全屏 AnswerPanel 共用同一份触发逻辑，IA-07 / IA-08 / IA-13）
+  useAnswerPipeline();
 
   useEffect(() => {
     loadAsrStatus();
   }, [loadAsrStatus]);
 
-  // 打开时恢复当前会话最近的问题与回答（迷你页是纯展示端，不主动生成）
+  // 打开时恢复当前会话最近的问题与回答（迷你页不自造问答，重新生成仍由热键触发）
   useEffect(() => {
     if (!sessionId) return;
     ipc<QaPair | null>("latest_question", { sessionId })
@@ -52,6 +65,22 @@ export default function MiniView() {
       })
       .catch((err) => console.error("恢复最近问答失败:", err));
   }, [sessionId, hydrateFromPair]);
+
+  /**
+   * 面试官一侧的实时文字：partial 优先（逐字增长），其次最近一条 final；
+   * 与当前问题文本重复时不重复展示（「我」通道文字不进入迷你页）。
+   */
+  const live = useMemo(() => {
+    if (partial?.speaker === "interviewer") {
+      return { text: partial.text, provisional: true };
+    }
+    const lastFinal = [...transcript].reverse().find((line) => line.speaker === "interviewer");
+    if (!lastFinal || lastFinal.text === currentQuestion?.text) return null;
+    return { text: lastFinal.text, provisional: false };
+  }, [transcript, partial, currentQuestion]);
+
+  // 引用来源：优先实时召回结果，无则回退落库引用（与全屏 AnswerPanel 口径一致）
+  const citations = sources.length ? sources : persistedSources;
 
   /** 退出应用：与标题栏「关闭」一致，遵循设置中的托盘行为配置 */
   const quitApp = () => {
@@ -82,9 +111,6 @@ export default function MiniView() {
           draggable={false}
           className="hidden h-4 w-auto select-none dark:block"
         />
-        <span data-tauri-drag-region className="text-[11px] font-medium">
-          {t("迷你")}
-        </span>
         <div className="ml-auto flex items-center">
           <button className={iconButton} title={t("恢复完整界面")} onClick={exitMiniMode}>
             <Maximize2 className="h-3.5 w-3.5" />
@@ -100,12 +126,30 @@ export default function MiniView() {
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2.5">
-        {/* 当前问题 */}
+        {/* 面试官实时转写 / 当前问题 */}
         <div className="rounded-md border border-primary/25 bg-primary/[0.07] px-2.5 py-2">
-          <p className="text-[10px] text-text-subtle">当前问题</p>
-          <p className="mt-0.5 text-[12.5px] font-medium leading-relaxed">
-            {currentQuestion?.text ?? "等待识别面试官问题…"}
+          <p className="text-[10px] text-text-subtle">
+            {currentQuestion ? t("当前问题") : t("面试官")}
           </p>
+          {currentQuestion ? (
+            <p className="mt-0.5 text-[12.5px] font-medium leading-relaxed">
+              {currentQuestion.text}
+            </p>
+          ) : (
+            <p
+              className={cn(
+                "mt-0.5 line-clamp-3 text-[12.5px] leading-relaxed",
+                live ? "italic text-text-muted" : "text-text-subtle"
+              )}
+            >
+              {live ? `${live.text}…` : "等待识别面试官问题…"}
+            </p>
+          )}
+          {currentQuestion && live && (
+            <p className="mt-1 line-clamp-1 border-t border-ghost/[0.06] pt-1 text-[10.5px] leading-relaxed text-text-subtle">
+              {live.provisional ? `${live.text}…` : live.text}
+            </p>
+          )}
         </div>
 
         {/* AI 回答 */}
@@ -128,10 +172,10 @@ export default function MiniView() {
           )}
         </div>
 
-        {sources.length > 0 && (
+        {citations.length > 0 && (
           <div className="flex flex-wrap items-center gap-1">
             <span className="text-[10px] text-text-subtle">引用：</span>
-            {sources.slice(0, 3).map((hit) => (
+            {citations.slice(0, 3).map((hit) => (
               <span
                 key={hit.noteId}
                 className="max-w-[8rem] truncate rounded bg-ghost/[0.06] px-1.5 py-0.5 text-[10px] text-text-muted"

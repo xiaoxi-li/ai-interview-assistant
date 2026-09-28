@@ -80,7 +80,7 @@ export default function App() {
     setCurrentPage(key);
   };
 
-  // 迷你模式（IA-13）：整个界面就地切换为「仅展示当前问题 + AI 回答」的迷你页
+  // 迷你模式（IA-13）：整个界面就地切换为「面试官实时转写 / 当前问题 + AI 回答」的迷你页
   if (miniMode) {
     return <MiniView />;
   }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   AlertCircle,
   BookOpen,
@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useAnswerEvents } from "../../hooks/useAnswerEvents";
+import { useAnswerPipeline } from "../../hooks/useAnswerPipeline";
 import { useT } from "../../hooks/useT";
 import { useAppStore } from "../../stores/appStore";
 import { useInterviewStore } from "../../stores/interviewStore";
@@ -27,7 +28,6 @@ interface Citation {
 export default function AnswerPanel() {
   const asrStatus = useInterviewStore((s) => s.asrStatus);
   const currentQaId = useInterviewStore((s) => s.currentQaId);
-  const questionConfig = useInterviewStore((s) => s.questionConfig);
   const answerText = useInterviewStore((s) => s.answerText);
   const answerStatus = useInterviewStore((s) => s.answerStatus);
   const answerError = useInterviewStore((s) => s.answerError);
@@ -36,38 +36,16 @@ export default function AnswerPanel() {
   const persistedSources = useInterviewStore((s) => s.persistedSources);
   const generateAnswer = useInterviewStore((s) => s.generateAnswer);
   const applyAnswerPush = useInterviewStore((s) => s.applyAnswerPush);
-  const loadQuestionConfig = useInterviewStore((s) => s.loadQuestionConfig);
-  const recallSources = useInterviewStore((s) => s.recallSources);
 
   const [copied, setCopied] = useState(false);
-  const autoHandledRef = useRef<string | null>(null);
   const t = useT();
 
   const sessionId = asrStatus?.sessionId ?? null;
   const streaming = answerStatus === "streaming" || answerStatus === "thinking";
 
   useAnswerEvents(applyAnswerPush);
-
-  useEffect(() => {
-    loadQuestionConfig();
-  }, [loadQuestionConfig]);
-
-  // 识别到新问题后自动召回知识库片段（IA-07）：结果供下方「引用来源」展示
-  useEffect(() => {
-    if (sessionId && currentQaId) {
-      recallSources(sessionId, currentQaId);
-    }
-  }, [sessionId, currentQaId, recallSources]);
-
-  // 识别到新问题后自动生成回答（可在设置中关闭）
-  useEffect(() => {
-    if (!sessionId || !currentQaId) return;
-    if (autoHandledRef.current === currentQaId) return;
-    if (questionConfig && questionConfig.autoAnswer === false) return;
-
-    autoHandledRef.current = currentQaId;
-    generateAnswer(sessionId, currentQaId);
-  }, [sessionId, currentQaId, questionConfig, generateAnswer]);
+  // 自动召回 + 自动生成回答：与迷你页共用同一份触发逻辑（IA-07 / IA-08 / IA-13）
+  useAnswerPipeline();
 
   const handleCopy = () => {
     if (!answerText) return;
