@@ -2,15 +2,161 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   主题令牌（ST-13）
+   - `:root` = 浅色取值；`.dark` = 深色取值（`html` 上由主题运行时切换 class）
+   - 全部颜色以「RGB 三通道分量」表达，供 Tailwind 的 `rgb(var(--x) / <alpha>)` 消费
+   - 深色取值与改造前完全一致，作为零回归基线
+   ========================================================================== */
 @layer base {
   :root {
-    --border: 222 22% 18%;
-    --input: 222 22% 18%;
-    --ring: 226 79% 66%;
+    /* 背景层级：页面底 / 卡片 / 嵌套块与控件底 */
+    --bg: 245 246 250; /* #F5F6FA */
+    --bg-2: 255 255 255; /* #FFFFFF */
+    --bg-3: 238 241 247; /* #EEF1F7 */
+
+    /* 文字层级：正文 / 次要 / 最弱 */
+    --fg: 20 26 40; /* #141A28 */
+    --fg-muted: 91 100 120; /* #5B6478 */
+    --fg-subtle: 133 141 158; /* #858D9E */
+
+    /* 品牌蓝（主色两主题一致，前景色在浅色下加深以保证白底可读） */
+    --primary: 79 107 237; /* #4F6BED */
+    --primary-2: 61 87 214; /* #3D57D6 */
+    --primary-3: 43 70 196; /* #2B46C4 */
+
+    /* 状态色（浅色下整体加深以保证对比度） */
+    --success: 27 158 99; /* #1B9E63 */
+    --danger: 217 45 51; /* #D92D33 */
+    --warning: 178 106 0; /* #B26A00 */
+
+    /* 描边与键盘聚焦环 */
+    --border: 226 229 236; /* #E2E5EC */
+    --input: 226 229 236;
+    --ring: 79 107 237;
+
+    /* 双主题叠加层：浅色下叠黑（深色下叠白） */
+    --ghost: 15 20 32;
+
+    /* 玻璃拟态面板 */
+    --glass-bg: rgba(255, 255, 255, 0.82);
+    --glass-border: rgba(15, 20, 32, 0.08);
+    --glass-strong-bg: rgba(255, 255, 255, 0.92);
+    --glass-strong-border: rgba(15, 20, 32, 0.1);
+
+    /* 阴影：浅色更轻 */
+    --shadow-card: 0 1px 2px rgba(15, 20, 32, 0.06),
+      0 8px 24px -12px rgba(15, 20, 32, 0.14);
+    --shadow-card-hover: 0 2px 6px rgba(15, 20, 32, 0.08),
+      0 12px 32px -12px rgba(15, 20, 32, 0.18);
+    --shadow-popover: 0 12px 40px -8px rgba(15, 20, 32, 0.22);
+    --shadow-brand: 0 6px 20px -6px rgba(79, 107, 237, 0.35);
+
+    /* 滚动条 */
+    --scrollbar-thumb: #c9cfdb;
+    --scrollbar-thumb-hover: #aeb6c6;
+
+    /* Markdown 预览 */
+    --md-text: #141a28;
+    --md-heading-border: #e2e5ec;
+    --md-link: #2b46c4;
+    --md-code-bg: #eef1f7;
+    --md-pre-bg: #f7f8fc;
+    --md-pre-border: #e2e5ec;
+    --md-quote-border: #4f6bed;
+    --md-quote-text: #5b6478;
+    --md-table-border: #e2e5ec;
+    --md-th-bg: #eef1f7;
+
+    /* 代码高亮 */
+    --hl-keyword: #7c3aed;
+    --hl-string: #15803d;
+    --hl-number: #c2410c;
+    --hl-comment: #94a3b8;
+    --hl-function: #2563eb;
+    --hl-type: #b45309;
+    --hl-variable: #141a28;
+
+    /* 代码编辑器（CodeMirror 微调） */
+    --cm-bg: #ffffff;
+    --cm-gutter-bg: #f7f8fc;
+    --cm-gutter-border: #e2e5ec;
+    --cm-gutter-color: #8a93a6;
+    --cm-active-line: rgba(79, 107, 237, 0.05);
+    --cm-active-gutter: rgba(79, 107, 237, 0.1);
+    --cm-active-gutter-color: #2b46c4;
+    --cm-cursor: #2b46c4;
+  }
+
+  .dark {
+    --bg: 15 20 32; /* #0F1420 */
+    --bg-2: 23 30 46; /* #171E2E */
+    --bg-3: 30 39 57; /* #1E2739 */
+
+    --fg: 230 234 242; /* #E6EAF2 */
+    --fg-muted: 154 163 181; /* #9AA3B5 */
+    --fg-subtle: 107 116 136; /* #6B7488 */
+
+    --primary: 79 107 237; /* #4F6BED */
+    --primary-2: 91 124 250; /* #5B7CFA */
+    --primary-3: 124 154 255; /* #7C9AFF */
+
+    --success: 46 194 126; /* #2EC27E */
+    --danger: 229 72 77; /* #E5484D */
+    --warning: 245 166 35; /* #F5A623 */
+
+    --border: 36 42 56; /* 原 hsl(222 22% 18%) */
+    --input: 36 42 56;
+    --ring: 100 132 237; /* 原 hsl(226 79% 66%) */
+
+    --ghost: 255 255 255;
+
+    --glass-bg: rgba(23, 30, 46, 0.72);
+    --glass-border: rgba(255, 255, 255, 0.06);
+    --glass-strong-bg: rgba(15, 20, 32, 0.85);
+    --glass-strong-border: rgba(255, 255, 255, 0.08);
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28),
+      0 8px 24px -12px rgba(0, 0, 0, 0.55);
+    --shadow-card-hover: 0 2px 6px rgba(0, 0, 0, 0.3),
+      0 12px 32px -12px rgba(0, 0, 0, 0.6);
+    --shadow-popover: 0 12px 40px -8px rgba(0, 0, 0, 0.7);
+    --shadow-brand: 0 6px 20px -6px rgba(79, 107, 237, 0.45);
+
+    --scrollbar-thumb: #2a3448;
+    --scrollbar-thumb-hover: #38435a;
+
+    --md-text: #e6eaf2;
+    --md-heading-border: #2a3448;
+    --md-link: #7c9aff;
+    --md-code-bg: #1e2739;
+    --md-pre-bg: #141a28;
+    --md-pre-border: #242e44;
+    --md-quote-border: #4f6bed;
+    --md-quote-text: #9aa3b5;
+    --md-table-border: #2a3448;
+    --md-th-bg: #1e2739;
+
+    --hl-keyword: #c792ea;
+    --hl-string: #c3e88d;
+    --hl-number: #f78c6c;
+    --hl-comment: #6b7488;
+    --hl-function: #82aaff;
+    --hl-type: #ffcb6b;
+    --hl-variable: #e6eaf2;
+
+    --cm-bg: #0f1420;
+    --cm-gutter-bg: #131a28;
+    --cm-gutter-border: #1e2739;
+    --cm-gutter-color: #4a5567;
+    --cm-active-line: rgba(79, 107, 237, 0.07);
+    --cm-active-gutter: rgba(79, 107, 237, 0.12);
+    --cm-active-gutter-color: #7c9aff;
+    --cm-cursor: #7c9aff;
   }
 
   * {
-    border-color: hsl(var(--border));
+    border-color: rgb(var(--border));
   }
 
   html,
@@ -22,8 +168,8 @@
   }
 
   body {
-    background-color: #0f1420;
-    color: #e6eaf2;
+    background-color: rgb(var(--bg));
+    color: rgb(var(--fg));
     font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui,
       -apple-system, sans-serif;
     font-size: 14px;
@@ -43,11 +189,11 @@
     height: 8px;
   }
   ::-webkit-scrollbar-thumb {
-    background: #2a3448;
+    background: var(--scrollbar-thumb);
     border-radius: 6px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #38435a;
+    background: var(--scrollbar-thumb-hover);
   }
   ::-webkit-scrollbar-track {
     background: transparent;
@@ -56,14 +202,14 @@
 
 @layer utilities {
   .glass {
-    background: rgba(23, 30, 46, 0.72);
+    background: var(--glass-bg);
     backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--glass-border);
   }
   .glass-strong {
-    background: rgba(15, 20, 32, 0.85);
+    background: var(--glass-strong-bg);
     backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--glass-strong-border);
   }
   /* 统一键盘聚焦可见环（可交互元素通用） */
   .focus-ring {
@@ -71,9 +217,9 @@
   }
 }
 
-/* Markdown 预览样式 */
+/* Markdown 预览样式（配色随主题令牌，见上方 `--md-*`） */
 .markdown-body {
-  color: #e6eaf2;
+  color: var(--md-text);
   line-height: 1.75;
   font-size: 14px;
 }
@@ -82,13 +228,13 @@
 .markdown-body h3,
 .markdown-body h4 {
   font-weight: 600;
-  color: #e6eaf2;
+  color: var(--md-text);
   margin: 1.2em 0 0.6em;
   line-height: 1.3;
 }
 .markdown-body h1 {
   font-size: 1.6em;
-  border-bottom: 1px solid #2a3448;
+  border-bottom: 1px solid var(--md-heading-border);
   padding-bottom: 0.4em;
 }
 .markdown-body h2 {
@@ -101,22 +247,22 @@
   margin: 0.6em 0;
 }
 .markdown-body a {
-  color: #7c9aff;
+  color: var(--md-link);
   text-decoration: none;
 }
 .markdown-body a:hover {
   text-decoration: underline;
 }
 .markdown-body code {
-  background: #1e2739;
+  background: var(--md-code-bg);
   padding: 0.15em 0.4em;
   border-radius: 6px;
   font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
   font-size: 0.9em;
 }
 .markdown-body pre {
-  background: #141a28;
-  border: 1px solid #242e44;
+  background: var(--md-pre-bg);
+  border: 1px solid var(--md-pre-border);
   border-radius: 8px;
   padding: 14px 16px;
   overflow-x: auto;
@@ -127,10 +273,10 @@
   padding: 0;
 }
 .markdown-body blockquote {
-  border-left: 3px solid #4f6bed;
+  border-left: 3px solid var(--md-quote-border);
   padding-left: 1em;
   margin: 0.8em 0;
-  color: #9aa3b5;
+  color: var(--md-quote-text);
 }
 .markdown-body table {
   border-collapse: collapse;
@@ -139,12 +285,12 @@
 }
 .markdown-body th,
 .markdown-body td {
-  border: 1px solid #2a3448;
+  border: 1px solid var(--md-table-border);
   padding: 6px 12px;
   text-align: left;
 }
 .markdown-body th {
-  background: #1e2739;
+  background: var(--md-th-bg);
   font-weight: 600;
 }
 .markdown-body ul,
@@ -164,47 +310,47 @@
 }
 .markdown-body hr {
   border: none;
-  border-top: 1px solid #2a3448;
+  border-top: 1px solid var(--md-heading-border);
   margin: 1.2em 0;
 }
 
-/* 代码高亮（highlight.js 精简主题） */
+/* 代码高亮（highlight.js 精简主题，深/浅两套取值） */
 .markdown-body .hljs-keyword,
 .markdown-body .hljs-selector-tag,
 .markdown-body .hljs-built_in {
-  color: #c792ea;
+  color: var(--hl-keyword);
 }
 .markdown-body .hljs-string,
 .markdown-body .hljs-attr,
 .markdown-body .hljs-template-variable {
-  color: #c3e88d;
+  color: var(--hl-string);
 }
 .markdown-body .hljs-number,
 .markdown-body .hljs-literal {
-  color: #f78c6c;
+  color: var(--hl-number);
 }
 .markdown-body .hljs-comment,
 .markdown-body .hljs-quote {
-  color: #6b7488;
+  color: var(--hl-comment);
   font-style: italic;
 }
 .markdown-body .hljs-function,
 .markdown-body .hljs-title {
-  color: #82aaff;
+  color: var(--hl-function);
 }
 .markdown-body .hljs-type,
 .markdown-body .hljs-class {
-  color: #ffcb6b;
+  color: var(--hl-type);
 }
 .markdown-body .hljs-variable,
 .markdown-body .hljs-tag {
-  color: #e6eaf2;
+  color: var(--hl-variable);
 }
 
-/* ===== CodeMirror 深色主题微调 ===== */
+/* ===== CodeMirror 主题微调（配色随主题令牌） ===== */
 .cm-editor {
   height: 100%;
-  background: #0f1420 !important;
+  background: var(--cm-bg) !important;
 }
 .cm-editor .cm-scroller {
   font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
@@ -212,19 +358,19 @@
   line-height: 1.7;
 }
 .cm-editor .cm-gutters {
-  background: #131a28;
-  border-right: 1px solid #1e2739;
-  color: #4a5567;
+  background: var(--cm-gutter-bg);
+  border-right: 1px solid var(--cm-gutter-border);
+  color: var(--cm-gutter-color);
 }
 .cm-editor .cm-activeLine {
-  background: rgba(79, 107, 237, 0.07);
+  background: var(--cm-active-line);
 }
 .cm-editor .cm-activeLineGutter {
-  background: rgba(79, 107, 237, 0.12);
-  color: #7c9aff;
+  background: var(--cm-active-gutter);
+  color: var(--cm-active-gutter-color);
 }
 .cm-editor .cm-cursor {
-  border-left-color: #7c9aff;
+  border-left-color: var(--cm-cursor);
 }
 .cm-editor.cm-focused {
   outline: none;

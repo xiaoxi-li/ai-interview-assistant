@@ -57,7 +57,7 @@ export default function ModelManagerSection({
           return (
             <li
               key={model.id}
-              className="rounded-md border border-white/[0.06] bg-background-3/40 p-3"
+              className="rounded-md border border-ghost/[0.06] bg-background-3/40 p-3"
             >
               <div className="flex items-start gap-3">
                 <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary-3" />
@@ -66,7 +66,7 @@ export default function ModelManagerSection({
                     <span className="text-[12px] font-medium text-text">
                       {model.name}
                     </span>
-                    <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-text-subtle">
+                    <span className="rounded bg-ghost/[0.06] px-1.5 py-0.5 text-[10px] text-text-subtle">
                       {meta.label}
                     </span>
                     {model.installed && (
@@ -102,7 +102,7 @@ export default function ModelManagerSection({
                     <button
                       title="删除本地文件"
                       onClick={() => onDelete(model.id)}
-                      className="focus-ring cursor-pointer rounded-lg border border-white/10 p-1.5 text-text-subtle transition-colors hover:border-danger/40 hover:text-danger"
+                      className="focus-ring cursor-pointer rounded-lg border border-ghost/10 p-1.5 text-text-subtle transition-colors hover:border-danger/40 hover:text-danger"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -112,7 +112,7 @@ export default function ModelManagerSection({
 
               {downloading && (
                 <div className="mt-2">
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-ghost/[0.06]">
                     <div
                       className={cn(
                         "h-full rounded-full bg-gradient-to-r from-primary to-primary-3 transition-[width] duration-200",

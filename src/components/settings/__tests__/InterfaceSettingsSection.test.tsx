@@ -56,6 +56,38 @@ describe("InterfaceSettingsSection", () => {
     );
   });
 
+  it("主题三选一包含「跟随系统」（ST-13）", () => {
+    const h = setup();
+    expect(screen.getByText("深色")).toBeTruthy();
+    expect(screen.getByText("浅色")).toBeTruthy();
+    expect(screen.getByText("跟随系统")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("跟随系统"));
+    fireEvent.click(screen.getByText("保存配置"));
+
+    expect(h.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ theme: "system" })
+    );
+  });
+
+  it("点选主题即时预览，离开分区后回滚（ST-13）", () => {
+    useSettingsStore.setState({ previewTheme: null });
+    const { unmount } = render(
+      <InterfaceSettingsSection
+        config={config}
+        autoStartEnabled={false}
+        onSave={vi.fn()}
+        onToggleAutoStart={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByText("浅色"));
+    expect(useSettingsStore.getState().previewTheme).toBe("light");
+
+    unmount();
+    expect(useSettingsStore.getState().previewTheme).toBeNull();
+  });
+
   it("录制快捷键：按下组合键后更新绑定", () => {
     const h = setup();
     const recorder = screen.getByText("Ctrl+Shift+A");

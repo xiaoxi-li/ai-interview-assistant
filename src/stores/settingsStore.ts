@@ -9,6 +9,7 @@ import type {
   AudioDevice,
   ConnectionTest,
   InterfaceConfig,
+  InterfaceTheme,
   KnowledgeConfig,
   ModelProgress,
   ModelStatus,
@@ -109,6 +110,15 @@ interface SettingsState {
   interfaceConfig: InterfaceConfig | null;
   /** 系统级开机自启状态 */
   autoStartEnabled: boolean;
+  /**
+   * 设置页正在预览的主题（ST-13）：非空表示"即时预览中、尚未保存"。
+   * 取值优先于 `interfaceConfig.theme`，由 `useThemeSync` 统一消费。
+   */
+  previewTheme: InterfaceTheme | null;
+  /** 设置页点选主题：仅即时预览，不持久化（保存由 `saveInterfaceConfig` 完成） */
+  setPreviewTheme: (theme: InterfaceTheme) => void;
+  /** 结束预览并回滚到已保存主题（离开设置页时调用） */
+  clearPreviewTheme: () => void;
   loadInterfaceSettings: () => Promise<void>;
   saveInterfaceConfig: (config: InterfaceConfig) => Promise<void>;
   setAutoStart: (enabled: boolean) => Promise<void>;
@@ -197,6 +207,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     audioDevices: [],
     interfaceConfig: null,
     autoStartEnabled: false,
+    previewTheme: null,
+
+    setPreviewTheme: (theme) => set({ previewTheme: theme }),
+
+    clearPreviewTheme: () => set({ previewTheme: null }),
+
     knowledgeConfig: null,
     storagePaths: null,
 
@@ -213,7 +229,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     saveInterfaceConfig: (config) =>
       ipc<InterfaceConfig>("save_interface_config", { config })
         .then((saved) => {
-          set({ interfaceConfig: saved });
+          // 保存成功后预览态即成为正式主题，清空以免与已保存值分叉（ST-13）
+          set({ interfaceConfig: saved, previewTheme: null });
           feedback("interface", "success", "界面配置已保存");
         })
         .catch((err) => fail("保存界面配置", err, "interface")),

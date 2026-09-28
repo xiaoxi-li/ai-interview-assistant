@@ -24,7 +24,7 @@ import type {
 import type { ApiKeyStatus } from "../../stores/settingsStore";
 
 const FIELD =
-  "focus-ring w-full rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
+  "focus-ring w-full rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
 const LABEL = "mb-1.5 block text-[11px] text-text-muted";
 
 /** 回答模式选项（ST-12）：默认非思考 */
@@ -105,7 +105,7 @@ export default function AiSettingsSection({
               "focus-ring cursor-pointer rounded-lg border px-3 py-1.5 text-[12px] transition-colors",
               draft.platform === preset.platform
                 ? "border-primary/40 bg-primary/15 text-primary-3"
-                : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
+                : "border-ghost/10 bg-background-3/60 text-text-muted hover:text-text"
             )}
           >
             {preset.label}
@@ -154,7 +154,7 @@ export default function AiSettingsSection({
             onChange={(e) =>
               setDraft({ ...draft, temperature: Number(e.target.value) })
             }
-            className="w-full cursor-pointer accent-[#4F6BED]"
+            className="w-full cursor-pointer accent-primary"
           />
         </div>
 
@@ -164,7 +164,7 @@ export default function AiSettingsSection({
               type="checkbox"
               checked={draft.stream}
               onChange={(e) => setDraft({ ...draft, stream: e.target.checked })}
-              className="focus-ring h-3.5 w-3.5 cursor-pointer rounded accent-[#4F6BED]"
+              className="focus-ring h-3.5 w-3.5 cursor-pointer rounded accent-primary"
             />
             流式输出（降低首字延迟）
           </label>
@@ -189,7 +189,7 @@ export default function AiSettingsSection({
                 "focus-ring cursor-pointer rounded-lg border px-3 py-1.5 text-[12px] transition-colors",
                 draft.thinking === option.value
                   ? "border-primary/40 bg-primary/15 text-primary-3"
-                  : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
+                  : "border-ghost/10 bg-background-3/60 text-text-muted hover:text-text"
               )}
             >
               {option.label}
@@ -234,7 +234,7 @@ export default function AiSettingsSection({
           <button
             onClick={() => onDeleteApiKey(draft.platform)}
             title="清除已保存的密钥"
-            className="focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:border-danger/40 hover:text-danger"
+            className="focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:border-danger/40 hover:text-danger"
           >
             <Trash2 className="h-3.5 w-3.5" />
             清除
@@ -273,7 +273,7 @@ export default function AiSettingsSection({
           <button
             onClick={onTestConnection}
             disabled={testing || Boolean(validationError)}
-            className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:border-primary/40 hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+            className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:border-primary/40 hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
           >
             {testing ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />

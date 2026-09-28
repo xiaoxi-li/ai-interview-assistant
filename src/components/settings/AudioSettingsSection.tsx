@@ -5,7 +5,7 @@ import { SaveFeedback } from "./SaveFeedback";
 import type { AudioConfig, AudioDevice } from "../../types";
 
 const FIELD =
-  "focus-ring w-full cursor-pointer rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors focus:border-primary/50";
+  "focus-ring w-full cursor-pointer rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors focus:border-primary/50";
 const LABEL = "mb-1.5 block text-[11px] text-text-muted";
 
 interface AudioSettingsSectionProps {
@@ -84,7 +84,7 @@ export default function AudioSettingsSection({
         <button
           onClick={onRefresh}
           title="重新枚举设备"
-          className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:border-primary/40 hover:text-text"
+          className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-ghost/10 bg-background-3/60 px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:border-primary/40 hover:text-text"
         >
           <RefreshCw className="h-3 w-3" />
           刷新设备

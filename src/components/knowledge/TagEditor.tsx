@@ -26,7 +26,7 @@ export default function TagEditor({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-b border-white/[0.06] px-4 py-1.5">
+    <div className="flex flex-wrap items-center gap-1.5 border-b border-ghost/[0.06] px-4 py-1.5">
       <Hash className="h-3 w-3 shrink-0 text-text-subtle" />
 
       {tags.map((tag) => (

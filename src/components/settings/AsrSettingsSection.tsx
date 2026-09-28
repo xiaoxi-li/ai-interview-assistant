@@ -29,7 +29,7 @@ import type {
 } from "../../types";
 
 const FIELD =
-  "focus-ring w-full rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
+  "focus-ring w-full rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
 const LABEL = "mb-1.5 block text-[11px] text-text-muted";
 
 interface AsrSettingsSectionProps {
@@ -118,7 +118,7 @@ export default function AsrSettingsSection({
               "focus-ring flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] transition-colors",
               draft.mode === mode
                 ? "border-primary/40 bg-primary/15 text-primary-3"
-                : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
+                : "border-ghost/10 bg-background-3/60 text-text-muted hover:text-text"
             )}
           >
             <Icon className="h-3.5 w-3.5" />
@@ -146,7 +146,7 @@ export default function AsrSettingsSection({
                   "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] transition-colors",
                   draft.cloudProvider === provider.provider
                     ? "border-primary/40 bg-primary/15 text-primary-3"
-                    : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
+                    : "border-ghost/10 bg-background-3/60 text-text-muted hover:text-text"
                 )}
               >
                 {provider.label}
@@ -155,7 +155,7 @@ export default function AsrSettingsSection({
                     "rounded px-1 py-0.5 text-[10px] leading-none",
                     provider.implemented
                       ? "bg-success/15 text-success"
-                      : "bg-white/[0.06] text-text-subtle"
+                      : "bg-ghost/[0.06] text-text-subtle"
                   )}
                 >
                   {provider.implemented ? "已接入" : "待接入"}
@@ -206,7 +206,7 @@ export default function AsrSettingsSection({
                     setDraft(withProviderBaseUrl(draft, draft.cloudProvider, ""))
                   }
                   disabled={!customBaseUrl}
-                  className="focus-ring flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-2.5 py-2 text-[11px] text-text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+                  className="focus-ring flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-ghost/10 bg-background-3/60 px-2.5 py-2 text-[11px] text-text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <RotateCcw className="h-3 w-3" />
                   恢复默认
@@ -279,7 +279,7 @@ export default function AsrSettingsSection({
             </div>
             <button
               onClick={() => onDeleteCredentials(draft.cloudProvider)}
-              className="focus-ring mt-2 flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:border-danger/40 hover:text-danger"
+              className="focus-ring mt-2 flex cursor-pointer items-center gap-1.5 rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:border-danger/40 hover:text-danger"
             >
               <Trash2 className="h-3 w-3" />
               清空该服务商全部凭证
@@ -334,7 +334,7 @@ export default function AsrSettingsSection({
             onChange={(e) =>
               setDraft({ ...draft, vadThreshold: Number(e.target.value) })
             }
-            className="w-full cursor-pointer accent-[#4F6BED]"
+            className="w-full cursor-pointer accent-primary"
           />
           <p className="mt-1 text-[10px] leading-relaxed text-text-subtle">
             值越大越严格（0.5 约等于 -33dBFS，适合正常说话音量）。识别不到说话时调低，
@@ -357,7 +357,7 @@ export default function AsrSettingsSection({
           <button
             onClick={() => onTestConnection?.(draft)}
             disabled={testing || Boolean(validationError)}
-            className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+            className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
           >
             <PlugZap className="h-3.5 w-3.5" />
             {testing ? "测试中…" : "连接测试"}

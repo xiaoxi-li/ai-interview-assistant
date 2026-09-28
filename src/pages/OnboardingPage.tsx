@@ -100,7 +100,7 @@ export default function OnboardingPage() {
           </div>
           <button
             onClick={() => completeOnboarding()}
-            className="focus-ring ml-auto cursor-pointer rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-text-muted transition-colors hover:text-text"
+            className="focus-ring ml-auto cursor-pointer rounded-lg border border-ghost/10 px-2.5 py-1 text-[11px] text-text-muted transition-colors hover:text-text"
           >
             跳过向导
           </button>
@@ -116,7 +116,7 @@ export default function OnboardingPage() {
                     ? "bg-success/20 text-success"
                     : index === step
                       ? "bg-primary/20 text-primary-3"
-                      : "bg-white/[0.06] text-text-subtle"
+                      : "bg-ghost/[0.06] text-text-subtle"
                 )}
               >
                 {index < step ? <Check className="h-3 w-3" /> : index + 1}
@@ -130,13 +130,13 @@ export default function OnboardingPage() {
                 {item.title}
               </span>
               {index < STEPS.length - 1 && (
-                <span className="h-px flex-1 bg-white/10" />
+                <span className="h-px flex-1 bg-ghost/10" />
               )}
             </li>
           ))}
         </ol>
 
-        <div className="min-h-[260px] flex-1 rounded-xl border border-white/[0.06] bg-background-3/30 p-4">
+        <div className="min-h-[260px] flex-1 rounded-xl border border-ghost/[0.06] bg-background-3/30 p-4">
           {step === 0 && (
             <div className="flex flex-col gap-3">
               <h2 className="text-[13px] font-semibold">面试内容只保留在这台电脑上</h2>
@@ -170,7 +170,7 @@ export default function OnboardingPage() {
                 云端识别（讯飞/阿里/腾讯）将在后续版本提供，届时可在「设置 → 语音识别」中切换。
               </p>
 
-              <div className="rounded-md border border-white/[0.06] bg-background-2/40 p-3">
+              <div className="rounded-md border border-ghost/[0.06] bg-background-2/40 p-3">
                 <div className="flex items-center gap-2">
                   <Cloud className="h-3.5 w-3.5 text-text-subtle" />
                   <span className="text-[12px] font-medium">
@@ -195,7 +195,7 @@ export default function OnboardingPage() {
 
                 {progress && (
                   <div className="mt-2">
-                    <div className="h-1 overflow-hidden rounded-full bg-white/10">
+                    <div className="h-1 overflow-hidden rounded-full bg-ghost/10">
                       <div
                         className="h-full rounded-full bg-primary transition-all"
                         style={{ width: `${percent}%` }}
@@ -281,7 +281,7 @@ export default function OnboardingPage() {
                   <b> 双通道（区分说话人）</b>并开始转写。
                 </li>
               </ul>
-              <p className="rounded-md border border-white/[0.06] bg-background-2/40 px-3 py-2 text-[11px] leading-relaxed text-text-subtle">
+              <p className="rounded-md border border-ghost/[0.06] bg-background-2/40 px-3 py-2 text-[11px] leading-relaxed text-text-subtle">
                 所有设置随时可在「设置」页调整；按 <b>Ctrl/Cmd + Shift + A</b> 可在面试中一键提问。
               </p>
             </div>
@@ -292,7 +292,7 @@ export default function OnboardingPage() {
           <button
             onClick={() => setStep((value) => Math.max(0, value - 1))}
             disabled={step === 0}
-            className="focus-ring flex cursor-pointer items-center gap-1 rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+            className="focus-ring flex cursor-pointer items-center gap-1 rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
             上一步

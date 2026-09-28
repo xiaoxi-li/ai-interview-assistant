@@ -6,7 +6,7 @@ import { pickDirectory } from "../../lib/dialog";
 import type { KnowledgeConfig, ModelStatus, StoragePaths } from "../../types";
 
 const FIELD =
-  "focus-ring w-full rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
+  "focus-ring w-full rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-2 text-[12px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
 const LABEL = "mb-1.5 block text-[11px] text-text-muted";
 
 interface KnowledgeSettingsSectionProps {
@@ -81,7 +81,7 @@ export default function KnowledgeSettingsSection({
             <button
               onClick={() => browse("dbPath")}
               title="选择目录"
-              className="focus-ring cursor-pointer rounded-lg border border-white/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:border-primary/40 hover:text-text"
+              className="focus-ring cursor-pointer rounded-lg border border-ghost/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:border-primary/40 hover:text-text"
             >
               <FolderOpen className="h-3.5 w-3.5" />
             </button>
@@ -89,7 +89,7 @@ export default function KnowledgeSettingsSection({
               <button
                 onClick={() => resetPath("dbPath")}
                 title="恢复默认路径"
-                className="focus-ring cursor-pointer rounded-lg border border-white/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:text-text"
+                className="focus-ring cursor-pointer rounded-lg border border-ghost/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:text-text"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
               </button>
@@ -118,7 +118,7 @@ export default function KnowledgeSettingsSection({
             <button
               onClick={() => browse("modelsDir")}
               title="选择目录"
-              className="focus-ring cursor-pointer rounded-lg border border-white/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:border-primary/40 hover:text-text"
+              className="focus-ring cursor-pointer rounded-lg border border-ghost/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:border-primary/40 hover:text-text"
             >
               <FolderOpen className="h-3.5 w-3.5" />
             </button>
@@ -126,7 +126,7 @@ export default function KnowledgeSettingsSection({
               <button
                 onClick={() => resetPath("modelsDir")}
                 title="恢复默认路径"
-                className="focus-ring cursor-pointer rounded-lg border border-white/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:text-text"
+                className="focus-ring cursor-pointer rounded-lg border border-ghost/10 bg-background-3/60 p-2 text-text-muted transition-colors hover:text-text"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
               </button>

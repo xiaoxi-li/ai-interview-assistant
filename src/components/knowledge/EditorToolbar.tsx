@@ -31,7 +31,7 @@ export default function EditorToolbar({
   onToggleHistory,
 }: EditorToolbarProps) {
   return (
-    <div className="flex h-11 shrink-0 items-center gap-3 border-b border-white/[0.06] px-4">
+    <div className="flex h-11 shrink-0 items-center gap-3 border-b border-ghost/[0.06] px-4">
       <input
         value={title}
         onChange={(e) => onTitleChange(e.target.value)}
@@ -58,7 +58,7 @@ export default function EditorToolbar({
           title="版本历史"
           onClick={onToggleHistory}
           className={cn(
-            "focus-ring flex cursor-pointer items-center rounded border border-white/10 p-1.5 transition-colors",
+            "focus-ring flex cursor-pointer items-center rounded border border-ghost/10 p-1.5 transition-colors",
             historyOpen
               ? "bg-primary/20 text-primary-3"
               : "bg-background-3/60 text-text-subtle hover:text-text"
@@ -68,7 +68,7 @@ export default function EditorToolbar({
         </button>
       )}
 
-      <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-background-3/60 p-0.5">
+      <div className="flex items-center gap-0.5 rounded-lg border border-ghost/10 bg-background-3/60 p-0.5">
         {MODES.map(({ key, label, icon: Icon }) => (
           <button
             key={key}

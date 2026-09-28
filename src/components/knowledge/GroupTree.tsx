@@ -134,7 +134,7 @@ export default function GroupTree({
             "focus-ring group flex cursor-pointer items-center gap-1 rounded-md py-1 pr-1.5 text-[12px] transition-colors",
             selected
               ? "bg-primary/15 text-primary-3"
-              : "text-text-muted hover:bg-white/[0.06] hover:text-text"
+              : "text-text-muted hover:bg-ghost/[0.06] hover:text-text"
           )}
         >
           {hasChildren ? (
@@ -191,7 +191,7 @@ export default function GroupTree({
                 setEditing({ id: node.id, parentId: node.parentId });
                 setDraft(node.name);
               }}
-              className={cn(ICON_BTN, "hover:bg-white/[0.06] hover:text-text")}
+              className={cn(ICON_BTN, "hover:bg-ghost/[0.06] hover:text-text")}
             >
               <Pencil className="h-3 w-3" />
             </button>
@@ -235,7 +235,7 @@ export default function GroupTree({
           "focus-ring flex cursor-pointer items-center gap-1.5 rounded-md py-1 pl-3 pr-2 text-[12px] transition-colors",
           selected
             ? "bg-primary/15 text-primary-3"
-            : "text-text-muted hover:bg-white/[0.06] hover:text-text"
+            : "text-text-muted hover:bg-ghost/[0.06] hover:text-text"
         )}
       >
         <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -279,7 +279,7 @@ export default function GroupTree({
       <div
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => handleDrop(e, null)}
-        className="mt-1 rounded-lg border border-dashed border-white/10 py-1.5 text-center text-[10px] text-text-subtle"
+        className="mt-1 rounded-lg border border-dashed border-ghost/10 py-1.5 text-center text-[10px] text-text-subtle"
       >
         拖到此处移到根级
       </div>

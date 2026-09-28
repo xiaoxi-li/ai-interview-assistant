@@ -4,6 +4,7 @@ import EditorToolbar from "./EditorToolbar";
 import MarkdownView from "./MarkdownView";
 import TagEditor from "./TagEditor";
 import { cn } from "../../lib/utils";
+import { useResolvedTheme } from "../../hooks/useThemeSync";
 import type { ViewMode } from "../../types";
 
 interface MarkdownEditorProps {
@@ -49,6 +50,8 @@ export default function MarkdownEditor({
 }: MarkdownEditorProps) {
   const showSource = viewMode !== "preview";
   const showPreview = viewMode !== "source";
+  // 源码编辑器主题随全局主题切换（ST-13）
+  const theme = useResolvedTheme();
 
   return (
     <div className="flex h-full flex-col">
@@ -77,13 +80,13 @@ export default function MarkdownEditor({
           <div
             className={cn(
               "min-w-0 overflow-hidden",
-              viewMode === "split" ? "w-1/2 border-r border-white/[0.06]" : "flex-1"
+              viewMode === "split" ? "w-1/2 border-r border-ghost/[0.06]" : "flex-1"
             )}
           >
             <CodeMirror
               value={content}
               height="100%"
-              theme="dark"
+              theme={theme}
               extensions={[markdown()]}
               onChange={onContentChange}
               basicSetup={{

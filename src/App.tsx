@@ -12,6 +12,7 @@ import {
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { cn, isTauri } from "./lib/utils";
 import { useT } from "./hooks/useT";
+import { useThemeSync } from "./hooks/useThemeSync";
 import { useAppStore, type PageKey } from "./stores/appStore";
 import KnowledgePage from "./pages/KnowledgePage";
 import InterviewPage from "./pages/InterviewPage";
@@ -52,6 +53,9 @@ export default function App() {
   const enterMiniMode = useAppStore((s) => s.enterMiniMode);
   const t = useT();
 
+  // 主题同步（ST-13）：必须在迷你模式 / 向导早退之前调用，Hooks 不可条件调用
+  useThemeSync();
+
   useEffect(() => {
     loadOnboarding();
   }, [loadOnboarding]);
@@ -79,7 +83,7 @@ export default function App() {
       {/* 自定义标题栏 */}
       <header
         data-tauri-drag-region
-        className="flex h-11 shrink-0 items-center justify-between border-b border-white/[0.06] bg-background-2/70 px-3 backdrop-blur-xl"
+        className="flex h-11 shrink-0 items-center justify-between border-b border-ghost/[0.06] bg-background-2/70 px-3 backdrop-blur-xl"
       >
         <div data-tauri-drag-region className="flex items-center gap-2.5">
           <div className="flex h-6 w-6 items-center justify-center rounded bg-gradient-to-br from-primary to-primary-3 shadow-brand">
@@ -104,14 +108,14 @@ export default function App() {
           <button
             title={t("最小化")}
             onClick={() => controlWindow("minimize")}
-            className="focus-ring flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
+            className="focus-ring flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-ghost/[0.06] hover:text-text"
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
           <button
             title={t("最大化")}
             onClick={() => controlWindow("toggleMaximize")}
-            className="focus-ring flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
+            className="focus-ring flex h-7 w-8 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-ghost/[0.06] hover:text-text"
           >
             <Square className="h-3 w-3" />
           </button>
@@ -127,7 +131,7 @@ export default function App() {
 
       <div className="flex min-h-0 flex-1">
         {/* 侧边导航 */}
-        <nav className="flex w-[74px] shrink-0 flex-col items-center gap-1 border-r border-white/[0.06] bg-background-2/40 py-3">
+        <nav className="flex w-[74px] shrink-0 flex-col items-center gap-1 border-r border-ghost/[0.06] bg-background-2/40 py-3">
           {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
@@ -136,7 +140,7 @@ export default function App() {
                 "focus-ring group flex w-[60px] cursor-pointer flex-col items-center gap-1 rounded-lg py-2.5 text-[11px] transition-all duration-200",
                 currentPage === key
                   ? "bg-primary/15 text-primary-3"
-                  : "text-text-subtle hover:bg-white/[0.06] hover:text-text-muted"
+                  : "text-text-subtle hover:bg-ghost/[0.06] hover:text-text-muted"
               )}
             >
               <Icon className="h-[18px] w-[18px]" />

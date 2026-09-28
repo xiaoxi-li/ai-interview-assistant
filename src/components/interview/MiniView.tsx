@@ -60,13 +60,13 @@ export default function MiniView() {
   };
 
   const iconButton =
-    "focus-ring flex h-6 w-7 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text";
+    "focus-ring flex h-6 w-7 cursor-pointer items-center justify-center rounded text-text-subtle transition-colors hover:bg-ghost/[0.06] hover:text-text";
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden rounded-xl border border-primary/25 bg-background text-text">
       <header
         data-tauri-drag-region
-        className="flex h-8 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-background-2/80 px-2.5"
+        className="flex h-8 shrink-0 items-center gap-2 border-b border-ghost/[0.06] bg-background-2/80 px-2.5"
       >
         <Sparkles className="h-3.5 w-3.5 text-primary-3" />
         <span data-tauri-drag-region className="text-[11px] font-medium">
@@ -96,7 +96,7 @@ export default function MiniView() {
         </div>
 
         {/* AI 回答 */}
-        <div className="flex min-h-0 flex-1 flex-col rounded-md border border-white/[0.06] bg-background-3/30 px-2.5 py-2">
+        <div className="flex min-h-0 flex-1 flex-col rounded-md border border-ghost/[0.06] bg-background-3/30 px-2.5 py-2">
           {answerError ? (
             <p className="text-[11.5px] leading-relaxed text-danger">{answerError}</p>
           ) : answerText ? (
@@ -121,7 +121,7 @@ export default function MiniView() {
             {sources.slice(0, 3).map((hit) => (
               <span
                 key={hit.noteId}
-                className="max-w-[8rem] truncate rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-text-muted"
+                className="max-w-[8rem] truncate rounded bg-ghost/[0.06] px-1.5 py-0.5 text-[10px] text-text-muted"
                 title={hit.title}
               >
                 {hit.title}

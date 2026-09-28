@@ -12,6 +12,8 @@ pub const SETTING_INTERFACE_CONFIG: &str = "interface.config";
 pub enum Theme {
     Dark,
     Light,
+    /// 跟随操作系统深浅色（ST-13）；实际生效主题由前端解析
+    System,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -174,6 +176,52 @@ mod tests {
         accelerators.dedup();
         assert_eq!(accelerators.len(), total);
         assert!(hotkeys.iter().all(|h| h.accelerator.contains('+')));
+    }
+
+    #[test]
+    fn theme_variants_serialize_lowercase() {
+        // 前端以字符串交互，取值必须是 "dark" / "light" / "system"（ST-13）
+        assert_eq!(serde_json::to_string(&Theme::Dark).unwrap(), "\"dark\"");
+        assert_eq!(serde_json::to_string(&Theme::Light).unwrap(), "\"light\"");
+        assert_eq!(serde_json::to_string(&Theme::System).unwrap(), "\"system\"");
+        assert_eq!(
+            serde_json::from_str::<Theme>("\"system\"").unwrap(),
+            Theme::System
+        );
+    }
+
+    #[test]
+    fn interface_config_round_trip_with_system_theme() {
+        with_db(|conn| {
+            let config = InterfaceConfig {
+                theme: Theme::System,
+                hotkeys: default_hotkeys(),
+                auto_start: false,
+                tray_behavior: TrayBehavior::Minimize,
+                always_on_top: false,
+                hide_from_capture: false,
+            };
+            save_interface_config(conn, &config).expect("save");
+            assert_eq!(load_interface_config(conn).expect("load").theme, Theme::System);
+        });
+    }
+
+    #[test]
+    fn unknown_theme_value_falls_back_to_default() {
+        with_db(|conn| {
+            // 未知主题取值会导致整份配置反序列化失败，按既有策略回退默认配置
+            save_setting(
+                conn,
+                SETTING_INTERFACE_CONFIG,
+                r#"{"theme":"sepia","hotkeys":[],"autoStart":false,"trayBehavior":"minimize"}"#,
+            )
+            .expect("save raw");
+            assert_eq!(
+                load_interface_config(conn).expect("load").theme,
+                Theme::Dark,
+                "解析失败时回退默认主题"
+            );
+        });
     }
 
     #[test]

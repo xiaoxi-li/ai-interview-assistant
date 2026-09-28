@@ -8,7 +8,7 @@ import type { SettingsSaveFeedback } from "../../stores/settingsStore";
 import type { UpdateCheck, UpdateConfig } from "../../types";
 
 const FIELD =
-  "focus-ring w-full rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
+  "focus-ring w-full rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
 
 /** 关于与更新（P2）：版本信息、更新地址与检查更新 */
 export default function UpdateSection() {
@@ -80,7 +80,7 @@ export default function UpdateSection() {
       <header className="mb-3 flex items-center gap-2">
         <Rocket className="h-4 w-4 text-primary-3" />
         <h2 className="text-[13px] font-semibold">{t("关于与更新")}</h2>
-        <span className="ml-auto rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-text-subtle">
+        <span className="ml-auto rounded-full bg-ghost/[0.06] px-2 py-0.5 text-[10px] text-text-subtle">
           v{version || "…"}
         </span>
       </header>
@@ -136,7 +136,7 @@ export default function UpdateSection() {
                     });
                   });
               }}
-              className="focus-ring cursor-pointer rounded accent-[#4F6BED]"
+              className="focus-ring cursor-pointer rounded accent-primary"
             />
             {t("启动时自动检查")}
           </label>

@@ -47,7 +47,7 @@ export default function HotkeyInput({ id, value, invalid, onChange }: HotkeyInpu
           ? "border-danger/50 bg-danger/10 text-danger"
           : recording
             ? "border-primary/60 bg-primary/15 text-primary-3"
-            : "border-white/10 bg-background-3/60 text-text hover:border-primary/40"
+            : "border-ghost/10 bg-background-3/60 text-text hover:border-primary/40"
       )}
     >
       <Keyboard className="h-3.5 w-3.5 shrink-0 opacity-70" />

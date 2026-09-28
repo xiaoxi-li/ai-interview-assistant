@@ -52,11 +52,11 @@ export default function SessionsPage() {
   };
 
   const iconButton =
-    "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:border-primary/30 hover:text-primary-3 disabled:cursor-not-allowed disabled:opacity-40";
+    "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-ghost/10 bg-background-3/60 px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:border-primary/30 hover:text-primary-3 disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/[0.06] px-4">
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-ghost/[0.06] px-4">
         <History className="h-4 w-4 text-primary-3" />
         <h1 className="text-[15px] font-semibold">{t("会话历史")}</h1>
         <span className="text-[11px] text-text-subtle">
@@ -65,7 +65,7 @@ export default function SessionsPage() {
         <button
           onClick={() => loadSessions()}
           disabled={loading}
-          className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-text-muted transition-colors hover:text-text disabled:opacity-50"
+          className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-ghost/10 px-2.5 py-1 text-[11px] text-text-muted transition-colors hover:text-text disabled:opacity-50"
         >
           {loading ? (
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -119,7 +119,7 @@ export default function SessionsPage() {
                   "glass cursor-pointer rounded-xl p-3 text-left shadow-card transition-colors",
                   selectedId === session.id
                     ? "border-primary/40 bg-primary/[0.08]"
-                    : "hover:bg-white/[0.06]"
+                    : "hover:bg-ghost/[0.06]"
                 )}
               >
                 <div className="truncate text-[12px] font-medium text-text">
@@ -193,7 +193,7 @@ export default function SessionsPage() {
                   转写时间线（{detail.segments.length} 条）
                 </h3>
                 {detail.segments.length === 0 ? (
-                  <p className="rounded-md border border-white/[0.06] bg-background-3/30 px-3 py-4 text-[11px] text-text-subtle">
+                  <p className="rounded-md border border-ghost/[0.06] bg-background-3/30 px-3 py-4 text-[11px] text-text-subtle">
                     该会话没有转写记录
                   </p>
                 ) : (
@@ -208,7 +208,7 @@ export default function SessionsPage() {
                             "mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px]",
                             segment.speaker === "interviewer"
                               ? "bg-primary/15 text-primary-3"
-                              : "bg-white/[0.08] text-text-muted"
+                              : "bg-ghost/[0.08] text-text-muted"
                           )}
                         >
                           {SPEAKER_LABEL[segment.speaker] ?? segment.speaker}
@@ -226,7 +226,7 @@ export default function SessionsPage() {
                   问答记录（{detail.qa.length} 组）
                 </h3>
                 {detail.qa.length === 0 ? (
-                  <p className="rounded-md border border-white/[0.06] bg-background-3/30 px-3 py-4 text-[11px] text-text-subtle">
+                  <p className="rounded-md border border-ghost/[0.06] bg-background-3/30 px-3 py-4 text-[11px] text-text-subtle">
                     该会话没有识别到问题
                   </p>
                 ) : (
@@ -234,7 +234,7 @@ export default function SessionsPage() {
                     {detail.qa.map((pair, index) => (
                       <li
                         key={pair.id}
-                        className="rounded-md border border-white/[0.06] bg-background-3/30 p-3"
+                        className="rounded-md border border-ghost/[0.06] bg-background-3/30 p-3"
                       >
                         <div className="flex items-start gap-2">
                           <span className="shrink-0 text-[10px] text-text-subtle">
@@ -255,7 +255,7 @@ export default function SessionsPage() {
                             {pair.sources.map((source, sourceIndex) => (
                               <span
                                 key={`${source.noteId}-${sourceIndex}`}
-                                className="max-w-[12rem] truncate rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-text-muted"
+                                className="max-w-[12rem] truncate rounded bg-ghost/[0.06] px-1.5 py-0.5 text-[10px] text-text-muted"
                                 title={source.title}
                               >
                                 {source.title || "未命名笔记"}

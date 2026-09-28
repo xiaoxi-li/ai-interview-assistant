@@ -53,6 +53,7 @@ ehthumbs.db
 desktop.ini
 
 # ===== 本地数据 / 临时文件 =====
+.theme-shots/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal

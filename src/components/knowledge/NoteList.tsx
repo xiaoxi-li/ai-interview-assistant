@@ -84,7 +84,7 @@ export default function NoteList({
                 mode === "all" ? "cursor-pointer" : "cursor-default opacity-90",
                 active
                   ? "border-primary/40 bg-primary/12"
-                  : "border-transparent hover:border-white/10 hover:bg-white/[0.06]"
+                  : "border-transparent hover:border-ghost/10 hover:bg-ghost/[0.06]"
               )}
             >
               <div className="flex items-center gap-2">

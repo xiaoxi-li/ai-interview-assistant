@@ -103,7 +103,7 @@ export default function AnswerPanel() {
         <h2 className="text-[13px] font-semibold">{t("AI 回答")}</h2>
 
         {answerModel && (
-          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-text-subtle">
+          <span className="rounded-full bg-ghost/[0.06] px-2 py-0.5 text-[10px] text-text-subtle">
             {answerModel}
           </span>
         )}
@@ -119,7 +119,7 @@ export default function AnswerPanel() {
             onClick={handleCopy}
             disabled={!answerText}
             title={t("复制回答")}
-            className="focus-ring cursor-pointer rounded p-1 text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+            className="focus-ring cursor-pointer rounded p-1 text-text-subtle transition-colors hover:bg-ghost/[0.06] hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
           >
             {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
@@ -127,7 +127,7 @@ export default function AnswerPanel() {
             onClick={() => sessionId && generateAnswer(sessionId, currentQaId, true)}
             disabled={!currentQaId || streaming}
             title={t("重新生成")}
-            className="focus-ring flex cursor-pointer items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[10px] text-text-muted transition-colors hover:border-primary/30 hover:text-primary-3 disabled:cursor-not-allowed disabled:opacity-40"
+            className="focus-ring flex cursor-pointer items-center gap-1 rounded-lg border border-ghost/10 px-2 py-1 text-[10px] text-text-muted transition-colors hover:border-primary/30 hover:text-primary-3 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <RefreshCw className="h-3 w-3" />
             {t("重新生成")}
@@ -148,7 +148,7 @@ export default function AnswerPanel() {
           )}
         </p>
       ) : (
-        <p className="rounded-md border border-white/[0.06] bg-background-3/30 px-3 py-6 text-center text-[11px] leading-relaxed text-text-subtle">
+        <p className="rounded-md border border-ghost/[0.06] bg-background-3/30 px-3 py-6 text-center text-[11px] leading-relaxed text-text-subtle">
           {currentQaId
             ? streaming
               ? t("正在结合知识库生成回答…")
@@ -180,7 +180,7 @@ export default function AnswerPanel() {
                       : t("该引用缺少笔记 ID")
                   }
                   className={cn(
-                    "focus-ring flex w-full flex-col gap-0.5 rounded-md border border-white/[0.06] bg-background-3/30 px-2.5 py-2 text-left transition-colors",
+                    "focus-ring flex w-full flex-col gap-0.5 rounded-md border border-ghost/[0.06] bg-background-3/30 px-2.5 py-2 text-left transition-colors",
                     citation.noteId
                       ? "cursor-pointer hover:border-primary/30 hover:bg-primary/[0.07]"
                       : "cursor-default"

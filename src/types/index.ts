@@ -451,8 +451,11 @@ export interface HotkeyBinding {
   accelerator: string;
 }
 
+/** 主题设置（ST-13）：深色 / 浅色 / 跟随系统 */
+export type InterfaceTheme = "dark" | "light" | "system";
+
 export interface InterfaceConfig {
-  theme: "dark" | "light";
+  theme: InterfaceTheme;
   hotkeys: HotkeyBinding[];
   autoStart: boolean;
   trayBehavior: "minimize" | "quit";

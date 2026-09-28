@@ -171,15 +171,15 @@ npm run tauri build -- --bundles msi          # 只出 MSI 安装包
 1. 双击安装包完成安装（或直接运行免安装 exe）。
 2. 启动后完成首次向导；确认窗口无边框自定义标题栏可拖拽、最小化/最大化/关闭正常。
 3. 复跑第三节验收清单 1–9。
-4. 「设置」中确认：主题切换、语言切换（中/英）、AI 平台配置、模型管理、隐私设置等页面可正常打开保存。
+4. 「设置」中确认：主题切换（深色 / 浅色 / **跟随系统**，点选即时预览、点「保存配置」持久化）、语言切换（中/英）、AI 平台配置、模型管理、隐私设置等页面可正常打开保存。
 
 ---
 
 ## 五、本地校验（提交前自检）
 
 ```powershell
-npm run verify            # 前端：tsc 构建 + vitest（279 项）
-cd src-tauri; cargo test  # 后端：377 项（含 PCM 回放端到端、AEC、双通道、演示链路）
+npm run verify            # 前端：tsc 构建 + vitest（339 项）
+cd src-tauri; cargo test  # 后端：442 项（含 PCM 回放端到端、AEC、双通道、演示链路）
 ```
 
 `npm run verify` 等价于 `npm run build && npm test`。CI 会在 Windows / macOS 双平台跑同一套校验（`.github/workflows/`）。
@@ -232,6 +232,8 @@ cd src-tauri; cargo test  # 后端：377 项（含 PCM 回放端到端、AEC、�
 | 云端「连接测试」报 **ModelNotFound** | 模型名不能用于实时转写：非实时（HTTP 文件转写）模型（如 `qwen-audio-3.1-asr-flash`，无 `-streaming`）只能走 HTTP 接口。请改用实测可用的实时模型：`qwen-audio-3.1-asr-flash-streaming`（默认）、`fun-asr-realtime`、`paraformer-realtime-v2` |
 | 召回没有结果 | 确认演示已执行（会自动写入 4 篇示例笔记），或先在「知识库」导入 Markdown |
 | 转写面板里明明有问题句，但「问题识别」一直为空、AI 回答也不生成 | ① 只有「面试官」通道的转写参与识别：单通道模式下请选「面试官（系统音频）」，双通道模式下确认系统音频通路正常（面试官的话应标为「面试官」而不是「我」）；② 判定单位是**句**（已按句末标点切句打分，见 `ai-doc/技术方案.md` 6.13），但**纯陈述句、疑问特征过弱或与上一次问题高度重复**的句子不会上报；③ 可先点「手动识别当前问题」用最近 30 秒转写兜底；④ 排查日志 `<数据目录>/logs/app.log.<日期>`：命中会写 `识别到面试问题（字数/得分/来源）`，未命中只有候选超时丢弃的 debug 记录 |
+| 选了「浅色」切到别的页面后，界面又变回原来的主题 | 主题是**即时预览**：点选立刻生效但**不落库**，需在该分区点「保存配置」才持久化；未保存就离开设置页会自动回滚（避免误改）。见 `ai-doc/技术方案.md` 6.14 |
+| 想让界面跟随系统深浅色 | 「设置 → 界面与快捷键 → 主题」选「跟随系统」，之后系统切换深浅色时界面实时变化，重启仍保持；系统主题不可用时回退深色 |
 | 想重置全部数据重来一遍 | 关闭应用后删除数据目录：Windows `%APPDATA%\com.easyinterview.app\`，macOS `~/Library/Application Support/com.easyinterview.app/`（内含 `easy-interview.db` 与 `models/`），下次启动会重新初始化并再次进入首次向导。注意：API Key 存在系统钥匙链中，如需一并清除请在「设置 → AI 平台」中删除 |
 
 ---
@@ -243,7 +245,7 @@ src/                    前端（React）
   components/interview/ 面试面板：转写 / 问题 / 回答 / 快捷条 / 演示卡 / 迷你页（就地迷你模式）
   pages/                知识库 / 面试辅助 / 会话历史 / 设置 / 首次向导
   stores/               zustand 状态（含 IPC 降级 mock）
-  hooks/                事件订阅（转写 / 问题 / 回答）与快捷键
+  hooks/                事件订阅（转写 / 问题 / 回答）、快捷键与主题同步
 src-tauri/src/          后端（Rust）
   asr/                  ASR（通道抽象 / 本地引擎 + VAD 流水线 / 双通道 / 落库；cloud/ = 云端实时 WS，IA-16）
   audio/                采集（cpal 麦克风 + WASAPI 端点回环，IA-14）/ VAD / AEC / 设备 / WAV

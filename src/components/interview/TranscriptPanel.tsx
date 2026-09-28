@@ -77,7 +77,7 @@ export default function TranscriptPanel() {
         <span
           className={cn(
             "rounded-full px-2 py-0.5 text-[10px]",
-            running ? "bg-success/15 text-success" : "bg-white/[0.06] text-text-subtle"
+            running ? "bg-success/15 text-success" : "bg-ghost/[0.06] text-text-subtle"
           )}
         >
           {statusText}
@@ -97,7 +97,7 @@ export default function TranscriptPanel() {
             <button
             title={t("清空当前转写显示")}
           onClick={clearTranscript}
-          className="focus-ring ml-auto cursor-pointer rounded p-1 text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
+          className="focus-ring ml-auto cursor-pointer rounded p-1 text-text-subtle transition-colors hover:bg-ghost/[0.06] hover:text-text"
         >
           <Eraser className="h-3.5 w-3.5" />
         </button>
@@ -120,7 +120,7 @@ export default function TranscriptPanel() {
               "focus-ring flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-60",
               mode === key
                 ? "border-primary/40 bg-primary/15 text-primary-3"
-                : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
+                : "border-ghost/10 bg-background-3/60 text-text-muted hover:text-text"
             )}
           >
             <Icon className="h-3 w-3" />
@@ -146,7 +146,7 @@ export default function TranscriptPanel() {
       {/* 转写列表 */}
       <div
         ref={listRef}
-        className="min-h-[140px] flex-1 overflow-y-auto rounded-md border border-white/[0.06] bg-background-3/30 p-2"
+        className="min-h-[140px] flex-1 overflow-y-auto rounded-md border border-ghost/[0.06] bg-background-3/30 p-2"
       >
         {transcript.length === 0 && !partial ? (
           <p className="px-1 py-6 text-center text-[11px] leading-relaxed text-text-subtle">
@@ -163,7 +163,7 @@ export default function TranscriptPanel() {
                     "mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px]",
                     line.speaker === "interviewer"
                       ? "bg-primary/15 text-primary-3"
-                      : "bg-white/[0.08] text-text-muted"
+                      : "bg-ghost/[0.08] text-text-muted"
                   )}
                 >
                   {speakerLabel(line.speaker)}
@@ -173,7 +173,7 @@ export default function TranscriptPanel() {
             ))}
             {partial && (
               <li key="partial" className="flex gap-2 opacity-70">
-                <span className="mt-0.5 shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-text-subtle">
+                <span className="mt-0.5 shrink-0 rounded bg-ghost/[0.06] px-1.5 py-0.5 text-[10px] text-text-subtle">
                   {speakerLabel(partial.speaker)}
                 </span>
                 <span className="text-[12px] italic leading-relaxed text-text-muted">

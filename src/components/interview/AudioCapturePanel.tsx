@@ -52,7 +52,7 @@ export default function AudioCapturePanel() {
             "ml-auto flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px]",
             running
               ? "bg-success/15 text-success"
-              : "bg-white/[0.06] text-text-subtle"
+              : "bg-ghost/[0.06] text-text-subtle"
           )}
         >
           <span
@@ -81,7 +81,7 @@ export default function AudioCapturePanel() {
               "focus-ring flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-60",
               source === key
                 ? "border-primary/40 bg-primary/15 text-primary-3"
-                : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
+                : "border-ghost/10 bg-background-3/60 text-text-muted hover:text-text"
             )}
           >
             <Icon className="h-3.5 w-3.5" />
@@ -97,7 +97,7 @@ export default function AudioCapturePanel() {
           value={deviceId}
           disabled={running}
           onChange={(e) => setDeviceId(e.target.value)}
-          className="focus-ring w-full cursor-pointer rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text outline-none focus:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="focus-ring w-full cursor-pointer rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-2 text-[12px] text-text outline-none focus:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <option value="">使用系统默认设备</option>
           {devices.map((device) => (
@@ -123,7 +123,7 @@ export default function AudioCapturePanel() {
                     : index > LEVEL_BARS * 0.5
                       ? "bg-warning"
                       : "bg-success"
-                  : "bg-white/[0.06]"
+                  : "bg-ghost/[0.06]"
               )}
             />
           ))}

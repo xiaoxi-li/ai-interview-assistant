@@ -102,7 +102,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/[0.06] px-4">
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-ghost/[0.06] px-4">
         <SettingsIcon className="h-4 w-4 text-primary-3" />
         <h1 className="text-[15px] font-semibold">{t("设置")}</h1>
 
@@ -113,7 +113,7 @@ export default function SettingsPage() {
           <select
             value={locale}
             onChange={(event) => setLocale(event.target.value as Locale)}
-            className="focus-ring cursor-pointer rounded-lg border border-white/10 bg-background-3/60 px-2 py-1 text-[11px] text-text outline-none transition-colors focus:border-primary/50"
+            className="focus-ring cursor-pointer rounded-lg border border-ghost/10 bg-background-3/60 px-2 py-1 text-[11px] text-text outline-none transition-colors focus:border-primary/50"
           >
             {LOCALES.map((item) => (
               <option key={item.value} value={item.value}>
@@ -220,7 +220,7 @@ export default function SettingsPage() {
                   <h3 className="text-[13px] font-medium text-text">
                     {section.title}
                   </h3>
-                  <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-text-subtle">
+                  <span className="rounded bg-ghost/[0.06] px-1.5 py-0.5 text-[10px] text-text-subtle">
                     {section.task}
                   </span>
                 </div>

@@ -4,9 +4,21 @@ import { cn } from "../../lib/utils";
 import { SaveFeedback } from "./SaveFeedback";
 import { HOTKEY_ACTIONS, updateBinding, validateHotkeys } from "../../lib/hotkeys";
 import HotkeyInput from "./HotkeyInput";
-import type { InterfaceConfig } from "../../types";
+import { useSettingsStore } from "../../stores/settingsStore";
+import type { InterfaceConfig, InterfaceTheme } from "../../types";
 
 const LABEL = "mb-1.5 block text-[11px] text-text-muted";
+
+/** 主题三选一（ST-13）：深色 / 浅色 / 跟随系统 */
+const THEME_OPTIONS: {
+  theme: InterfaceTheme;
+  label: string;
+  icon: typeof Moon;
+}[] = [
+  { theme: "dark", label: "深色", icon: Moon },
+  { theme: "light", label: "浅色", icon: Sun },
+  { theme: "system", label: "跟随系统", icon: Monitor },
+];
 
 interface InterfaceSettingsSectionProps {
   config: InterfaceConfig;
@@ -22,10 +34,21 @@ export default function InterfaceSettingsSection({
   onToggleAutoStart,
 }: InterfaceSettingsSectionProps) {
   const [draft, setDraft] = useState<InterfaceConfig>(config);
+  const setPreviewTheme = useSettingsStore((s) => s.setPreviewTheme);
+  const clearPreviewTheme = useSettingsStore((s) => s.clearPreviewTheme);
 
   useEffect(() => {
     setDraft(config);
   }, [config]);
+
+  // 离开设置页即结束预览，回滚到已保存主题（ST-13，未点保存不应改变全局界面）
+  useEffect(() => () => clearPreviewTheme(), [clearPreviewTheme]);
+
+  /** 点选主题：即时预览但不持久化，保存仍由「保存配置」完成 */
+  const selectTheme = (theme: InterfaceTheme) => {
+    setDraft((prev) => ({ ...prev, theme }));
+    setPreviewTheme(theme);
+  };
 
   const hotkeyError = useMemo(() => validateHotkeys(draft.hotkeys), [draft.hotkeys]);
 
@@ -41,24 +64,21 @@ export default function InterfaceSettingsSection({
         </span>
       </header>
 
-      {/* 主题 */}
+      {/* 主题（ST-13）：点选即时预览，「保存配置」后才持久化 */}
       <div className="mb-4">
         <span className={LABEL}>主题</span>
         <div className="flex gap-1.5">
-          {(
-            [
-              { theme: "dark" as const, label: "深色", icon: Moon },
-              { theme: "light" as const, label: "浅色", icon: Sun },
-            ]
-          ).map(({ theme, label, icon: Icon }) => (
+          {THEME_OPTIONS.map(({ theme, label, icon: Icon }) => (
             <button
               key={theme}
-              onClick={() => setDraft({ ...draft, theme })}
+              type="button"
+              aria-pressed={draft.theme === theme}
+              onClick={() => selectTheme(theme)}
               className={cn(
                 "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] transition-colors",
                 draft.theme === theme
                   ? "border-primary/40 bg-primary/15 text-primary-3"
-                  : "border-white/10 bg-background-3/60 text-text-muted hover:text-text"
+                  : "border-ghost/10 bg-background-3/60 text-text-muted hover:text-text"
               )}
             >
               <Icon className="h-3.5 w-3.5" />
@@ -66,6 +86,9 @@ export default function InterfaceSettingsSection({
             </button>
           ))}
         </div>
+        <p className="mt-1.5 text-[10px] text-text-subtle">
+          点选即时预览，点「保存配置」后生效并保留
+        </p>
       </div>
 
       {/* 快捷键 */}
@@ -98,7 +121,7 @@ export default function InterfaceSettingsSection({
 
       {/* 启动与托盘 */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-white/[0.06] bg-background-3/40 p-3">
+        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-ghost/[0.06] bg-background-3/40 p-3">
           <Power className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" />
           <span className="min-w-0 flex-1">
             <span className="block text-[12px] font-medium text-text">开机自启</span>
@@ -112,7 +135,7 @@ export default function InterfaceSettingsSection({
             type="checkbox"
             checked={autoStartEnabled}
             onChange={(e) => onToggleAutoStart(e.target.checked)}
-            className="focus-ring mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded accent-[#4F6BED]"
+            className="focus-ring mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded accent-primary"
           />
         </label>
 
@@ -132,7 +155,7 @@ export default function InterfaceSettingsSection({
                 trayBehavior: e.target.value as InterfaceConfig["trayBehavior"],
               })
             }
-            className="focus-ring w-full cursor-pointer rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none focus:border-primary/50"
+            className="focus-ring w-full cursor-pointer rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-2 text-[13px] text-text outline-none focus:border-primary/50"
           >
             <option value="minimize">最小化到系统托盘（保留捕获）</option>
             <option value="quit">直接退出应用</option>

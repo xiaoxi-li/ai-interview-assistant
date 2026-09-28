@@ -15,17 +15,17 @@ export default function VersionPanel({
   onClose,
 }: VersionPanelProps) {
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-l border-white/[0.06] bg-background-2/40">
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-white/[0.06] px-3">
+    <aside className="flex w-72 shrink-0 flex-col border-l border-ghost/[0.06] bg-background-2/40">
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-ghost/[0.06] px-3">
         <History className="h-3.5 w-3.5 text-primary-3" />
         <span className="text-[12px] font-medium">版本历史</span>
-        <span className="rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-text-muted">
+        <span className="rounded-full bg-ghost/[0.06] px-1.5 py-0.5 text-[10px] text-text-muted">
           {versions.length}
         </span>
         <button
           title="关闭版本历史"
           onClick={onClose}
-          className="focus-ring ml-auto cursor-pointer rounded p-1 text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
+          className="focus-ring ml-auto cursor-pointer rounded p-1 text-text-subtle transition-colors hover:bg-ghost/[0.06] hover:text-text"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -43,7 +43,7 @@ export default function VersionPanel({
             {versions.map((version) => (
               <li
                 key={version.id}
-                className="rounded-md border border-white/[0.06] bg-background-3/40 p-2.5 transition-colors hover:border-primary/30"
+                className="rounded-md border border-ghost/[0.06] bg-background-3/40 p-2.5 transition-colors hover:border-primary/30"
               >
                 <div className="flex items-center gap-2">
                   <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary-3">

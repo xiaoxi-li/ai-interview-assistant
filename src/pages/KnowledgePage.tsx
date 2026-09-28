@@ -29,7 +29,7 @@ import { cn } from "../lib/utils";
 import type { Note, ViewMode } from "../types";
 
 const ACTION_BTN =
-  "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:border-primary/40 hover:text-text disabled:cursor-not-allowed disabled:opacity-50";
+  "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:border-primary/40 hover:text-text disabled:cursor-not-allowed disabled:opacity-50";
 const PRIMARY_BTN =
   "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-3 py-1.5 text-[12px] text-primary-3 transition-colors hover:bg-primary/25";
 
@@ -181,15 +181,15 @@ export default function KnowledgePage() {
   return (
     <div className="relative flex h-full flex-col">
       {/* 页头 */}
-      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/[0.06] px-4">
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-ghost/[0.06] px-4">
         <BookOpen className="h-4 w-4 text-primary-3" />
         <h1 className="text-[15px] font-semibold">知识库</h1>
-        <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] text-text-muted">
+        <span className="rounded-full bg-ghost/[0.06] px-2 py-0.5 text-[11px] text-text-muted">
           {notes.length} 篇
         </span>
 
         <div className="ml-auto flex items-center gap-2">
-          <div className="focus-ring flex w-56 items-center gap-2 rounded-lg border border-white/10 bg-background-3/60 px-3 py-1.5">
+          <div className="focus-ring flex w-56 items-center gap-2 rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-1.5">
             <Search className="h-3.5 w-3.5 shrink-0 text-text-subtle" />
             <input
               value={keyword}
@@ -206,7 +206,7 @@ export default function KnowledgePage() {
           </div>
 
           {/* 检索模式切换：关键词（FTS5）/ 语义（向量） */}
-          <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-background-3/60 p-0.5">
+          <div className="flex items-center gap-0.5 rounded-lg border border-ghost/10 bg-background-3/60 p-0.5">
             <button
               onClick={() => setSearchMode("keyword")}
               title="关键词检索（FTS5 + 中文分词）"
@@ -270,32 +270,32 @@ export default function KnowledgePage() {
           </button>
 
           {/* 导出 / 备份 / 恢复 */}
-          <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-background-3/60 p-0.5">
+          <div className="flex items-center gap-0.5 rounded-lg border border-ghost/10 bg-background-3/60 p-0.5">
             <button
               title="导出全部笔记为 Markdown"
               onClick={handleExportMarkdown}
-              className="focus-ring cursor-pointer rounded px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
+              className="focus-ring cursor-pointer rounded px-1.5 py-1 text-text-subtle transition-colors hover:bg-ghost/[0.06] hover:text-text"
             >
               <FileDown className="h-3.5 w-3.5" />
             </button>
             <button
               title="导出 JSON 备份"
               onClick={handleExportJson}
-              className="focus-ring cursor-pointer rounded px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
+              className="focus-ring cursor-pointer rounded px-1.5 py-1 text-text-subtle transition-colors hover:bg-ghost/[0.06] hover:text-text"
             >
               <FileJson className="h-3.5 w-3.5" />
             </button>
             <button
               title="备份数据库文件"
               onClick={handleBackupDatabase}
-              className="focus-ring cursor-pointer rounded px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
+              className="focus-ring cursor-pointer rounded px-1.5 py-1 text-text-subtle transition-colors hover:bg-ghost/[0.06] hover:text-text"
             >
               <Database className="h-3.5 w-3.5" />
             </button>
             <button
               title="从 JSON 备份恢复"
               onClick={handleRestore}
-              className="focus-ring cursor-pointer rounded px-1.5 py-1 text-text-subtle transition-colors hover:bg-white/[0.06] hover:text-text"
+              className="focus-ring cursor-pointer rounded px-1.5 py-1 text-text-subtle transition-colors hover:bg-ghost/[0.06] hover:text-text"
             >
               <Upload className="h-3.5 w-3.5" />
             </button>
@@ -325,7 +325,7 @@ export default function KnowledgePage() {
 
       <div className="flex min-h-0 flex-1">
         {/* 侧栏 */}
-        <aside className="flex w-64 shrink-0 flex-col border-r border-white/[0.06]">
+        <aside className="flex w-64 shrink-0 flex-col border-r border-ghost/[0.06]">
           <div className="flex items-center gap-1 px-2 pt-2">
             <button
               onClick={() => setView("all")}
@@ -406,7 +406,7 @@ export default function KnowledgePage() {
                           "focus-ring cursor-pointer rounded-full border px-2 py-0.5 text-[11px] transition-colors",
                           active
                             ? "border-primary/40 bg-primary/20 text-primary-3"
-                            : "border-white/10 bg-white/[0.04] text-text-subtle hover:text-text-muted"
+                            : "border-ghost/10 bg-ghost/[0.04] text-text-subtle hover:text-text-muted"
                         )}
                       >
                         {tag.name}

@@ -55,7 +55,7 @@ export default function ShortcutBar() {
   };
 
   const buttonClass =
-    "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:border-primary/30 hover:text-primary-3 disabled:cursor-not-allowed disabled:opacity-40";
+    "focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-ghost/10 bg-background-3/60 px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:border-primary/30 hover:text-primary-3 disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
     <div className="glass flex flex-wrap items-center gap-2 rounded-xl px-3 py-2">
@@ -109,7 +109,7 @@ export default function ShortcutBar() {
       </button>
 
       {/* 隐身模式（IA-11） */}
-      <span className="mx-1 h-4 w-px bg-white/10" />
+      <span className="mx-1 h-4 w-px bg-ghost/10" />
       <button
         className={cn(buttonClass, alwaysOnTop && "border-primary/40 text-primary-3")}
         title={t("隐身模式：窗口置顶")}

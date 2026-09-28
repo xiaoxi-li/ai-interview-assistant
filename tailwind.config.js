@@ -15,28 +15,38 @@ export default {
         ],
         mono: ["JetBrains Mono", "Fira Code", "Consolas", "monospace"],
       },
+      /**
+       * 主题令牌（ST-13）：全部颜色引用 CSS 变量，取值由 `src/index.css` 的
+       * `:root`（浅色）与 `.dark`（深色）分别定义，两套主题共用同一批类名。
+       * 格式统一为 RGB 三通道分量，支持 Tailwind 的 `/<alpha-value>` 透明度语法。
+       */
       colors: {
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
+        border: "rgb(var(--border) / <alpha-value>)",
+        input: "rgb(var(--input) / <alpha-value>)",
+        ring: "rgb(var(--ring) / <alpha-value>)",
         background: {
-          DEFAULT: "#0F1420",
-          2: "#171E2E",
-          3: "#1E2739",
+          DEFAULT: "rgb(var(--bg) / <alpha-value>)",
+          2: "rgb(var(--bg-2) / <alpha-value>)",
+          3: "rgb(var(--bg-3) / <alpha-value>)",
         },
         primary: {
-          DEFAULT: "#4F6BED",
-          2: "#5B7CFA",
-          3: "#7C9AFF",
+          DEFAULT: "rgb(var(--primary) / <alpha-value>)",
+          2: "rgb(var(--primary-2) / <alpha-value>)",
+          3: "rgb(var(--primary-3) / <alpha-value>)",
         },
         text: {
-          DEFAULT: "#E6EAF2",
-          muted: "#9AA3B5",
-          subtle: "#6B7488",
+          DEFAULT: "rgb(var(--fg) / <alpha-value>)",
+          muted: "rgb(var(--fg-muted) / <alpha-value>)",
+          subtle: "rgb(var(--fg-subtle) / <alpha-value>)",
         },
-        success: "#2EC27E",
-        danger: "#E5484D",
-        warning: "#F5A623",
+        success: "rgb(var(--success) / <alpha-value>)",
+        danger: "rgb(var(--danger) / <alpha-value>)",
+        warning: "rgb(var(--warning) / <alpha-value>)",
+        /**
+         * 双主题叠加层：深色下叠加白色、浅色下叠加黑色，
+         * 供描边（`border-ghost/[0.06]`）与幽灵悬停（`hover:bg-ghost/[0.06]`）使用。
+         */
+        ghost: "rgb(var(--ghost) / <alpha-value>)",
       },
       borderRadius: {
         sm: "6px",
@@ -47,11 +57,11 @@ export default {
         "2xl": "16px",
       },
       boxShadow: {
-        card: "0 1px 2px rgba(0, 0, 0, 0.28), 0 8px 24px -12px rgba(0, 0, 0, 0.55)",
-        "card-hover":
-          "0 2px 6px rgba(0, 0, 0, 0.3), 0 12px 32px -12px rgba(0, 0, 0, 0.6)",
-        popover: "0 12px 40px -8px rgba(0, 0, 0, 0.7)",
-        brand: "0 6px 20px -6px rgba(79, 107, 237, 0.45)",
+        // 阴影同样按主题取值（浅色下更轻），取值见 `src/index.css`
+        card: "var(--shadow-card)",
+        "card-hover": "var(--shadow-card-hover)",
+        popover: "var(--shadow-popover)",
+        brand: "var(--shadow-brand)",
       },
       keyframes: {
         "fade-in": {

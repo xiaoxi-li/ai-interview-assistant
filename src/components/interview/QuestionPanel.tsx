@@ -86,7 +86,7 @@ export default function QuestionPanel() {
               {currentQuestion.signals.map((signal) => (
                 <span
                   key={signal}
-                  className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-text-muted"
+                  className="rounded bg-ghost/[0.06] px-1.5 py-0.5 text-[10px] text-text-muted"
                 >
                   {signal}
                 </span>
@@ -114,7 +114,7 @@ export default function QuestionPanel() {
                 {sources.map((hit) => (
                   <li
                     key={hit.noteId}
-                    className="rounded-md border border-white/[0.06] bg-background-3/30 px-2.5 py-2"
+                    className="rounded-md border border-ghost/[0.06] bg-background-3/30 px-2.5 py-2"
                   >
                     <div className="flex items-center gap-2">
                       <span className="truncate text-[11px] font-medium text-text">
@@ -132,7 +132,7 @@ export default function QuestionPanel() {
               </ul>
             ) : (
               !sourcesLoading && (
-                <p className="rounded-md border border-white/[0.06] bg-background-3/30 px-2.5 py-3 text-[11px] leading-relaxed text-text-subtle">
+                <p className="rounded-md border border-ghost/[0.06] bg-background-3/30 px-2.5 py-3 text-[11px] leading-relaxed text-text-subtle">
                   {t("知识库中未召回到相关内容")}
                   {recallQueries.length > 0 &&
                     t("（查询：{queries}）", { queries: recallQueries.join(" / ") })}
@@ -142,7 +142,7 @@ export default function QuestionPanel() {
           </div>
         </>
       ) : (
-        <p className="rounded-md border border-white/[0.06] bg-background-3/30 px-3 py-6 text-center text-[11px] leading-relaxed text-text-subtle">
+        <p className="rounded-md border border-ghost/[0.06] bg-background-3/30 px-3 py-6 text-center text-[11px] leading-relaxed text-text-subtle">
           {asrStatus?.running
             ? t("正在监听面试官语音，识别到问题后会显示在这里。")
             : t("开始转写后，面试官的问题会被自动识别；也可随时手动触发识别。")}
@@ -157,7 +157,7 @@ export default function QuestionPanel() {
             .map((pair) => (
               <li
                 key={pair.id}
-                className="truncate rounded-md border border-white/[0.06] bg-background-3/30 px-2 py-1 text-[11px] text-text-muted"
+                className="truncate rounded-md border border-ghost/[0.06] bg-background-3/30 px-2 py-1 text-[11px] text-text-muted"
                 title={pair.question}
               >
                 {pair.question}
@@ -169,7 +169,7 @@ export default function QuestionPanel() {
       <button
         onClick={() => triggerQuestion()}
         disabled={!asrStatus?.running}
-        className="focus-ring mt-3 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-4 py-2 text-[12px] text-text-muted transition-colors hover:border-primary/30 hover:text-primary-3 disabled:cursor-not-allowed disabled:opacity-50"
+        className="focus-ring mt-3 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-ghost/10 bg-background-3/60 px-4 py-2 text-[12px] text-text-muted transition-colors hover:border-primary/30 hover:text-primary-3 disabled:cursor-not-allowed disabled:opacity-50"
         title={t("用最近的面试官语音立即识别一次问题")}
       >
         <RefreshCw className="h-3.5 w-3.5" />

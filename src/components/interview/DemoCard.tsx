@@ -74,7 +74,7 @@ export default function DemoCard() {
       <ol className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-text-muted">
         {STEPS.map((step, index) => (
           <li key={step} className="flex items-center gap-1.5">
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/[0.08] text-[9px] text-text-subtle">
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-ghost/[0.08] text-[9px] text-text-subtle">
               {index + 1}
             </span>
             {t(step)}

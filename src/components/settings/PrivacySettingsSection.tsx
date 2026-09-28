@@ -36,7 +36,7 @@ function SwitchRow({
     <label
       htmlFor={id}
       className={cn(
-        "flex cursor-pointer items-start gap-3 rounded-md border border-white/[0.06] bg-background-3/40 p-3 transition-colors",
+        "flex cursor-pointer items-start gap-3 rounded-md border border-ghost/[0.06] bg-background-3/40 p-3 transition-colors",
         disabled ? "cursor-not-allowed opacity-60" : "hover:border-primary/30"
       )}
     >
@@ -59,7 +59,7 @@ function SwitchRow({
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="focus-ring mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded accent-[#4F6BED]"
+        className="focus-ring mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded accent-primary"
       />
     </label>
   );
@@ -152,7 +152,7 @@ export default function PrivacySettingsSection({
             </button>
             <button
               onClick={() => setConfirming(false)}
-              className="focus-ring cursor-pointer rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text"
+              className="focus-ring cursor-pointer rounded-lg border border-ghost/10 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text"
             >
               取消
             </button>

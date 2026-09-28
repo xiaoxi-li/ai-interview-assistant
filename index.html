@@ -3,8 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="dark light" />
     <title>轻松面试</title>
+    <script>
+      /**
+       * 首屏主题预置（ST-13）：在样式与 React 挂载前消费本地缓存，
+       * 使窗口打开瞬间即为正确主题，避免"先亮后暗"的闪烁（FOUC）。
+       * 缓存只是镜像，最终以设置中的主题配置为准（见 src/hooks/useThemeSync.ts）。
+       */
+      (function () {
+        try {
+          var cached = localStorage.getItem("ei.theme");
+          var theme = cached === "light" ? "light" : "dark";
+          var root = document.documentElement;
+          root.classList.toggle("dark", theme === "dark");
+          root.style.colorScheme = theme;
+        } catch (err) {
+          // 缓存不可读时保留 HTML 上的默认深色
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
