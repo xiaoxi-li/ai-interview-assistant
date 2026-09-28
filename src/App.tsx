@@ -100,9 +100,6 @@ export default function App() {
             draggable={false}
             className="hidden h-7 w-auto select-none dark:block"
           />
-          <span className="text-[13px] font-medium tracking-wide">
-            {t("轻松面试")}
-          </span>
           <span className="rounded border border-primary/20 bg-primary/10 px-1.5 py-[1px] text-[10px] text-primary-3">
             v0.1.0
           </span>

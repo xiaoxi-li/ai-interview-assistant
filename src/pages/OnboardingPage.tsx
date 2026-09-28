@@ -13,7 +13,8 @@ import {
   Waves,
 } from "lucide-react";
 import { cn } from "../lib/utils";
-import logoMark from "../assets/logo-mark.png";
+import logoLockupLight from "../assets/logo-lockup-light.png";
+import logoLockupDark from "../assets/logo-lockup-dark.png";
 import { useModelProgress } from "../hooks/useModelProgress";
 import { useAppStore } from "../stores/appStore";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -91,10 +92,16 @@ export default function OnboardingPage() {
         {/* 步骤指示 */}
         <header className="mb-5 flex items-center gap-3">
           <img
-            src={logoMark}
+            src={logoLockupLight}
             alt=""
             draggable={false}
-            className="h-9 w-auto select-none"
+            className="h-10 w-auto select-none dark:hidden"
+          />
+          <img
+            src={logoLockupDark}
+            alt=""
+            draggable={false}
+            className="hidden h-10 w-auto select-none dark:block"
           />
           <div>
             <h1 className="text-[15px] font-semibold">欢迎使用轻松面试</h1>

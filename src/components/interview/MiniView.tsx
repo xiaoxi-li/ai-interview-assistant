@@ -2,7 +2,8 @@ import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Maximize2, Power } from "lucide-react";
 import { cn, isTauri } from "../../lib/utils";
-import logoMark from "../../assets/logo-mark.png";
+import logoLockupLight from "../../assets/logo-lockup-light.png";
+import logoLockupDark from "../../assets/logo-lockup-dark.png";
 import { ipc } from "../../lib/ipc";
 import { useAnswerEvents } from "../../hooks/useAnswerEvents";
 import { useInterviewShortcuts } from "../../hooks/useInterviewShortcuts";
@@ -69,9 +70,20 @@ export default function MiniView() {
         data-tauri-drag-region
         className="flex h-8 shrink-0 items-center gap-2 border-b border-ghost/[0.06] bg-background-2/80 px-2.5"
       >
-        <img src={logoMark} alt="" draggable={false} className="h-3.5 w-auto select-none" />
+        <img
+          src={logoLockupLight}
+          alt=""
+          draggable={false}
+          className="h-4 w-auto select-none dark:hidden"
+        />
+        <img
+          src={logoLockupDark}
+          alt=""
+          draggable={false}
+          className="hidden h-4 w-auto select-none dark:block"
+        />
         <span data-tauri-drag-region className="text-[11px] font-medium">
-          {t("轻松面试")} · {t("迷你")}
+          {t("迷你")}
         </span>
         <div className="ml-auto flex items-center">
           <button className={iconButton} title={t("恢复完整界面")} onClick={exitMiniMode}>
