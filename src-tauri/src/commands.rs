@@ -2554,11 +2554,12 @@ pub fn save_asr_config(
     crate::config::asr::load_asr_config(&conn).map_err(|e| e.to_string())
 }
 
-/// 云端 ASR 连接测试（IA-16.8）：按当前服务商与 Base URL 建连并等到 `task-started`，
-/// 返回结果与耗时；**不发送音频、不修改任何配置**。
+/// 云端 ASR 连接测试（IA-16.8）：按给定配置（设置页当前表单值；缺省则用已保存配置）
+/// 建连并等到 `task-started`，返回结果与耗时；**不发送音频、不修改任何配置**。
 #[tauri::command]
 pub fn test_cloud_asr_connection(
     state: State<'_, AppState>,
+    config: Option<crate::config::asr::AsrConfig>,
 ) -> Result<crate::providers::types::ConnectionTest, String> {
     use crate::providers::types::ConnectionTest;
     use std::time::Instant;
@@ -2569,10 +2570,17 @@ pub fn test_cloud_asr_connection(
         message,
     };
 
-    let config = {
-        let conn = state.lock()?;
-        crate::config::asr::load_asr_config(&conn).map_err(|e| e.to_string())?
+    // 优先使用前端传来的表单草稿：避免「界面显示新地址、实际测的是未保存的旧地址」的困惑
+    let config = match config {
+        Some(draft) => draft,
+        None => {
+            let conn = state.lock()?;
+            crate::config::asr::load_asr_config(&conn).map_err(|e| e.to_string())?
+        }
     };
+    if let Err(err) = config.validate() {
+        return Ok(fail(err));
+    }
     if config.mode != AsrMode::Cloud {
         return Ok(fail(
             "当前为「本地（隐私优先）」模式，不涉及云端连接；切换到云端模式后再测试。".into(),

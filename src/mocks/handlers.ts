@@ -521,7 +521,7 @@ export async function mockInvoke<T>(
         {
           provider: "aliyun",
           label: "阿里云智能语音",
-          defaultModel: "gummy-realtime-v1",
+          defaultModel: "qwen-audio-3.1-asr-flash-streaming",
           credentialFields: ["api_key"],
           defaultBaseUrl: "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
           implemented: true,

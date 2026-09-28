@@ -54,8 +54,8 @@ interface SettingsState {
   testingAsr: boolean;
   /** 最近一次云端 ASR 连接测试结果 */
   asrTestResult: ConnectionTest | null;
-  /** 一键测试云端 ASR 连通性（IA-16.8） */
-  testAsrConnection: () => Promise<void>;
+  /** 一键测试云端 ASR 连通性（IA-16.8）；传入表单草稿则测草稿，缺省测已保存配置 */
+  testAsrConnection: (config?: ASRConfig) => Promise<void>;
   loadAsrSettings: () => Promise<void>;
   saveAsrConfig: (config: ASRConfig) => Promise<void>;
   loadAsrCredentialStatus: (provider: string) => Promise<void>;
@@ -325,9 +325,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
         .then((saved) => set({ asrConfig: saved }))
         .catch((err) => fail("保存 ASR 配置", err)),
 
-    testAsrConnection: () => {
+    testAsrConnection: (config) => {
       set({ testingAsr: true, asrTestResult: null, error: null });
-      return ipc<ConnectionTest>("test_cloud_asr_connection")
+      return ipc<ConnectionTest>("test_cloud_asr_connection", { config })
         .then((result) => set({ testingAsr: false, asrTestResult: result }))
         .catch((err) => {
           console.error("云端 ASR 连接测试失败:", err);

@@ -197,6 +197,16 @@ describe("AsrSettingsSection", () => {
     expect(saveButton.disabled).toBe(true);
   });
 
+  it("阿里云提示实时模型示例（避免误填非实时 HTTP 模型）", () => {
+    setup();
+    fireEvent.click(screen.getByText("阿里云智能语音"));
+
+    expect(
+      screen.getByText(/实时模型示例：qwen-audio-3\.1-asr-flash-streaming/)
+    ).toBeTruthy();
+    expect(screen.getByText(/不能用于实时转写/)).toBeTruthy();
+  });
+
   it("Base URL 填成 HTTP 接口路径时给出防呆提示", () => {
     setup();
     fireEvent.change(screen.getByLabelText("服务端地址（Base URL）"), {
@@ -240,7 +250,10 @@ describe("AsrSettingsSection", () => {
 
     expect(screen.getByText("连接成功（128ms）")).toBeTruthy();
     fireEvent.click(screen.getByText("连接测试"));
-    expect(onTestConnection).toHaveBeenCalled();
+    // 回传当前表单草稿：避免测到未保存的旧配置
+    expect(onTestConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "cloud", cloudProvider: "xfyun" })
+    );
   });
 
   it("连接测试进行中时按钮禁用", () => {

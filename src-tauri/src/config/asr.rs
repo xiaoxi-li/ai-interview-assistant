@@ -60,10 +60,15 @@ impl CloudAsrProvider {
     }
 
     /// 默认流式模型
+    ///
+    /// 阿里云默认取 `qwen-audio-3.1-asr-flash-streaming`：官方推荐的实时识别模型
+    /// （Gummy 系已标注「即将下线」）。已实测可用，备选：`fun-asr-realtime`、
+    /// `paraformer-realtime-v2`。注意 **`qwen-audio-3.1-asr-flash`（无 `-streaming`）
+    /// 是非实时 HTTP 模型**，填到实时端点会被拒（ModelNotFound）。
     pub fn default_model(self) -> &'static str {
         match self {
             CloudAsrProvider::Xfyun => "iat",
-            CloudAsrProvider::Aliyun => "gummy-realtime-v1",
+            CloudAsrProvider::Aliyun => "qwen-audio-3.1-asr-flash-streaming",
             CloudAsrProvider::Tencent => "16k_zh",
             CloudAsrProvider::OpenaiCompat => "whisper-1",
         }

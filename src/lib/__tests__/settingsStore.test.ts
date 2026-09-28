@@ -26,10 +26,22 @@ describe("settingsStore 密钥管理", () => {
       latencyMs: 128,
       message: "阿里云智能语音 连接成功（128ms）",
     });
+    const draft = {
+      mode: "cloud" as const,
+      cloudProvider: "aliyun" as const,
+      model: "qwen-audio-3.1-asr-flash-streaming",
+      language: "zh-CN",
+      vadThreshold: 0.5,
+      localModel: "sherpa-onnx-paraformer-zh",
+      cloudBaseUrls: {},
+    };
 
-    await useSettingsStore.getState().testAsrConnection();
+    await useSettingsStore.getState().testAsrConnection(draft);
 
-    expect(mockedIpc).toHaveBeenCalledWith("test_cloud_asr_connection");
+    // 传草稿时测的就是草稿（而非已保存配置）
+    expect(mockedIpc).toHaveBeenCalledWith("test_cloud_asr_connection", {
+      config: draft,
+    });
     expect(useSettingsStore.getState().testingAsr).toBe(false);
     expect(useSettingsStore.getState().asrTestResult?.ok).toBe(true);
     expect(useSettingsStore.getState().asrTestResult?.latencyMs).toBe(128);

@@ -39,8 +39,8 @@ interface AsrSettingsSectionProps {
   onSaveCredential: (provider: string, field: string, value: string) => void;
   onDeleteCredentials: (provider: string) => void;
   onProviderChange?: (provider: string) => void;
-  /** 云端 ASR 连接测试（IA-16.8） */
-  onTestConnection?: () => void;
+  /** 云端 ASR 连接测试（IA-16.8）：回传当前表单草稿，避免测到未保存的旧配置 */
+  onTestConnection?: (config: ASRConfig) => void;
   testing?: boolean;
   testResult?: ConnectionTest | null;
 }
@@ -175,6 +175,13 @@ export default function AsrSettingsSection({
                 placeholder="iat"
                 className={FIELD}
               />
+              {draft.cloudProvider === "aliyun" && (
+                <p className="mt-1 text-[10px] leading-relaxed text-text-subtle">
+                  实时模型示例：qwen-audio-3.1-asr-flash-streaming、fun-asr-realtime、
+                  paraformer-realtime-v2；非实时（HTTP）模型如
+                  qwen-audio-3.1-asr-flash 不能用于实时转写。
+                </p>
+              )}
             </div>
 
             <div>
@@ -347,7 +354,7 @@ export default function AsrSettingsSection({
         )}
         {draft.mode === "cloud" && (
           <button
-            onClick={() => onTestConnection?.()}
+            onClick={() => onTestConnection?.(draft)}
             disabled={testing || Boolean(validationError)}
             className="focus-ring ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-background-3/60 px-3 py-2 text-[12px] text-text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -368,19 +375,25 @@ export default function AsrSettingsSection({
         </button>
       </div>
 
+      {draft.mode === "cloud" && (
+        <p className="mt-2 text-[10px] text-text-subtle">
+          「连接测试」使用当前表单值（含未保存的修改），不需要先点保存。
+        </p>
+      )}
+
       {testResult && (
         <p
           className={cn(
-            "mt-2 flex items-center gap-1.5 text-[11px]",
+            "mt-2 flex items-start gap-1.5 text-[11px]",
             testResult.ok ? "text-success" : "text-danger"
           )}
         >
           {testResult.ok ? (
-            <Check className="h-3 w-3" />
+            <Check className="mt-[1px] h-3 w-3 shrink-0" />
           ) : (
-            <AlertCircle className="h-3 w-3" />
+            <AlertCircle className="mt-[1px] h-3 w-3 shrink-0" />
           )}
-          {testResult.message}
+          <span className="leading-relaxed">{testResult.message}</span>
         </p>
       )}
     </section>

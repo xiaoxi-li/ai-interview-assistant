@@ -77,14 +77,15 @@ npm run tauri build -- --features local-asr-native --config src-tauri/tauri.loca
 2. 「设置 → 语音识别」把模式切到 **「云端（低延迟）」**，服务商选 **「阿里云智能语音」**（已接入；讯飞 / 腾讯 / OpenAI 兼容显示「待接入」，选中后开始转写会给出可操作提示）。
 3. 在「服务商凭证」填入百炼 **API Key**（存系统钥匙链，不落库）。
 4. （可选）**服务端地址（Base URL）**：默认 `wss://dashscope.aliyuncs.com/api-ws/v1/inference`；如需走代理或地域专属域名可自行填写（**每个服务商各存一份**，点「恢复默认」还原官方地址）。
-5. 点 **「连接测试」**：成功会显示耗时；失败给出可读原因（未填 Key / 地址非法 / 鉴权失败 / 网络不可达）。
+5. **云端模型**默认已是官方推荐的实时模型 `qwen-audio-3.1-asr-flash-streaming`（实测可用；备选 `fun-asr-realtime`、`paraformer-realtime-v2`）。注意 **`qwen-audio-3.1-asr-flash`（无 `-streaming`）是非实时 HTTP 模型**，不能用于实时转写，填了会被服务端以 `ModelNotFound` 拒绝。
+6. 点 **「连接测试」**：成功会显示耗时；失败给出可读原因（未填 Key / 地址非法 / 鉴权失败 / 模型名不适用 / 网络不可达）。测试用的是**当前表单值**（含未保存的修改），不需要先点保存。
 6. 保存配置后回到面试辅助页，选「双通道」开始转写：**系统音频通道 = 面试官**、**麦克风通道 = 我**，服务端句级结果中「句未结束」显示为 partial（斜体），「句结束」落库为 final。
 
 - 冒烟自检（需要真实凭证，默认 `#[ignore]`）：
   ```powershell
   $env:DASHSCOPE_API_KEY="sk-xxx"; cargo test --lib -- --ignored real_aliyun --nocapture
   ```
-  三个用例：**握手鉴权**（建连 + `task-started`）、**音频通路**（按实时率投递音频 → `finish-task` 正常收尾）、**错误凭证**（HTTP 401 → 可操作鉴权提示）。默认用合成音频验证协议通路；如需真实语音识别，追加 `$env:ASR_SAMPLE_WAV="<16k 单声道 WAV 路径>"`（该用例会断言识别出非空文本）。
+  三个用例：**握手鉴权**（建连 + `task-started`）、**音频通路**（按实时率投递音频 → `finish-task` 正常收尾）、**错误凭证**（HTTP 401 → 可操作鉴权提示）。默认用合成音频验证协议通路；如需真实语音识别，追加 `$env:ASR_SAMPLE_WAV="<16k 单声道 WAV 路径>"`（该用例会断言识别出非空文本）；可用 `$env:ASR_MODEL=<模型名>` 覆盖联调所用模型，用于核对某模型是否被实时端点接受。
 - **已验证（2026-09-28）**：真实凭证握手与音频通路均通过，无效 Key 报 `鉴权失败（HTTP 401）…`；合成音频不产出文本属预期，真实中文语音文本待用麦克风/WAV 在 GUI 复核。
 - 协议与实现要点见 `ai-doc/技术方案.md` 6.3.2；讯飞 / 腾讯 / OpenAI 兼容通路见 `ai-doc/需求分析.md` 5.5 待办 TODO-10 / TODO-11。
 
@@ -228,6 +229,7 @@ cd src-tauri; cargo test  # 后端：377 项（含 PCM 回放端到端、AEC、�
 | 云端模式报「XX 的云端 ASR 待接入」 | 当前仅「阿里云智能语音」已接入；请在设置页切换服务商或改用本地模式（见第七节第 2 条） |
 | 云端「连接测试」失败 | 按提示依次检查：凭证是否已保存、Base URL 是否可达（代理/私有化部署需自行填写）、网络是否可用；网络问题会在文案中明确说明 |
 | 云端「连接测试」报 **HTTP 404** | 地址填成了 **HTTP 接口**。百炼的 `https://dashscope.aliyuncs.com/compatible-mode/v1` 是 OpenAI 兼容的 HTTP 接口（供对话/嵌入/录音文件转写），**实时转写必须用 WebSocket**：`wss://dashscope.aliyuncs.com/api-ws/v1/inference`。点「恢复默认」或手填该地址后**保存配置**再测（详见 `ai-doc/需求分析.md` IA-16） |
+| 云端「连接测试」报 **ModelNotFound** | 模型名不能用于实时转写：非实时（HTTP 文件转写）模型（如 `qwen-audio-3.1-asr-flash`，无 `-streaming`）只能走 HTTP 接口。请改用实测可用的实时模型：`qwen-audio-3.1-asr-flash-streaming`（默认）、`fun-asr-realtime`、`paraformer-realtime-v2` |
 | 召回没有结果 | 确认演示已执行（会自动写入 4 篇示例笔记），或先在「知识库」导入 Markdown |
 | 想重置全部数据重来一遍 | 关闭应用后删除数据目录：Windows `%APPDATA%\com.easyinterview.app\`，macOS `~/Library/Application Support/com.easyinterview.app/`（内含 `easy-interview.db` 与 `models/`），下次启动会重新初始化并再次进入首次向导。注意：API Key 存在系统钥匙链中，如需一并清除请在「设置 → AI 平台」中删除 |
 

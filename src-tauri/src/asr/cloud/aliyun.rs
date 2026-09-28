@@ -447,7 +447,7 @@ async fn session(
                         }));
                     }
                     ServerEvent::Failed { code, message } => {
-                        emit_error(&events, format!("服务端识别失败（{code}）：{message}"));
+                        emit_error(&events, failed_message(&code, &message));
                         return;
                     }
                     ServerEvent::Finished => return,
@@ -483,27 +483,39 @@ fn emit_error(events: &std_mpsc::Sender<WorkerEvent>, message: String) {
     let _ = events.send(WorkerEvent::Error(message));
 }
 
-/// 握手失败的错误映射：鉴权类 HTTP 状态码给出**可操作**提示
-fn map_handshake_error(err: tokio_tungstenite::tungstenite::Error) -> String {
+/// 握手失败的错误映射：带上**实际使用的地址**与可操作提示
+fn map_handshake_error(url: &str, err: tokio_tungstenite::tungstenite::Error) -> String {
     use tokio_tungstenite::tungstenite::http::StatusCode;
 
+    let address = redact_url(url);
     if let tokio_tungstenite::tungstenite::Error::Http(ref response) = err {
         let status = response.status();
         if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
             return format!(
-                "鉴权失败（HTTP {}）：请检查「设置 → 语音识别」中的 API Key 是否正确、是否已过期",
+                "鉴权失败（HTTP {}，地址：{address}）：请检查「设置 → 语音识别」中的 API Key 是否正确、是否已过期",
                 status.as_u16()
             );
         }
         if status == StatusCode::NOT_FOUND {
             return format!(
-                "服务端返回 HTTP 404：该地址不是实时识别端点（实时转写走 WebSocket）。若填的是 OpenAI 兼容的 /compatible-mode/v1 等 HTTP 接口地址，请改为 {}，或点「恢复默认」后保存配置",
+                "服务端返回 HTTP 404（地址：{address}）：该地址不是实时识别端点（实时转写走 WebSocket）。若填的是 OpenAI 兼容的 /compatible-mode/v1 等 HTTP 接口地址，请改为 {}，或点「恢复默认」后保存配置",
                 crate::config::asr::CloudAsrProvider::Aliyun.default_base_url()
             );
         }
-        return format!("连接云端 ASR 失败：HTTP {}", status.as_u16());
+        return format!("连接云端 ASR 失败：HTTP {}（地址：{address}）", status.as_u16());
     }
-    format!("连接云端 ASR 失败：{err}")
+    format!("连接云端 ASR 失败：{err}（地址：{address}）")
+}
+
+/// 服务端 `task-failed` 的可操作文案（模型名不适用于实时端点是最常见的自伤）
+fn failed_message(code: &str, message: &str) -> String {
+    let mut text = format!("服务端拒绝任务（{code}）：{message}");
+    if code.eq_ignore_ascii_case("ModelNotFound") || message.contains("Model not found") {
+        text.push_str(
+            "。请检查云端模型名：① 非实时（HTTP 文件转写）模型不能用于实时转写，例如 `qwen-audio-3.1-asr-flash` 的实时版是 `qwen-audio-3.1-asr-flash-streaming`；② 确认模型名拼写正确且在当前地域/账号可用。实测可用的实时模型：qwen-audio-3.1-asr-flash-streaming、fun-asr-realtime、paraformer-realtime-v2",
+        );
+    }
+    text
 }
 
 /// 建立连接并等待 `task-started`
@@ -521,7 +533,7 @@ async fn connect_and_start(url: &str, api_key: &str, run_task: &str) -> Result<W
 
     let (mut ws, _response) = tokio_tungstenite::connect_async(request)
         .await
-        .map_err(map_handshake_error)?;
+        .map_err(|err| map_handshake_error(url, err))?;
 
     ws.send(Message::text(run_task))
         .await
@@ -532,7 +544,7 @@ async fn connect_and_start(url: &str, api_key: &str, run_task: &str) -> Result<W
             Some(Ok(Message::Text(text))) => match parse_server_event(text.as_str()) {
                 ServerEvent::Started => return Ok(ws),
                 ServerEvent::Failed { code, message } => {
-                    return Err(format!("服务端拒绝任务（{code}）：{message}"))
+                    return Err(failed_message(&code, &message))
                 }
                 _ => continue,
             },
@@ -554,11 +566,23 @@ mod tests {
         EngineSpec {
             provider: CloudAsrProvider::Aliyun,
             base_url: base_url.to_string(),
-            model: "gummy-realtime-v1".to_string(),
+            // 用「出厂默认模型」，确保联调用例验证的就是用户默认拿到的模型
+            model: CloudAsrProvider::Aliyun.default_model().to_string(),
             language: "zh-CN".to_string(),
             api_key: api_key.to_string(),
             channel: "mic".to_string(),
         }
+    }
+
+    /// 联调用规格：模型可用 `ASR_MODEL` 覆盖（默认取出厂默认的实时模型）
+    fn real_spec(base_url: &str, api_key: &str) -> EngineSpec {
+        let mut spec = spec(base_url, api_key);
+        if let Ok(model) = std::env::var("ASR_MODEL") {
+            if !model.trim().is_empty() {
+                spec.model = model;
+            }
+        }
+        spec
     }
 
     /// 连接成功（引擎类型不含 Debug，故不用 `expect`）
@@ -732,7 +756,7 @@ mod tests {
     fn real_aliyun_handshake_succeeds_with_env_api_key() {
         let api_key = std::env::var("DASHSCOPE_API_KEY")
             .expect("请先设置环境变量 DASHSCOPE_API_KEY 再运行该联调用例");
-        let mut engine = connect_ok(spec(
+        let mut engine = connect_ok(real_spec(
             CloudAsrProvider::Aliyun.default_base_url(),
             &api_key,
         ));
@@ -758,7 +782,7 @@ mod tests {
     fn real_aliyun_audio_round_trip_sends_audio_and_finishes_cleanly() {
         let api_key = std::env::var("DASHSCOPE_API_KEY")
             .expect("请先设置环境变量 DASHSCOPE_API_KEY 再运行该联调用例");
-        let mut engine = connect_ok(spec(
+        let mut engine = connect_ok(real_spec(
             CloudAsrProvider::Aliyun.default_base_url(),
             &api_key,
         ));
@@ -820,55 +844,69 @@ mod tests {
     }
 
     #[test]
-    fn handshake_error_maps_auth_failures_to_actionable_message() {
+    fn handshake_error_maps_status_codes_with_used_address() {
         use tokio_tungstenite::tungstenite::http::Response;
         use tokio_tungstenite::tungstenite::Error;
 
-        let unauthorized = Error::Http(
-            Response::builder()
-                .status(401)
-                .body(None::<Vec<u8>>)
-                .expect("response"),
-        );
-        let message = map_handshake_error(unauthorized);
+        let http_error = |status: u16| {
+            Error::Http(
+                Response::builder()
+                    .status(status)
+                    .body(None::<Vec<u8>>)
+                    .expect("response"),
+            )
+        };
+        const URL: &str = "wss://example.com/api-ws/v1/inference";
+
+        let message = map_handshake_error(URL, http_error(401));
         assert!(message.contains("鉴权失败"), "{message}");
         assert!(message.contains("401"), "{message}");
         assert!(message.contains("API Key"), "应给出可操作引导：{message}");
         assert!(message.contains("设置"), "{message}");
+        assert!(message.contains(URL), "应回显实际使用的地址：{message}");
 
-        let forbidden = Error::Http(
-            Response::builder()
-                .status(403)
-                .body(None::<Vec<u8>>)
-                .expect("response"),
-        );
-        assert!(map_handshake_error(forbidden).contains("鉴权失败"));
-
-        let server_error = Error::Http(
-            Response::builder()
-                .status(503)
-                .body(None::<Vec<u8>>)
-                .expect("response"),
-        );
-        let message = map_handshake_error(server_error);
-        assert!(message.contains("503"), "{message}");
-        assert!(!message.contains("鉴权失败"), "{message}");
+        assert!(map_handshake_error(URL, http_error(403)).contains("鉴权失败"));
 
         // 404：多为把 HTTP 接口地址（如 /compatible-mode/v1）当成实时识别端点
-        let not_found = Error::Http(
-            Response::builder()
-                .status(404)
-                .body(None::<Vec<u8>>)
-                .expect("response"),
+        let message = map_handshake_error(
+            "wss://dashscope.aliyuncs.com/compatible-mode/v1/",
+            http_error(404),
         );
-        let message = map_handshake_error(not_found);
         assert!(message.contains("404"), "{message}");
         assert!(message.contains("WebSocket"), "{message}");
+        assert!(
+            message.contains("compatible-mode"),
+            "应回显实际使用的地址：{message}"
+        );
         assert!(
             message.contains("api-ws/v1/inference"),
             "应给出正确的实时识别地址：{message}"
         );
         assert!(message.contains("恢复默认"), "{message}");
+
+        let message = map_handshake_error(URL, http_error(503));
+        assert!(message.contains("503"), "{message}");
+        assert!(!message.contains("鉴权失败"), "{message}");
+    }
+
+    #[test]
+    fn model_not_found_failure_gives_actionable_hint() {
+        // 真实踩坑：非实时（HTTP）模型名不能用于实时端点
+        let message = failed_message(
+            "ModelNotFound",
+            "Model not found (qwen-audio-3.1-asr-flash)!",
+        );
+        assert!(message.contains("服务端拒绝任务"), "{message}");
+        assert!(message.contains("qwen-audio-3.1-asr-flash"), "{message}");
+        assert!(
+            message.contains("qwen-audio-3.1-asr-flash-streaming"),
+            "应给出可用的实时模型：{message}"
+        );
+        assert!(message.contains("fun-asr-realtime"), "{message}");
+
+        // 其他错误码不附加模型提示，避免噪音
+        let other = failed_message("InvalidParameter", "bad parameter");
+        assert!(!other.contains("qwen-audio-3.1-asr-flash-streaming"), "{other}");
     }
 
     /// 中途断连：以错误事件上报，而不是静默停止
