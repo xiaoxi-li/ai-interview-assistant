@@ -1,4 +1,8 @@
-"""调用多模态图片生成服务生成图标候选方案，并把结果下载到本目录。
+"""调用云端图片生成服务，产出「简」字**艺术字体概念图**（篆书 / 花体等
+系统字体没有的风格），下载到 `ai-concepts/` 供评审参考。
+
+注意：这些是生成式概念图，带「AI 生成」水印、字形可能不规范，仅作风格灵感；
+正式方案请用 `render.py`（系统字体精确渲染）。
 
 用法：
     set BUDDY_CLOUD_TOKEN=...
@@ -16,27 +20,26 @@ BUDDY = (
     r"c:\Users\LQM\.vscode\extensions\tencent-cloud.coding-copilot-4.12.38765564"
     r"\out\extension\builtin\buddy-multimodal-generation\scripts\buddy-cloud.py"
 )
-OUT_DIR = os.path.dirname(os.path.abspath(__file__))
+OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai-concepts")
 
 PROMPTS = [
     (
-        "03-dark-e.png",
-        "App icon design, one square app icon with rounded corners (squircle), flat vector, "
-        "minimal. Background: deep dark navy gradient from #0F1420 to #171E2E. Centered: a "
-        "glowing geometric capital letter E made of three thick horizontal rounded bars, "
-        "gradient fill from #7C9AFF to #4F6BED, with a soft blue neon glow behind it. Dark "
-        "theme desktop software icon, elegant, high contrast, no text, no watermark, crisp "
-        "vector edges, Windows 11 and macOS style.",
+        "seal-script.png",
+        "App icon, single square icon with rounded corners (squircle), flat vector. "
+        "Background: smooth diagonal gradient from #5B7CFA to #2B46C4. Centered: the "
+        "Chinese character 简 (jian) rendered in ancient Chinese seal script (zhuan shu) "
+        "style, uniform thin elegant strokes, symmetric square composition, white "
+        "strokes on blue. Minimal, generous padding, no other text, no watermark, "
+        "crisp vector edges, modern app icon.",
     ),
     (
-        "04-cards-e.png",
-        "App icon design, one square app icon with rounded corners (squircle), flat vector, "
-        "minimal. Background: soft light lavender white gradient #F5F6FA to #E4E9FF with a "
-        "thin royal blue inner border glow. Centered: a bold geometric capital letter E built "
-        "from three stacked rounded horizontal bars that read like three stacked note cards of "
-        "a knowledge base, bars in brand blue gradient #4F6BED to #2B46C4, the bottom bar in "
-        "lighter blue #7C9AFF. Clean, calm, professional productivity software icon, no text, "
-        "no watermark, crisp vector edges, Windows 11 and macOS style.",
+        "floral-script.png",
+        "App icon, single square icon with rounded corners (squircle), flat vector. "
+        "Background: smooth diagonal gradient from #5B7CFA to #2B46C4. Centered: the "
+        "Chinese character 简 in an ornate decorative floral calligraphy style, white "
+        "strokes with elegant flourishes and thin swirl endings, graceful, artistic. "
+        "Minimal, generous padding, no other text, no watermark, crisp vector edges, "
+        "modern app icon.",
     ),
 ]
 
@@ -44,24 +47,22 @@ PROMPTS = [
 def generate(prompt: str) -> str | None:
     proc = subprocess.run(
         [sys.executable, BUDDY, "image", prompt],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
+        capture_output=True, text=True, encoding="utf-8",
     )
     if proc.returncode != 0:
-        print("  submit failed:", (proc.stdout or "").strip()[:300])
+        print("  submit failed:", (proc.stdout or "").strip()[:200])
         return None
     try:
         data = json.loads(proc.stdout)
     except json.JSONDecodeError:
-        print("  bad json:", (proc.stdout or "").strip()[:300])
+        print("  bad json:", (proc.stdout or "").strip()[:200])
         return None
     urls = data.get("result_url")
     if isinstance(urls, list):
         return urls[0] if urls else None
     if isinstance(urls, str):
         return urls
-    print("  no url:", json.dumps(data, ensure_ascii=False)[:300])
+    print("  no url:", json.dumps(data, ensure_ascii=False)[:200])
     return None
 
 
@@ -69,6 +70,7 @@ def main() -> None:
     if not os.environ.get("BUDDY_CLOUD_TOKEN"):
         print("BUDDY_CLOUD_TOKEN not set")
         sys.exit(1)
+    os.makedirs(OUT_DIR, exist_ok=True)
 
     for name, prompt in PROMPTS:
         target = os.path.join(OUT_DIR, name)
