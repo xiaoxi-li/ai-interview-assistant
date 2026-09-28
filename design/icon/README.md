@@ -1,67 +1,54 @@
 # 轻松面试 · 品牌标识与应用图标
 
-> 以设计方品牌稿为准，**成品素材原样使用：不重绘、不改色、不改几何、不加描边或字重补偿**。
+> 以设计方品牌稿与用户提供的高清 logo 为准，**原样使用：不重绘、不改色、不改几何**。
 
-## 一、品牌要素（取自设计稿）
+## 一、品牌要素
 
 | 项 | 内容 |
 | --- | --- |
 | 品牌名 | **Easy** · 轻松面试 |
 | Slogan | 让面试，更轻松 |
-| 主图形 | 三条**渐变波浪横杠**（字母 E 的意象；流畅线条象征语音转写与信息流动） |
-| 主色 | `#3B82F6` 科技 · 信赖 |
-| 辅助色 | `#22D3A6` 活力 · 成长 |
-| 浅色底 | `#E6F0FF` 清晰 · 专注 |
-| 文字色 | `#0F172A` 专业 · 清晰 |
-| 字体 | 中文：思源黑体 / 阿里巴巴普惠体；英文：Inter / Poppins |
+| 主图形 | 三条**向右上倾斜约 15°** 的圆角横杠（字母 E 意象；线条流动象征语音转写与信息流转） |
+| 主色 | `#3B82F6` / 辅助色 `#22D3A6` / 文字色 `#0F172A` |
 | 造型风格 | 全圆润、渐变色彩、简洁现代 |
 
-> 界面设计令牌仍是 `#4F6BED` 系（见《技术方案》15.1–15.3），**本次不改界面主色**；
-> 品牌 logo 使用上表色板，新增品牌视觉元素时优先取 logo 色。
+> 界面设计令牌仍是 `#4F6BED` 系（见《技术方案》15.1–15.3），品牌 logo 使用上表色板。
 
-## 二、成品素材（直接使用，勿改）
+## 二、现行素材
 
 ```
-final/brand/                 设计方导出的透明底成品
-  mark-1024.png              主标记（透明底）1024
-  mark-256.png               主标记（透明底）256   ← 界面用
-  icon-app-1024.png          应用图标（圆角卡片）
-  icon-app-256.png           应用图标（圆角卡片）
-  horizontal.png             横版组合 1560×560（标记 + Easy + slogan）
-  vertical.png               竖版组合 720×792
-final/tauri-icons/           整套客户端图标（15 个 PNG + icon.ico + icon.icns）
-source/brand-sheet.png       品牌设计稿原图 1080×720（要素与配色出处）
+source/user/mark-hd.png          用户提供的应用图标源（1080²，含水印原图）
+source/user/lockup-hd.png        用户提供的横版组合源（1080²，含水印原图）
+final/user/mark-app-1024.png     去水印后的应用图标（白底方形）
+final/user/lockup-light.png      横版标识 · 浅色主题（深色文字）
+final/user/lockup-dark.png       横版标识 · 深色主题（白色文字）
+final/rebuilt/app-icon-1024.png  按设计稿复刻的应用图标（备用）
+final/rebuilt/mark-1024.png      按设计稿复刻的透明底标记（备用）
+source/brand-sheet.png           品牌设计稿原图 1080×720（要素与配色出处）
+source/crops/                    设计稿中定位出的标记（app_icon / hero_mark），复刻脚本的输入
 ```
 
 ## 三、落地位置
 
 | 客户端位置 | 使用素材 |
 | --- | --- |
-| 任务栏 / 桌面 / 安装包 / 窗口 / 托盘图标 | `final/tauri-icons/*` → `src-tauri/icons/*` |
-| 自定义标题栏（`App.tsx`） | `src/assets/logo-mark.png` |
-| 首次启动向导头部（`OnboardingPage.tsx`） | `src/assets/logo-mark.png` |
-| 迷你模式标题栏（`MiniView.tsx`） | `src/assets/logo-mark.png` |
+| 任务栏 / 桌面 / 安装包 / 窗口 / 托盘图标 | `final/user/mark-app-1024.png` → `src-tauri/icons/*` |
+| 自定义标题栏、向导页头部、迷你模式标题栏 | `src/assets/logo-lockup-{light,dark}.png`，以 Tailwind `dark:` 变体随主题切换 |
 
 托盘图标取 `app.default_window_icon()`，覆盖 `src-tauri/icons` 后自动跟随。
-`src/assets/` 另存 `logo-horizontal.png` / `logo-vertical.png` 备用（关于页、启动页等横竖版场景）。
 
-## 四、脚本与留档
-
-- `extract_logo.py` —— 按颜色特征（品牌蓝青 / 纯白底）从设计稿中定位并裁出各 logo 区块，输出到 `source/crops/`，供对照与备查。
-- `archive/` —— 早期自绘方案留档，**不作为交付物**：`easy/`（字母字标）、`hanzi/`（汉字「简」九套系统字体方案）、`render-hanzi.py`、`preview-hanzi.png`。探索期脚本 `scan_fonts.py` / `gen.py` 亦在此列。
-
-## 五、覆盖客户端图标
+## 四、脚本（复现流程）
 
 ```powershell
-Copy-Item design/icon/final/tauri-icons/* src-tauri/icons/ -Force
+py -3 design/icon/process_user_logo.py   # 去水印 + 裁切 + 拆标记/文字 + 双主题着色（主流程）
+py -3 design/icon/rebuild_logo.py        # 从设计稿像素 1:1 复刻（上采样 + 边缘锐化 + 去白底）
+py -3 design/icon/extract_logo.py        # 从设计稿按颜色特征定位各 logo 区块
+py -3 design/icon/export_icons.py        # 导出 15 尺寸 + icon.ico + icon.icns
 ```
 
-覆盖前请关闭运行中的 `easy-interview.exe`（否则文件被占用）。
-图标替换属客户端变更：须同步 `ai-doc/技术方案.md` 15.6 并单独提交。
+## 五、处理约定（踩过的坑）
 
-## 六、现行素材与弃用说明（2026-09-28 定稿）
-
-- **现行**：`final/rebuilt/`（由 `rebuild_logo.py` 按设计稿 1:1 复刻）→ 覆盖 `src-tauri/icons/` 与 `src/assets/logo-mark.png`。
-  复刻只做上采样、边缘锐化与去白底，**形状 / 比例 / 位置 / 蓝底渐变全部取自设计稿像素**，不重新设计。
-- **已弃用**：`final/brand/`、`final/tauri-icons/` 为波浪形标记，**与设计稿形状不符，勿再使用**。
-- 几何特征（取自设计稿）：三条**向右上倾斜**的圆角横杠（倾斜约 15°），左端对齐，杠粗约 1/5 图标宽；应用图标底色自上而下 `(39,167,254) → (9,98,250)`。
+- **去水印**：水印固定在右下角，该区域是纯背景，直接抹除填白，不触碰其他像素。
+- **拆分标记与文字按位置而非亮度**：标记本身含深蓝，用亮度阈值会把深蓝误判成文字；改为自动查找中间那条空白列分界。
+- **抠底用饱和度**：`alpha = clamp((sat-12)*6)`，用 `255-min` 会残留一圈白边。
+- **低分辨率位图放大**：先 GaussianBlur(0.8) 让边缘连续，再 LANCZOS 上采样 + LUT 阈值锐化（K=2.2），K 过大出阶梯、过小发虚。
