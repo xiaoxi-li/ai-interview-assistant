@@ -197,6 +197,15 @@ describe("AsrSettingsSection", () => {
     expect(saveButton.disabled).toBe(true);
   });
 
+  it("Base URL 填成 HTTP 接口路径时给出防呆提示", () => {
+    setup();
+    fireEvent.change(screen.getByLabelText("服务端地址（Base URL）"), {
+      target: { value: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
+    });
+
+    expect(screen.getByText(/该路径属于 HTTP 接口/)).toBeTruthy();
+  });
+
   it("标注服务商接入状态：已接入 / 待接入", () => {
     setup();
     expect(screen.getByText("已接入")).toBeTruthy();

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   activeAsrModel,
+  baseUrlWarning,
   credentialFieldLabel,
   effectiveBaseUrl,
   hasCustomBaseUrl,
@@ -134,5 +135,30 @@ describe("Base URL 校验与解析", () => {
 
     config = withProviderBaseUrl(config, "aliyun", "   ");
     expect(config.cloudBaseUrls).toEqual({ tencent: "wss://t.example.com" });
+  });
+});
+
+describe("baseUrlWarning（HTTP 接口误填防呆）", () => {
+  it("WebSocket 服务商填 HTTP 接口路径时给出提示", () => {
+    // 真实踩坑：百炼 OpenAI 兼容模式是 HTTP 接口，填给实时识别会 404
+    expect(
+      baseUrlWarning("https://dashscope.aliyuncs.com/compatible-mode/v1", true)
+    ).toContain("HTTP 接口");
+    expect(baseUrlWarning("https://dashscope.aliyuncs.com/api/v1", true)).toContain(
+      "HTTP 接口"
+    );
+    expect(baseUrlWarning("https://x.example.com/apps/anthropic", true)).toBeTruthy();
+  });
+
+  it("正确的 WebSocket 地址或非 WebSocket 服务商不提示", () => {
+    expect(
+      baseUrlWarning("wss://dashscope.aliyuncs.com/api-ws/v1/inference", true)
+    ).toBeNull();
+    expect(baseUrlWarning("wss://proxy.example.com/dashscope", true)).toBeNull();
+    expect(
+      baseUrlWarning("https://dashscope.aliyuncs.com/compatible-mode/v1", false)
+    ).toBeNull();
+    expect(baseUrlWarning("", true)).toBeNull();
+    expect(baseUrlWarning(null, true)).toBeNull();
   });
 });

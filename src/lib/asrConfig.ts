@@ -56,6 +56,32 @@ export function validateBaseUrl(value: string | undefined | null): string | null
   return null;
 }
 
+/**
+ * 仅提供 HTTP REST 的常见路径形态（OpenAI 兼容 / 原生接口 / Anthropic 兼容）。
+ * WebSocket 实时识别无法走这些路径（握手会返回 404），故给出提示。
+ */
+const HTTP_ONLY_PATH_PATTERNS = ["compatible-mode", "/api/v1", "/apps/anthropic"];
+
+/**
+ * 服务端地址「疑似填成 HTTP 接口」的提示（仅 WebSocket 服务商，非阻塞保存）。
+ *
+ * 典型误填：把 OpenAI 兼容的 `https://dashscope.aliyuncs.com/compatible-mode/v1`
+ * 填给实时识别——它是 HTTP 接口，WebSocket 握手会得到 404。
+ */
+export function baseUrlWarning(
+  value: string | undefined | null,
+  usesWebsocket: boolean
+): string | null {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed || !usesWebsocket) return null;
+
+  const lower = trimmed.toLowerCase();
+  if (!HTTP_ONLY_PATH_PATTERNS.some((pattern) => lower.includes(pattern))) {
+    return null;
+  }
+  return "该路径属于 HTTP 接口（OpenAI 兼容 / 原生 REST），实时转写不支持，握手会返回 404；请改用 WebSocket 地址（例如 wss://dashscope.aliyuncs.com/api-ws/v1/inference），或点「恢复默认」";
+}
+
 /** 某服务商生效的服务端地址：自定义值优先，否则回退官方默认 */
 export function effectiveBaseUrl(
   config: ASRConfig,

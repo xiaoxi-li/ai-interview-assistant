@@ -227,6 +227,7 @@ cd src-tauri; cargo test  # 后端：377 项（含 PCM 回放端到端、AEC、�
 | 云端模式报「需要上传音频」 | 到「设置 → 隐私」开启「音频上传」；或在「设置 → 语音识别」切回「本地（隐私优先）」（本地模式不上传音频） |
 | 云端模式报「XX 的云端 ASR 待接入」 | 当前仅「阿里云智能语音」已接入；请在设置页切换服务商或改用本地模式（见第七节第 2 条） |
 | 云端「连接测试」失败 | 按提示依次检查：凭证是否已保存、Base URL 是否可达（代理/私有化部署需自行填写）、网络是否可用；网络问题会在文案中明确说明 |
+| 云端「连接测试」报 **HTTP 404** | 地址填成了 **HTTP 接口**。百炼的 `https://dashscope.aliyuncs.com/compatible-mode/v1` 是 OpenAI 兼容的 HTTP 接口（供对话/嵌入/录音文件转写），**实时转写必须用 WebSocket**：`wss://dashscope.aliyuncs.com/api-ws/v1/inference`。点「恢复默认」或手填该地址后**保存配置**再测（详见 `ai-doc/需求分析.md` IA-16） |
 | 召回没有结果 | 确认演示已执行（会自动写入 4 篇示例笔记），或先在「知识库」导入 Markdown |
 | 想重置全部数据重来一遍 | 关闭应用后删除数据目录：Windows `%APPDATA%\com.easyinterview.app\`，macOS `~/Library/Application Support/com.easyinterview.app/`（内含 `easy-interview.db` 与 `models/`），下次启动会重新初始化并再次进入首次向导。注意：API Key 存在系统钥匙链中，如需一并清除请在「设置 → AI 平台」中删除 |
 

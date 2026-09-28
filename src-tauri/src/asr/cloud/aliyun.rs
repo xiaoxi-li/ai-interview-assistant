@@ -495,6 +495,12 @@ fn map_handshake_error(err: tokio_tungstenite::tungstenite::Error) -> String {
                 status.as_u16()
             );
         }
+        if status == StatusCode::NOT_FOUND {
+            return format!(
+                "服务端返回 HTTP 404：该地址不是实时识别端点（实时转写走 WebSocket）。若填的是 OpenAI 兼容的 /compatible-mode/v1 等 HTTP 接口地址，请改为 {}，或点「恢复默认」后保存配置",
+                crate::config::asr::CloudAsrProvider::Aliyun.default_base_url()
+            );
+        }
         return format!("连接云端 ASR 失败：HTTP {}", status.as_u16());
     }
     format!("连接云端 ASR 失败：{err}")
@@ -847,6 +853,22 @@ mod tests {
         let message = map_handshake_error(server_error);
         assert!(message.contains("503"), "{message}");
         assert!(!message.contains("鉴权失败"), "{message}");
+
+        // 404：多为把 HTTP 接口地址（如 /compatible-mode/v1）当成实时识别端点
+        let not_found = Error::Http(
+            Response::builder()
+                .status(404)
+                .body(None::<Vec<u8>>)
+                .expect("response"),
+        );
+        let message = map_handshake_error(not_found);
+        assert!(message.contains("404"), "{message}");
+        assert!(message.contains("WebSocket"), "{message}");
+        assert!(
+            message.contains("api-ws/v1/inference"),
+            "应给出正确的实时识别地址：{message}"
+        );
+        assert!(message.contains("恢复默认"), "{message}");
     }
 
     /// 中途断连：以错误事件上报，而不是静默停止

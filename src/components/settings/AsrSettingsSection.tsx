@@ -12,6 +12,7 @@ import {
 import { cn } from "../../lib/utils";
 import {
   activeAsrModel,
+  baseUrlWarning,
   credentialFieldLabel,
   effectiveBaseUrl,
   hasCustomBaseUrl,
@@ -70,6 +71,10 @@ export default function AsrSettingsSection({
     draft,
     draft.cloudProvider,
     preset?.defaultBaseUrl ?? ""
+  );
+  const baseUrlNotice = baseUrlWarning(
+    draft.cloudBaseUrls?.[draft.cloudProvider],
+    preset?.usesWebsocket ?? true
   );
 
   const configuredFields = useMemo(
@@ -204,6 +209,11 @@ export default function AsrSettingsSection({
                   ? `当前使用自定义地址；官方默认：${preset?.defaultBaseUrl ?? "—"}`
                   : "当前使用官方默认地址；可填写代理或私有化部署地址，各服务商各自保存"}
               </p>
+              {baseUrlNotice && (
+                <p className="mt-1 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-[10px] leading-relaxed text-warning">
+                  {baseUrlNotice}
+                </p>
+              )}
             </div>
           </div>
 
