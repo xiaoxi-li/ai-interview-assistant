@@ -3,6 +3,10 @@
 //! 规则式判定（无额外模型、零延迟、可解释），命中信号会在界面上展示，便于用户判断。
 //! 语音转写没有标点时主要依赖疑问词与祈使式提问（「介绍一下…」「说说…」）。
 //!
+//! **判定单位是「句子」而非「整段」**：一条转写（尤其云端按句返回的 final）常包含多句话，
+//! 若拿整段做判定，句中问号/句尾语气词会被后面的话稀释而漏判（2026-09-28 真实踩坑，见
+//! [`analyze_with`] 注释）。因此先按句末标点切句、逐句判定，再取最高分作为整段结论。
+//!
 //! 两个入口：
 //! * [`analyze`]：对单段文本打分（纯函数）；
 //! * [`QuestionDetector`]：跨段聚合（面试官常中途停顿分词），并支持手动触发。
@@ -144,7 +148,40 @@ pub fn analyze(text: &str) -> QuestionScore {
 ///
 /// 权重设计：任一「强信号」（问号 / 疑问词 / 祈使式提问）单独即可越过默认阈值 0.5；
 /// 「第二人称疑问」「句尾语气词」属弱信号，需与强信号组合。
+///
+/// 判定按**句**进行（见 [`split_sentences`]）并取最高分：转写结果常在一条文本里包含多句话，
+/// 典型踩坑（2026-09-28）：`呃第一个问题，lvm了解过吗？假如你有块新的磁盘…你说一下用到的命令。`
+/// ——问号在句中、句尾是句号，整段判定得分 0，问题被静默丢弃；按句判定则首句命中。
 pub fn analyze_with(text: &str, threshold: f32) -> QuestionScore {
+    split_sentences(text)
+        .into_iter()
+        .map(|sentence| analyze_sentence(sentence, threshold))
+        .reduce(|best, current| if current.score > best.score { current } else { best })
+        .unwrap_or_else(|| QuestionScore::not_question(vec![]))
+}
+
+/// 句末分隔符（中英文）：用于把一条转写切成句子
+const SENTENCE_BREAKS: &[char] = &['。', '！', '？', '!', '?', '；', ';', '\n'];
+
+/// 切句：句末标点保留在句尾；末段（可能尚未说完）原样保留
+fn split_sentences(text: &str) -> Vec<&str> {
+    let mut sentences = Vec::new();
+    let mut start = 0usize;
+    for (index, ch) in text.char_indices() {
+        if SENTENCE_BREAKS.contains(&ch) {
+            let end = index + ch.len_utf8();
+            sentences.push(&text[start..end]);
+            start = end;
+        }
+    }
+    if start < text.len() {
+        sentences.push(&text[start..]);
+    }
+    sentences
+}
+
+/// 单句判定（问号 / 疑问词 / 祈使式提问 / 第二人称疑问 / 句尾语气词）
+fn analyze_sentence(text: &str, threshold: f32) -> QuestionScore {
     let trimmed = text.trim();
     let bare = strip_punctuation(trimmed);
     if bare.is_empty() {
@@ -273,6 +310,11 @@ impl QuestionDetector {
 
         // 长时间没有任何疑问特征的陈述：丢弃，避免缓冲无限增长
         if !self.buffer.is_empty() && ts - self.buffer_start > self.stale_ms {
+            // 只记录长度与结论，不落正文（原始转写属用户内容，日志只用于定位「为何没识别到」）
+            tracing::debug!(
+                "问题候选缓冲超时丢弃（{} 字，未命中疑问特征）",
+                self.buffer.chars().count()
+            );
             self.reset();
         }
 
@@ -438,6 +480,22 @@ mod tests {
     }
 
     #[test]
+    fn statement_only_multi_sentence_text_is_not_question() {
+        assert!(!is_question("第一句是陈述。第二句也是陈述。"));
+    }
+
+    #[test]
+    fn multi_sentence_segment_with_inner_question_is_detected() {
+        // 真实踩坑（2026-09-28，云端 ASR 按句返回）：一条转写含多句话、问号在句中，
+        // 整段判定得分 0 → 问题被静默丢弃；按句判定后首句应命中。
+        let score = analyze(
+            "呃第一个问题，lvm了解过吗？假如你有你有块新的磁盘，你要用lvm的方式挂载到指定的目录，你说一下这个过程中用到的命令。",
+        );
+        assert!(score.is_question, "句中问号应命中：{score:?}");
+        assert!(score.signals.iter().any(|signal| signal.contains("问号")));
+    }
+
+    #[test]
     fn fillers_are_never_questions() {
         for filler in ["嗯", "好的", "明白", "OK", "谢谢", "嗯？"] {
             let score = analyze(filler);
@@ -565,5 +623,21 @@ mod tests {
         detector.clear();
         // 清空后同样的问题可以再次被识别
         assert!(detector.push("介绍一下你的项目", 2_000).is_some());
+    }
+
+    #[test]
+    fn detector_emits_multi_sentence_segment_and_keeps_working() {
+        let mut detector = QuestionDetector::with_defaults();
+        let text = "呃第一个问题，lvm了解过吗？假如你有块新的磁盘，你要用lvm的方式挂载到指定的目录，你说一下这个过程中用到的命令。";
+
+        let detected = detector.push(text, 1_000).expect("内层疑问句应被识别");
+        assert_eq!(detected.text, text, "整段文本应作为问题上报");
+        assert_eq!(detector.pending_text(), "", "上报后应清空缓冲");
+
+        // 后续问题不受影响（不因去重逻辑被吞掉）
+        let next = detector
+            .push("要改服务器的SS端口的话，要去哪个文件上去修改哪个参数？", 39_000)
+            .expect("下一句问题应被识别");
+        assert!(next.text.contains("SS端口"));
     }
 }

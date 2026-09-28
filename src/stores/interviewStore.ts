@@ -232,6 +232,12 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
             sources: [],
             persistedSources: [],
             recallQueries: [],
+            // 回答也要归零，否则重启转写后仍显示上一场的问题/回答
+            answerText: "",
+            answerStatus: "idle",
+            answerError: null,
+            answerQaId: null,
+            answerModel: null,
           })
         )
         .catch((err) => {
@@ -329,6 +335,12 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
             sources: [],
             persistedSources: [],
             recallQueries: [],
+            // 回答也要归零，否则重启转写后仍显示上一场的问题/回答
+            answerText: "",
+            answerStatus: "idle",
+            answerError: null,
+            answerQaId: null,
+            answerModel: null,
           })
         )
         .catch((err) => {

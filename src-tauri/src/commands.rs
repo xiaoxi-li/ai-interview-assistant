@@ -1447,6 +1447,14 @@ fn handle_detected_question(
 ) {
     use tauri::Emitter;
 
+    // 只记录长度/得分/来源，不落正文（正文属用户内容，日志仅用于定位「为何没识别到」）
+    tracing::info!(
+        "识别到面试问题（{} 字，得分 {:.2}，{}）",
+        question.text.chars().count(),
+        question.score,
+        if manual { "手动触发" } else { "自动识别" }
+    );
+
     let qa_id = match conn.lock() {
         Ok(guard) => QaRepo::new(&guard)
             .create_question(session_id, &question.text, question.ts)

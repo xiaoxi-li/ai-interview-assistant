@@ -231,6 +231,7 @@ cd src-tauri; cargo test  # 后端：377 项（含 PCM 回放端到端、AEC、�
 | 云端「连接测试」报 **HTTP 404** | 地址填成了 **HTTP 接口**。百炼的 `https://dashscope.aliyuncs.com/compatible-mode/v1` 是 OpenAI 兼容的 HTTP 接口（供对话/嵌入/录音文件转写），**实时转写必须用 WebSocket**：`wss://dashscope.aliyuncs.com/api-ws/v1/inference`。点「恢复默认」或手填该地址后**保存配置**再测（详见 `ai-doc/需求分析.md` IA-16） |
 | 云端「连接测试」报 **ModelNotFound** | 模型名不能用于实时转写：非实时（HTTP 文件转写）模型（如 `qwen-audio-3.1-asr-flash`，无 `-streaming`）只能走 HTTP 接口。请改用实测可用的实时模型：`qwen-audio-3.1-asr-flash-streaming`（默认）、`fun-asr-realtime`、`paraformer-realtime-v2` |
 | 召回没有结果 | 确认演示已执行（会自动写入 4 篇示例笔记），或先在「知识库」导入 Markdown |
+| 转写面板里明明有问题句，但「问题识别」一直为空、AI 回答也不生成 | ① 只有「面试官」通道的转写参与识别：单通道模式下请选「面试官（系统音频）」，双通道模式下确认系统音频通路正常（面试官的话应标为「面试官」而不是「我」）；② 判定单位是**句**（已按句末标点切句打分，见 `ai-doc/技术方案.md` 6.13），但**纯陈述句、疑问特征过弱或与上一次问题高度重复**的句子不会上报；③ 可先点「手动识别当前问题」用最近 30 秒转写兜底；④ 排查日志 `<数据目录>/logs/app.log.<日期>`：命中会写 `识别到面试问题（字数/得分/来源）`，未命中只有候选超时丢弃的 debug 记录 |
 | 想重置全部数据重来一遍 | 关闭应用后删除数据目录：Windows `%APPDATA%\com.easyinterview.app\`，macOS `~/Library/Application Support/com.easyinterview.app/`（内含 `easy-interview.db` 与 `models/`），下次启动会重新初始化并再次进入首次向导。注意：API Key 存在系统钥匙链中，如需一并清除请在「设置 → AI 平台」中删除 |
 
 ---
