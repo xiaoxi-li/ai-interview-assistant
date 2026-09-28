@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import AsrSettingsSection from "../AsrSettingsSection";
-import type { ASRConfig, AsrCredentialStatus, AsrProviderPreset } from "../../../types";
+import type {
+  ASRConfig,
+  AsrCredentialStatus,
+  AsrEngineInfo,
+  AsrProviderPreset,
+} from "../../../types";
 
 const providers: AsrProviderPreset[] = [
   {
@@ -51,6 +56,20 @@ const credentialStatus: AsrCredentialStatus = {
     { field: "api_key", configured: false, masked: "" },
     { field: "api_secret", configured: false, masked: "" },
   ],
+};
+
+const readyEngine: AsrEngineInfo = {
+  id: "asr-paraformer-zh",
+  label: "本地 ASR（sherpa-onnx 中文 paraformer）",
+  ready: true,
+  detail: "模型已就绪（C:/models/asr-paraformer-zh）；本地识别已接入",
+};
+
+const blockedEngine: AsrEngineInfo = {
+  ...readyEngine,
+  ready: false,
+  detail:
+    "模型已就绪（C:/models/asr-paraformer-zh）；本地识别代码已就绪，但本次构建未启用（需构建机安装 libclang 后以 --features local-asr-native 构建，见 README）",
 };
 
 function setup(overrides: Partial<Parameters<typeof AsrSettingsSection>[0]> = {}) {
@@ -266,5 +285,27 @@ describe("AsrSettingsSection", () => {
     setup();
     fireEvent.click(screen.getByText("本地（隐私优先）"));
     expect(screen.queryByText("连接测试")).toBeNull();
+  });
+
+  it("本地模式展示已就绪的本地引擎状态（IA-15）", () => {
+    setup({ localEngine: readyEngine });
+    fireEvent.click(screen.getByText("本地（隐私优先）"));
+
+    expect(screen.getByText("本地引擎")).toBeTruthy();
+    expect(screen.getByText("已就绪")).toBeTruthy();
+    expect(screen.getByText(/本地识别已接入/)).toBeTruthy();
+  });
+
+  it("本地模式未启用原生推理时展示未启用与构建指引", () => {
+    setup({ localEngine: blockedEngine });
+    fireEvent.click(screen.getByText("本地（隐私优先）"));
+
+    expect(screen.getByText("未启用")).toBeTruthy();
+    expect(screen.getByText(/--features local-asr-native/)).toBeTruthy();
+  });
+
+  it("云端模式不展示本地引擎状态", () => {
+    setup({ localEngine: readyEngine });
+    expect(screen.queryByText("本地引擎")).toBeNull();
   });
 });

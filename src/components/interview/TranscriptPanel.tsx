@@ -19,7 +19,6 @@ type CaptureMode = CaptureSource | "dual";
 
 export default function TranscriptPanel() {
   const asrStatus = useInterviewStore((s) => s.asrStatus);
-  const engines = useInterviewStore((s) => s.engines);
   const transcript = useInterviewStore((s) => s.transcript);
   const partial = useInterviewStore((s) => s.partial);
   const asrError = useInterviewStore((s) => s.asrError);
@@ -48,8 +47,6 @@ export default function TranscriptPanel() {
   }, [transcript.length, partial?.text]);
 
   const running = asrStatus?.running ?? false;
-  const engine = engines[0];
-  const engineBlocked = Boolean(engine && !engine.ready);
 
   const start = () => {
     if (mode === "dual") {
@@ -128,13 +125,6 @@ export default function TranscriptPanel() {
           </button>
         ))}
       </div>
-
-      {/* 引擎就绪提示 */}
-      {engineBlocked && !asrError && (
-        <p className="mb-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[10px] leading-relaxed text-warning">
-          {engine?.detail}
-        </p>
-      )}
 
       {asrError && (
         <p className="mb-3 flex items-start gap-1.5 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[10px] leading-relaxed text-danger">

@@ -43,6 +43,8 @@ export default function SettingsPage() {
   const testingAsr = useSettingsStore((s) => s.testingAsr);
   const asrTestResult = useSettingsStore((s) => s.asrTestResult);
   const testAsrConnection = useSettingsStore((s) => s.testAsrConnection);
+  const asrEngines = useSettingsStore((s) => s.asrEngines);
+  const loadAsrEngines = useSettingsStore((s) => s.loadAsrEngines);
   const audioConfig = useSettingsStore((s) => s.audioConfig);
   const audioDevices = useSettingsStore((s) => s.audioDevices);
   const loadAudioSettings = useSettingsStore((s) => s.loadAudioSettings);
@@ -79,6 +81,7 @@ export default function SettingsPage() {
   useEffect(() => {
     loadAiSettings();
     loadAsrSettings();
+    loadAsrEngines();
     loadAudioSettings();
     loadPrivacySettings();
     loadModels();
@@ -87,6 +90,7 @@ export default function SettingsPage() {
   }, [
     loadAiSettings,
     loadAsrSettings,
+    loadAsrEngines,
     loadAudioSettings,
     loadPrivacySettings,
     loadModels,
@@ -156,6 +160,7 @@ export default function SettingsPage() {
               onTestConnection={testAsrConnection}
               testing={testingAsr}
               testResult={asrTestResult}
+              localEngine={asrEngines[0] ?? null}
             />
           )}
 

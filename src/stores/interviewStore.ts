@@ -5,7 +5,6 @@ import type {
   AnswerPush,
   AnswerStatus,
   DemoAck,
-  AsrEngineInfo,
   AsrSessionStatus,
   AudioDevice,
   CaptureStatus,
@@ -48,8 +47,6 @@ interface InterviewState {
 
   /** 本地 ASR 会话状态 */
   asrStatus: AsrSessionStatus | null;
-  /** 可用本地 ASR 引擎 */
-  engines: AsrEngineInfo[];
   /** 已确认的转写（final） */
   transcript: TranscriptLine[];
   /** 当前进行中的中间结果（partial） */
@@ -144,7 +141,6 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
     starting: false,
 
     asrStatus: null,
-    engines: [],
     transcript: [],
     partial: null,
     asrError: null,
@@ -204,12 +200,10 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
 
     applyLevel: (level) => set({ level }),
 
+    // 只取会话状态；本地引擎就绪信息由「设置 → 语音识别」按需读取（list_asr_engines）
     loadAsrStatus: () =>
-      Promise.all([
-        ipc<AsrSessionStatus>("asr_session_status"),
-        ipc<AsrEngineInfo[]>("list_asr_engines"),
-      ])
-        .then(([asrStatus, engines]) => set({ asrStatus, engines }))
+      ipc<AsrSessionStatus>("asr_session_status")
+        .then((asrStatus) => set({ asrStatus }))
         .catch((err) => fail("读取转写状态", err)),
 
     startTranscription: (source, deviceId) => {

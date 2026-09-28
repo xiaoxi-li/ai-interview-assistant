@@ -24,6 +24,7 @@ import {
 import type {
   ASRConfig,
   AsrCredentialStatus,
+  AsrEngineInfo,
   AsrProviderPreset,
   ConnectionTest,
 } from "../../types";
@@ -44,6 +45,11 @@ interface AsrSettingsSectionProps {
   onTestConnection?: (config: ASRConfig) => void;
   testing?: boolean;
   testResult?: ConnectionTest | null;
+  /**
+   * 本地 ASR 引擎就绪状态（IA-15，取自 `list_asr_engines`）。
+   * 未启用 `local-asr-native` 的构建恒为 `ready: false`，`detail` 给出构建指引。
+   */
+  localEngine?: AsrEngineInfo | null;
 }
 
 export default function AsrSettingsSection({
@@ -57,6 +63,7 @@ export default function AsrSettingsSection({
   onTestConnection,
   testing = false,
   testResult = null,
+  localEngine = null,
 }: AsrSettingsSectionProps) {
   const [draft, setDraft] = useState<ASRConfig>(config);
   const [credentialInputs, setCredentialInputs] = useState<Record<string, string>>({});
@@ -302,6 +309,27 @@ export default function AsrSettingsSection({
             <p className="mt-1 text-[10px] text-text-subtle">
               本地模型需在「模型管理」中下载后使用，识别过程不上传音频
             </p>
+            {/* 本地引擎就绪状态（IA-15）：面试页不再提示，统一在这里说明三种情形 */}
+            {localEngine && (
+              <div className="mt-2 rounded-md border border-ghost/[0.06] bg-background-3/40 px-2.5 py-2">
+                <span className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-text-subtle">本地引擎</span>
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[10px] leading-none",
+                      localEngine.ready
+                        ? "bg-success/15 text-success"
+                        : "bg-ghost/[0.06] text-text-subtle"
+                    )}
+                  >
+                    {localEngine.ready ? "已就绪" : "未启用"}
+                  </span>
+                </span>
+                <p className="mt-1 break-all text-[10px] leading-relaxed text-text-subtle">
+                  {localEngine.detail}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}

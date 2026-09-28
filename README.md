@@ -65,7 +65,7 @@ npm run tauri build -- --features local-asr-native --config src-tauri/tauri.loca
 - 首次启用构建时，`sherpa-rs-sys` 会按 target 下载**约 23MB** 预编译原生库（SHA256 校验后缓存到 `%LOCALAPPDATA%\sherpa-rs\`），之后构建不再下载。
 - 构建产物由 `sherpa-rs-sys` 的 build.rs 把 DLL 复制到 `target/<profile>/`（与 exe 同目录）；**安装包**则由 `tauri.local-asr.conf.json` 的 `bundle.resources` 携带。
 - 启用后：在「设置 → 模型管理」下载「本地 ASR（Paraformer 中文）」，再回到面试辅助页开始转写，即可得到真实中文转写。
-- 未启用时相关命令会返回**明确的构建指引**错误（不再是一句含糊的「尚未接入」）。
+- 未启用时相关命令会返回**明确的构建指引**错误（不再是一句含糊的「尚未接入」）；就绪状态可在**「设置 → 语音识别」（本地模式）**的「本地引擎」处查看（chip：已就绪 / 未启用 + 具体说明）。
 - 冒烟自检（需已下载模型）：`cargo test --features local-asr-native -- --ignored asr::sherpa`（会加载真实模型并解码 1 秒静音）。
 - macOS 通路见 `ai-doc/需求分析.md` 5.5 待办 TODO-01。
 
@@ -207,6 +207,7 @@ cd src-tauri; cargo test  # 后端：445 项（含 PCM 回放端到端、AEC、�
 
 1. **本地 ASR 原生推理（IA-15）Windows 通路已接入并验证，但默认未启用**：由 cargo 特性 `local-asr-native` 控制，启用见 2.1（构建机需 libclang）。
    - 未启用时 `SherpaOnnxEngine::transcribe_segment` 返回**明确的构建指引错误**，不静默降级、不伪造文本。
+   - **就绪状态在「设置 → 语音识别」（本地模式）的「本地引擎」处查看**（已就绪 / 未启用 + 具体说明）；面试辅助页「实时转写」卡片不再常驻该提示，只有真的启动失败时才显示红色错误条。
    - 已验证：真实模型可加载并完成解码（冒烟自检见 2.1）；带特性的安装包已随包携带原生 DLL（MSI 11.95MB / NSIS 9.32MB，未启用特性时为 6.40MB / 5.39MB）。
    - macOS 通路待接入，见 `ai-doc/需求分析.md` 5.5 待办 TODO-01。
 2. **云端 ASR 仅接入阿里云百炼（IA-16）**：讯飞开放平台 / 腾讯云语音识别 / OpenAI 兼容（自定义）的配置项、凭证与 **Base URL** 已完整保留，但协议适配未实现（`CloudAsrProvider::implemented()` 仅阿里为 `true`）；选中它们开始转写会得到**可操作提示**而非静默失败。详见 `ai-doc/需求分析.md` 待办 TODO-10 / TODO-11。
@@ -225,7 +226,7 @@ cd src-tauri; cargo test  # 后端：445 项（含 PCM 回放端到端、AEC、�
 | `npm run tauri dev` 报 `cargo not found` | 把 `%USERPROFILE%\.cargo\bin` 加入 PATH（见第一节） |
 | 首次编译很慢 / 卡在 `Compiling` | 正常，Rust 首次全量编译 3–6 分钟 |
 | 演示时没有 AI 回答内容 | 未配 Key 时会用离线回答；若报错请检查「设置 → AI 平台」的 Base URL 与 Key |
-| 提示「未启用本地 ASR 原生推理」 | 默认构建不含原生识别；按第二节 2.1 以 `--features local-asr-native` 构建（需 libclang） |
+| 「设置 → 语音识别」（本地模式）显示「本地引擎：未启用」，或开始转写时报「未启用本地 ASR 原生推理」 | 默认构建不含原生识别；按第二节 2.1 以 `--features local-asr-native` 构建（需 libclang） |
 | 报「加载本地 ASR 模型失败」 | 模型文件损坏或下载不完整；在「设置 → 模型管理」删除后重新下载 |
 | 提示「未检测到可用的系统音频来源」 | Windows：确认系统至少有一个可用播放设备（插好耳机/音箱），在「设置 → 音频设备」点「刷新设备」；macOS：安装 BlackHole 等虚拟回环设备后重启应用 |
 | 采集面板点「开始采集」报「未指定音频设备」 | 麦克风来源需在下拉中选中具体设备；系统音频来源可直接用系统默认播放设备（见第七节第 7 条） |

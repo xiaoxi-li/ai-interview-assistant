@@ -4,6 +4,7 @@ import type {
   AIConfig,
   ASRConfig,
   AsrCredentialStatus,
+  AsrEngineInfo,
   AsrProviderPreset,
   AudioConfig,
   AudioDevice,
@@ -99,6 +100,9 @@ interface SettingsState {
   loadAsrCredentialStatus: (provider: string) => Promise<void>;
   saveAsrCredential: (provider: string, field: string, value: string) => Promise<void>;
   deleteAsrCredentials: (provider: string) => Promise<void>;
+  /** 本地 ASR 引擎就绪状态（IA-15）：区分模型未下载 / 模型就绪但未启用本特性 / 已启用可识别 */
+  asrEngines: AsrEngineInfo[];
+  loadAsrEngines: () => Promise<void>;
   /** 音频设备配置 */
   audioConfig: AudioConfig | null;
   /** 已枚举的设备列表 */
@@ -203,6 +207,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     asrCredentials: {},
     testingAsr: false,
     asrTestResult: null,
+    asrEngines: [],
     audioConfig: null,
     audioDevices: [],
     interfaceConfig: null,
@@ -424,6 +429,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
             .catch((err) => fail("查询 ASR 凭证状态", err));
         })
         .catch((err) => fail("加载 ASR 配置", err)),
+
+    // 本地引擎就绪信息只在设置页需要（面试页不再展示），故从面试 store 迁到这里按需读取
+    loadAsrEngines: () =>
+      ipc<AsrEngineInfo[]>("list_asr_engines")
+        .then((asrEngines) => set({ asrEngines }))
+        .catch((err) => fail("读取本地识别引擎状态", err)),
 
     saveAsrConfig: (config) =>
       ipc<ASRConfig>("save_asr_config", { config })

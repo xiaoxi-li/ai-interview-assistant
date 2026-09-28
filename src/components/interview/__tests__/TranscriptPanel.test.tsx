@@ -3,24 +3,11 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import TranscriptPanel from "../TranscriptPanel";
 import { useAppStore } from "../../../stores/appStore";
 import { useInterviewStore, type TranscriptLine } from "../../../stores/interviewStore";
-import type { AsrEngineInfo, AsrSessionStatus } from "../../../types";
+import type { AsrSessionStatus } from "../../../types";
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(() => {}),
 }));
-
-const readyEngine: AsrEngineInfo = {
-  id: "asr-paraformer-zh",
-  label: "本地 ASR（sherpa-onnx 中文 paraformer）",
-  ready: true,
-  detail: "模型已就绪",
-};
-
-const blockedEngine: AsrEngineInfo = {
-  ...readyEngine,
-  ready: false,
-  detail: "本地 ASR 模型尚未下载：C:/models/asr/xxx。请前往「设置 → 模型管理」下载后重试。",
-};
 
 const idleStatus: AsrSessionStatus = {
   running: false,
@@ -49,7 +36,6 @@ function finalLine(overrides: Partial<TranscriptLine> = {}): TranscriptLine {
 function resetStore(overrides: Partial<ReturnType<typeof useInterviewStore.getState>> = {}) {
   useInterviewStore.setState({
     asrStatus: idleStatus,
-    engines: [readyEngine],
     transcript: [],
     partial: null,
     asrError: null,
@@ -111,10 +97,10 @@ describe("TranscriptPanel", () => {
     expect(screen.getByText("然后我负责…")).toBeTruthy();
   });
 
-  it("未就绪引擎给出可操作提示", () => {
-    resetStore({ engines: [blockedEngine] });
+  it("不再展示本地引擎就绪黄条（已迁至设置页）", () => {
     render(<TranscriptPanel />);
-    expect(screen.getByText(/请前往「设置 → 模型管理」下载/)).toBeTruthy();
+    expect(screen.queryByText(/模型已就绪/)).toBeNull();
+    expect(screen.queryByText(/local-asr-native/)).toBeNull();
   });
 
   it("转写中展示状态并隐藏渠道切换", () => {
