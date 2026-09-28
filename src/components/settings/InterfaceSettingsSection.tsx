@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Monitor, Moon, Power, Save, Sun } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { SaveFeedback } from "./SaveFeedback";
 import { HOTKEY_ACTIONS, updateBinding, validateHotkeys } from "../../lib/hotkeys";
 import HotkeyInput from "./HotkeyInput";
 import type { InterfaceConfig } from "../../types";
@@ -154,6 +155,8 @@ export default function InterfaceSettingsSection({
           <Save className="h-3.5 w-3.5" />
           保存配置
         </button>
+        {/* 保存反馈：覆盖「保存配置」「开机自启开关」 */}
+        <SaveFeedback target="interface" />
       </div>
     </section>
   );

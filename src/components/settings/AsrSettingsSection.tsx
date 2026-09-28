@@ -10,6 +10,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { SaveFeedback } from "./SaveFeedback";
 import {
   activeAsrModel,
   baseUrlWarning,
@@ -373,6 +374,8 @@ export default function AsrSettingsSection({
           <Save className="h-3.5 w-3.5" />
           保存配置
         </button>
+        {/* 保存反馈：覆盖「保存配置」「保存凭证」「清空凭证」 */}
+        <SaveFeedback target="asr" />
       </div>
 
       {draft.mode === "cloud" && (

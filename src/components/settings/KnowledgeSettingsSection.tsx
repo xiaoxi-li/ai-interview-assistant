@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Database, FolderOpen, RefreshCw, Save } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { SaveFeedback } from "./SaveFeedback";
 import { pickDirectory } from "../../lib/dialog";
 import type { KnowledgeConfig, ModelStatus, StoragePaths } from "../../types";
 
@@ -169,7 +170,9 @@ export default function KnowledgeSettingsSection({
         </p>
       )}
 
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex items-center justify-end gap-3">
+        {/* 保存反馈：知识库配置保存 */}
+        <SaveFeedback target="knowledge" />
         <button
           onClick={() => onSave(draft)}
           className="focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/15 px-4 py-2 text-[12px] text-primary-3 transition-colors hover:bg-primary/25"

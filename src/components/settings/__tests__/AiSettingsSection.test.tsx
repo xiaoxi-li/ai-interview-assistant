@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import AiSettingsSection from "../AiSettingsSection";
+import { emptySaveFeedback, useSettingsStore } from "../../../stores/settingsStore";
 import type { AIConfig, PlatformPreset } from "../../../types";
+
+const ipcMock = vi.fn();
+vi.mock("../../../lib/ipc", () => ({
+  ipc: (...args: unknown[]) => ipcMock(...args),
+}));
 
 const presets: PlatformPreset[] = [
   {
@@ -178,5 +184,60 @@ describe("AiSettingsSection", () => {
     expect(
       screen.getByPlaceholderText("已配置：sk-****cdef")
     ).toBeTruthy();
+  });
+
+  it("保存配置成功 / 失败时在分区内就地提示，失败可手动关闭（ST-11）", async () => {
+    ipcMock.mockReset();
+    useSettingsStore.setState({ saveFeedback: emptySaveFeedback(), error: null });
+    ipcMock.mockResolvedValueOnce(config);
+
+    render(
+      <AiSettingsSection
+        config={config}
+        presets={presets}
+        onSaveConfig={useSettingsStore.getState().saveAiConfig}
+        onSaveApiKey={vi.fn()}
+        onDeleteApiKey={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByText("保存配置"));
+    expect(await screen.findByText("AI 配置已保存")).toBeTruthy();
+
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    ipcMock.mockRejectedValueOnce(new Error("network down"));
+    fireEvent.click(screen.getByText("保存配置"));
+    expect(await screen.findByText("保存 AI 配置失败：network down")).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText("关闭提示"));
+    expect(screen.queryByText("保存 AI 配置失败：network down")).toBeNull();
+    spy.mockRestore();
+  });
+
+  it("保存 API Key 后提示「密钥已保存」（ST-11）", async () => {
+    ipcMock.mockReset();
+    useSettingsStore.setState({ saveFeedback: emptySaveFeedback(), error: null });
+    ipcMock.mockResolvedValueOnce({
+      platform: "deepseek",
+      configured: true,
+      masked: "sk-****",
+    });
+
+    render(
+      <AiSettingsSection
+        config={config}
+        presets={presets}
+        onSaveConfig={vi.fn()}
+        onSaveApiKey={useSettingsStore.getState().saveApiKey}
+        onDeleteApiKey={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText(/API Key/), {
+      target: { value: "sk-test-key" },
+    });
+    fireEvent.click(screen.getByText("保存"));
+
+    expect(await screen.findByText("密钥已保存")).toBeTruthy();
   });
 });

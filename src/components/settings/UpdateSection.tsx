@@ -3,6 +3,8 @@ import { AlertCircle, CheckCircle2, Download, Loader2, RefreshCw, Rocket } from 
 import { cn } from "../../lib/utils";
 import { ipc } from "../../lib/ipc";
 import { useT } from "../../hooks/useT";
+import { SaveFeedbackView } from "./SaveFeedback";
+import type { SettingsSaveFeedback } from "../../stores/settingsStore";
 import type { UpdateCheck, UpdateConfig } from "../../types";
 
 const FIELD =
@@ -16,6 +18,8 @@ export default function UpdateSection() {
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<UpdateCheck | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** 保存反馈（ST-11）：本分区直连 ipc，不走 settingsStore，故用本地状态 */
+  const [feedback, setFeedback] = useState<SettingsSaveFeedback | null>(null);
   const t = useT();
 
   useEffect(() => {
@@ -37,13 +41,21 @@ export default function UpdateSection() {
   const saveEndpoint = () => {
     if (!config) return;
     setError(null);
+    setFeedback(null);
     ipc<UpdateConfig>("save_update_config", {
       config: { ...config, endpoint: draftEndpoint.trim() },
     })
-      .then((saved) => setConfig(saved))
+      .then((saved) => {
+        setConfig(saved);
+        setFeedback({ kind: "success", text: "更新地址已保存" });
+      })
       .catch((err) => {
         console.error("保存更新配置失败:", err);
         setError(String(err));
+        setFeedback({
+          kind: "error",
+          text: `保存更新地址失败：${err instanceof Error ? err.message : String(err)}`,
+        });
       });
   };
 
@@ -109,15 +121,28 @@ export default function UpdateSection() {
               onChange={(event) => {
                 const next = { ...config, autoCheck: event.target.checked };
                 setConfig(next);
-                ipc<UpdateConfig>("save_update_config", { config: next }).catch((err) =>
-                  console.error("保存更新配置失败:", err)
-                );
+                setFeedback(null);
+                ipc<UpdateConfig>("save_update_config", { config: next })
+                  .then(() =>
+                    setFeedback({ kind: "success", text: "自动检查设置已保存" })
+                  )
+                  .catch((err) => {
+                    console.error("保存更新配置失败:", err);
+                    setFeedback({
+                      kind: "error",
+                      text: `保存自动检查设置失败：${
+                        err instanceof Error ? err.message : String(err)
+                      }`,
+                    });
+                  });
               }}
               className="focus-ring cursor-pointer rounded accent-[#4F6BED]"
             />
             {t("启动时自动检查")}
           </label>
         )}
+        {/* 保存反馈：更新地址失焦保存 / 自动检查开关 */}
+        <SaveFeedbackView feedback={feedback} onDismiss={() => setFeedback(null)} />
       </div>
 
       {error && (

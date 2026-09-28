@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Mic, RefreshCw, Save, Volume2 } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { SaveFeedback } from "./SaveFeedback";
 import type { AudioConfig, AudioDevice } from "../../types";
 
 const FIELD =
@@ -129,6 +130,8 @@ export default function AudioSettingsSection({
           <Save className="h-3.5 w-3.5" />
           保存配置
         </button>
+        {/* 保存反馈：覆盖「保存配置」「刷新设备」 */}
+        <SaveFeedback target="audio" />
       </div>
     </section>
   );

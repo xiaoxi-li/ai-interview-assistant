@@ -24,9 +24,46 @@ export interface ApiKeyStatus {
   masked: string;
 }
 
+/** 设置分区标识：保存反馈按分区就地展示（ST-11） */
+export type SettingsFeedbackTarget =
+  | "ai"
+  | "asr"
+  | "audio"
+  | "knowledge"
+  | "interface"
+  | "privacy";
+
+/** 分区保存反馈：成功约 3 秒自动淡出，失败保留至手动关闭或下一次操作 */
+export interface SettingsSaveFeedback {
+  kind: "success" | "error";
+  text: string;
+}
+
+/** 空的分区反馈表（state 初始化与测试重置共用） */
+export const emptySaveFeedback = (): Record<
+  SettingsFeedbackTarget,
+  SettingsSaveFeedback | null
+> => ({
+  ai: null,
+  asr: null,
+  audio: null,
+  knowledge: null,
+  interface: null,
+  privacy: null,
+});
+
 interface SettingsState {
   /** 操作提示（成功类信息） */
   notice: string | null;
+  /** 各设置分区的保存结果反馈（ST-11：就地提示成功/失败） */
+  saveFeedback: Record<SettingsFeedbackTarget, SettingsSaveFeedback | null>;
+  /** 写入某个分区的保存反馈 */
+  setSaveFeedback: (
+    target: SettingsFeedbackTarget,
+    feedback: SettingsSaveFeedback
+  ) => void;
+  /** 清除某个分区的保存反馈（成功提示到期 / 用户关闭失败提示） */
+  clearSaveFeedback: (target: SettingsFeedbackTarget) => void;
   /** 各平台的密钥配置状态 */
   apiKeys: Record<string, ApiKeyStatus>;
   /** 当前 AI 配置 */
@@ -120,9 +157,29 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       apiKeys: { ...state.apiKeys, [status.platform]: status },
     }));
 
-  const fail = (action: string, err: unknown) => {
+  /** 写某个分区的保存反馈；success 由 UI 侧定时自动清除，error 由用户关闭或下次操作覆盖 */
+  const feedback = (
+    target: SettingsFeedbackTarget,
+    kind: SettingsSaveFeedback["kind"],
+    text: string
+  ) =>
+    set((state) => ({
+      saveFeedback: { ...state.saveFeedback, [target]: { kind, text } },
+    }));
+
+  const fail = (action: string, err: unknown, target?: SettingsFeedbackTarget) => {
     console.error(`${action}失败:`, err);
-    set({ error: String(err) });
+    // Error 只取 message，避免提示里出现多余的「Error: 」前缀
+    const message = err instanceof Error ? err.message : String(err);
+    set((state) => ({
+      error: message,
+      saveFeedback: target
+        ? {
+            ...state.saveFeedback,
+            [target]: { kind: "error", text: `${action}失败：${message}` },
+          }
+        : state.saveFeedback,
+    }));
   };
 
   return {
@@ -155,13 +212,23 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
 
     saveInterfaceConfig: (config) =>
       ipc<InterfaceConfig>("save_interface_config", { config })
-        .then((saved) => set({ interfaceConfig: saved }))
-        .catch((err) => fail("保存界面配置", err)),
+        .then((saved) => {
+          set({ interfaceConfig: saved });
+          feedback("interface", "success", "界面配置已保存");
+        })
+        .catch((err) => fail("保存界面配置", err, "interface")),
 
     setAutoStart: (enabled) =>
       ipc<boolean>("set_autostart", { enabled })
-        .then((autoStartEnabled) => set({ autoStartEnabled }))
-        .catch((err) => fail("设置开机自启", err)),
+        .then((autoStartEnabled) => {
+          set({ autoStartEnabled });
+          feedback(
+            "interface",
+            "success",
+            autoStartEnabled ? "开机自启已开启" : "开机自启已关闭"
+          );
+        })
+        .catch((err) => fail("设置开机自启", err, "interface")),
 
     setStealthWindow: (patch) =>
       ipc<InterfaceConfig>("set_stealth_window", patch)
@@ -184,12 +251,23 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
 
     saveKnowledgeConfig: (config) =>
       ipc<KnowledgeConfig>("save_knowledge_config", { config })
-        .then((saved) => set({ knowledgeConfig: saved }))
-        .catch((err) => fail("保存知识库配置", err)),
+        .then((saved) => {
+          set({ knowledgeConfig: saved });
+          feedback("knowledge", "success", "知识库配置已保存");
+        })
+        .catch((err) => fail("保存知识库配置", err, "knowledge")),
     privacyConfig: null,
     clearing: false,
     notice: null,
     error: null,
+    saveFeedback: emptySaveFeedback(),
+
+    setSaveFeedback: (target, value) => feedback(target, value.kind, value.text),
+
+    clearSaveFeedback: (target) =>
+      set((state) => ({
+        saveFeedback: { ...state.saveFeedback, [target]: null },
+      })),
 
     loadModels: () =>
       ipc<ModelStatus[]>("list_models")
@@ -262,8 +340,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
 
     savePrivacyConfig: (config) =>
       ipc<PrivacyConfig>("save_privacy_config", { config })
-        .then((saved) => set({ privacyConfig: saved }))
-        .catch((err) => fail("保存隐私配置", err)),
+        .then((saved) => {
+          set({ privacyConfig: saved });
+          feedback("privacy", "success", "隐私配置已保存");
+        })
+        .catch((err) => fail("保存隐私配置", err, "privacy")),
 
     clearLocalData: () => {
       set({ clearing: true, error: null });
@@ -290,13 +371,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
 
     refreshAudioDevices: () =>
       ipc<AudioDevice[]>("list_audio_devices")
-        .then((audioDevices) => set({ audioDevices }))
-        .catch((err) => fail("刷新音频设备", err)),
+        .then((audioDevices) => {
+          set({ audioDevices });
+          feedback("audio", "success", "设备列表已刷新");
+        })
+        .catch((err) => fail("刷新音频设备", err, "audio")),
 
     saveAudioConfig: (config) =>
       ipc<AudioConfig>("save_audio_config", { config })
-        .then((saved) => set({ audioConfig: saved }))
-        .catch((err) => fail("保存音频设备配置", err)),
+        .then((saved) => {
+          set({ audioConfig: saved });
+          feedback("audio", "success", "音频配置已保存");
+        })
+        .catch((err) => fail("保存音频设备配置", err, "audio")),
 
     loadAsrSettings: () =>
       Promise.all([
@@ -322,8 +409,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
 
     saveAsrConfig: (config) =>
       ipc<ASRConfig>("save_asr_config", { config })
-        .then((saved) => set({ asrConfig: saved }))
-        .catch((err) => fail("保存 ASR 配置", err)),
+        .then((saved) => {
+          set({ asrConfig: saved });
+          feedback("asr", "success", "ASR 配置已保存");
+        })
+        .catch((err) => fail("保存 ASR 配置", err, "asr")),
 
     testAsrConnection: (config) => {
       set({ testingAsr: true, asrTestResult: null, error: null });
@@ -349,21 +439,23 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
 
     saveAsrCredential: (provider, field, value) =>
       ipc<AsrCredentialStatus>("save_asr_credential", { provider, field, value })
-        .then((status) =>
+        .then((status) => {
           set((state) => ({
             asrCredentials: { ...state.asrCredentials, [status.provider]: status },
-          }))
-        )
-        .catch((err) => fail("保存 ASR 凭证", err)),
+          }));
+          feedback("asr", "success", "凭证已保存");
+        })
+        .catch((err) => fail("保存 ASR 凭证", err, "asr")),
 
     deleteAsrCredentials: (provider) =>
       ipc<AsrCredentialStatus>("delete_asr_credentials", { provider })
-        .then((status) =>
+        .then((status) => {
           set((state) => ({
             asrCredentials: { ...state.asrCredentials, [status.provider]: status },
-          }))
-        )
-        .catch((err) => fail("清除 ASR 凭证", err)),
+          }));
+          feedback("asr", "success", "凭证已清空");
+        })
+        .catch((err) => fail("清除 ASR 凭证", err, "asr")),
 
     loadAiSettings: () =>
       Promise.all([
@@ -375,8 +467,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
 
     saveAiConfig: (config) =>
       ipc<AIConfig>("save_ai_config", { config })
-        .then((saved) => set({ aiConfig: saved }))
-        .catch((err) => fail("保存 AI 配置", err)),
+        .then((saved) => {
+          set({ aiConfig: saved });
+          feedback("ai", "success", "AI 配置已保存");
+        })
+        .catch((err) => fail("保存 AI 配置", err, "ai")),
 
     testAiConnection: () => {
       set({ testing: true, testResult: null, error: null });
@@ -398,12 +493,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
 
     saveApiKey: (platform, apiKey) =>
       ipc<ApiKeyStatus>("save_api_key", { platform, apiKey })
-        .then(apply)
-        .catch((err) => fail("保存密钥", err)),
+        .then((status) => {
+          apply(status);
+          feedback("ai", "success", "密钥已保存");
+        })
+        .catch((err) => fail("保存密钥", err, "ai")),
 
     deleteApiKey: (platform) =>
       ipc<ApiKeyStatus>("delete_api_key", { platform })
-        .then(apply)
-        .catch((err) => fail("删除密钥", err)),
+        .then((status) => {
+          apply(status);
+          feedback("ai", "success", "密钥已清除");
+        })
+        .catch((err) => fail("删除密钥", err, "ai")),
   };
 });

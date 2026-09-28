@@ -9,6 +9,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { SaveFeedback } from "./SaveFeedback";
 import { isAiConfigDirty, validateAiConfig } from "../../lib/aiConfig";
 import type { AIConfig, ConnectionTest, PlatformPreset } from "../../types";
 import type { ApiKeyStatus } from "../../stores/settingsStore";
@@ -247,6 +248,8 @@ export default function AiSettingsSection({
           <Save className="h-3.5 w-3.5" />
           保存配置
         </button>
+        {/* 保存反馈：覆盖「保存配置」「保存 / 清除 API Key」 */}
+        <SaveFeedback target="ai" />
       </div>
     </section>
   );

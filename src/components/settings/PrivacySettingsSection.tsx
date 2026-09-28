@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Loader2, Lock, Save, Trash2, UploadCloud } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { SaveFeedback } from "./SaveFeedback";
 import type { PrivacyConfig } from "../../types";
 
 interface PrivacySettingsSectionProps {
@@ -121,6 +122,8 @@ export default function PrivacySettingsSection({
           <Save className="h-3.5 w-3.5" />
           保存配置
         </button>
+        {/* 保存反馈：隐私与安全配置保存 */}
+        <SaveFeedback target="privacy" />
       </div>
 
       {/* 数据清理 */}

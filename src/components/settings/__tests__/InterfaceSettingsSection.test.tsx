@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import InterfaceSettingsSection from "../InterfaceSettingsSection";
+import { emptySaveFeedback, useSettingsStore } from "../../../stores/settingsStore";
 import type { InterfaceConfig } from "../../../types";
+
+const ipcMock = vi.fn();
+vi.mock("../../../lib/ipc", () => ({
+  ipc: (...args: unknown[]) => ipcMock(...args),
+}));
 
 const config: InterfaceConfig = {
   theme: "dark",
@@ -131,5 +137,25 @@ describe("InterfaceSettingsSection", () => {
     setup({ autoStartEnabled: true });
     const checkbox = screen.getByLabelText("开机自启") as HTMLInputElement;
     expect(checkbox.checked).toBe(true);
+  });
+
+  it("开机自启开关在该分区就地提示结果（ST-11）", async () => {
+    ipcMock.mockReset();
+    useSettingsStore.setState({ saveFeedback: emptySaveFeedback(), error: null });
+    ipcMock.mockResolvedValueOnce(true);
+
+    render(
+      <InterfaceSettingsSection
+        config={config}
+        autoStartEnabled={false}
+        onSave={vi.fn()}
+        onToggleAutoStart={useSettingsStore.getState().setAutoStart}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText("开机自启"));
+
+    expect(await screen.findByText("开机自启已开启")).toBeTruthy();
+    expect(useSettingsStore.getState().saveFeedback.interface?.kind).toBe("success");
   });
 });

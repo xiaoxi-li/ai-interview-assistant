@@ -135,4 +135,39 @@ describe("UpdateSection", () => {
       })
     );
   });
+
+  it("更新地址失焦保存后在该分区就地提示（ST-11）", async () => {
+    render(<UpdateSection />);
+    await waitFor(() => expect(screen.getByText("v0.1.0")).toBeTruthy());
+
+    const input = screen.getByLabelText("更新地址（latest.json）");
+    fireEvent.change(input, { target: { value: "https://cdn.example.com/latest.json" } });
+    fireEvent.blur(input);
+
+    expect(await screen.findByText("更新地址已保存")).toBeTruthy();
+  });
+
+  it("保存失败时就地提示错误并可手动关闭（ST-11）", async () => {
+    ipcMock.mockImplementation((command: string) => {
+      if (command === "app_version") return Promise.resolve("0.1.0");
+      if (command === "get_update_config")
+        return Promise.resolve({
+          autoCheck: false,
+          endpoint: "https://example.com/latest.json",
+        });
+      if (command === "save_update_config") return Promise.reject(new Error("disk full"));
+      return Promise.reject(new Error("unexpected"));
+    });
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(<UpdateSection />);
+    await waitFor(() => expect(screen.getByText("v0.1.0")).toBeTruthy());
+
+    fireEvent.click(screen.getByLabelText("启动时自动检查"));
+
+    expect(await screen.findByText(/保存自动检查设置失败：disk full/)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("关闭提示"));
+    expect(screen.queryByText(/保存自动检查设置失败/)).toBeNull();
+    spy.mockRestore();
+  });
 });
