@@ -37,6 +37,7 @@ export default function AnswerPanel() {
   const generateAnswer = useInterviewStore((s) => s.generateAnswer);
   const applyAnswerPush = useInterviewStore((s) => s.applyAnswerPush);
   const loadQuestionConfig = useInterviewStore((s) => s.loadQuestionConfig);
+  const recallSources = useInterviewStore((s) => s.recallSources);
 
   const [copied, setCopied] = useState(false);
   const autoHandledRef = useRef<string | null>(null);
@@ -50,6 +51,13 @@ export default function AnswerPanel() {
   useEffect(() => {
     loadQuestionConfig();
   }, [loadQuestionConfig]);
+
+  // 识别到新问题后自动召回知识库片段（IA-07）：结果供下方「引用来源」展示
+  useEffect(() => {
+    if (sessionId && currentQaId) {
+      recallSources(sessionId, currentQaId);
+    }
+  }, [sessionId, currentQaId, recallSources]);
 
   // 识别到新问题后自动生成回答（可在设置中关闭）
   useEffect(() => {

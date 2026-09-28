@@ -58,6 +58,7 @@ function resetStore(overrides: Partial<ReturnType<typeof useInterviewStore.getSt
     generateAnswer: vi.fn().mockResolvedValue(undefined),
     applyAnswerPush: vi.fn(),
     loadQuestionConfig: vi.fn().mockResolvedValue(undefined),
+    recallSources: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   });
 }
@@ -121,6 +122,14 @@ describe("AnswerPanel", () => {
     render(<AnswerPanel />);
 
     await waitFor(() => expect(generateAnswer).toHaveBeenCalledWith("s-1", "q1"));
+  });
+
+  it("识别到新问题时自动召回知识库片段（结果供引用来源使用）", async () => {
+    const recallSources = vi.fn().mockResolvedValue(undefined);
+    resetStore({ currentQaId: "q1", recallSources });
+    render(<AnswerPanel />);
+
+    await waitFor(() => expect(recallSources).toHaveBeenCalledWith("s-1", "q1"));
   });
 
   it("关闭自动回答时不触发生成", async () => {

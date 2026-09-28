@@ -85,13 +85,9 @@ const EN: Record<string, string> = {
   自动识别: "Auto",
   手动触发: "Manual",
   "已识别 {count} 个问题": "{count} questions detected",
-  知识库参考: "Knowledge references",
-  "{count} 条片段": "{count} snippets",
   手动识别当前问题: "Detect question now",
   用最近的面试官语音立即识别一次问题:
     "Detect a question immediately from recent interviewer speech",
-  知识库中未召回到相关内容: "No relevant knowledge found",
-  "（查询：{queries}）": " (queries: {queries})",
   当前问题: "Current question",
   置信度: "Confidence",
   "判定得分（阈值 0.5，越高越确定）": "Score (threshold 0.5, higher is more certain)",
