@@ -11,7 +11,7 @@ from PIL import Image
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(BASE, "..", ".."))
-SRC = os.path.join(BASE, "final", "user", "app-icon-taskbar-1024.png")
+SRC = os.path.join(BASE, "final", "user", "app-icon-dark-1024.png")
 SMALL_SRC = SRC          # 标记本已占 88%，小尺寸无需另一版
 OUT = os.path.join(REPO, "src-tauri", "icons")
 SMALL_UPTO = 32          # 该尺寸及以下改用「标记更大」的专用版，避免小尺寸糊成一团
