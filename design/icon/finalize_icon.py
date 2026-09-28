@@ -92,15 +92,21 @@ def build_brand(ratio, name):
     print(name, "mark", mark.size)
 
 
+def build_white(ratio, name):
+    """白底 + 彩色标记（忠于原稿）。"""
+    mark = mark_layer(ratio)
+    card = rounded(Image.new("RGB", (SIZE, SIZE), (255, 255, 255)))
+    card.alpha_composite(mark, ((SIZE - mark.width) // 2, (SIZE - mark.height) // 2))
+    card.save(os.path.join(OUT, name))
+    print(name, "mark", mark.size)
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
-    mark = mark_layer()
-    white = rounded(Image.new("RGB", (SIZE, SIZE), (255, 255, 255)))
-    white.alpha_composite(mark, ((SIZE - mark.width) // 2, (SIZE - mark.height) // 2))
-    white.save(os.path.join(OUT, "app-icon-white-1024.png"))
-
+    build_white(MARK_RATIO, "app-icon-white-1024.png")
+    build_white(0.78, "app-icon-white-small-1024.png")   # ≤32px 用，放大标记避免糊成一团
     build_brand(MARK_RATIO, "app-icon-brand-1024.png")
-    build_brand(0.78, "app-icon-brand-small-1024.png")   # ≤32px 用，放大标记避免糊成一团
+    build_brand(0.78, "app-icon-brand-small-1024.png")
 
 
 if __name__ == "__main__":
