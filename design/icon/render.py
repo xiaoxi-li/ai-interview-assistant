@@ -181,26 +181,36 @@ def radial_glow(size, center, radius, strength):
     return gl.resize((size, size), Image.Resampling.BILINEAR)
 
 
-def draw_word_lockup(e_scale=0.90, font_px=168, gap=38,
+def draw_word_lockup(e_scale=0.90, font_px=205, gap=18,
                      c0=(255, 255, 255), c1=(232, 238, 255), c_asy=None,
                      shadow=None, shadow_offset=14, shadow_blur=26):
-    """方案 A：大「E」居左，小字「asy」贴在其右侧并垂直居中于 E。"""
+    """主方案：大「E」居左，小字「asy」接在下横杠末端。
+
+    asy 的字母主体（x-height 区）与下横杠**等高居中对齐**，故视觉上两者
+    连成同一条水平带；"y" 的降部自然垂到 E 底边之下，整体按合并后的
+    包围盒居中，避免重心歪斜。
+    """
     size = S
     font = load_font(font_px)
-    bb = font.getbbox("asy")
-    asy_w, asy_h = bb[2] - bb[0], bb[3] - bb[1]
+    bb = font.getbbox("asy", anchor="ls")   # 以基线左端为原点
+    asy_w = bb[2] - bb[0]
+    xh = -bb[1]                             # x-height（a/s/y 均无升部）
+    desc = max(0.0, bb[3])                  # y 的降部
+    bar_h = BAR_H * e_scale
+    drop = max(0.0, xh / 2 - bar_h / 2 + desc)
     e_w = (ARM_LONG[1] - STEM_X[0]) * e_scale
     e_h = (Y3 - Y0) * e_scale
     ox = (size - (e_w + gap + asy_w)) / 2
-    oy = (size - e_h) / 2
+    oy = (size - (e_h + drop)) / 2
+
     layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     layer = Image.alpha_composite(layer, draw_mark(
         size, e_scale, c0, c1, center=(ox + e_w / 2, oy + e_h / 2),
         shadow=shadow, shadow_offset=shadow_offset, shadow_blur=shadow_blur))
-    baseline = oy + e_h / 2 - (bb[1] + bb[3]) / 2
+    baseline = oy + e_h - bar_h / 2 + xh / 2
     txt = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     ImageDraw.Draw(txt).text((ox + e_w + gap - bb[0], baseline), "asy",
-                             font=font, fill=(c_asy or c0) + (255,))
+                             font=font, anchor="ls", fill=(c_asy or c0) + (255,))
     return Image.alpha_composite(layer, txt)
 
 
