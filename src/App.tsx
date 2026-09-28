@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { cn, isTauri } from "./lib/utils";
-import logoMark from "./assets/logo-mark.png";
+import logoLockupLight from "./assets/logo-lockup-light.png";
+import logoLockupDark from "./assets/logo-lockup-dark.png";
 import { useT } from "./hooks/useT";
 import { useThemeSync } from "./hooks/useThemeSync";
 import { useAppStore, type PageKey } from "./stores/appStore";
@@ -88,10 +89,16 @@ export default function App() {
       >
         <div data-tauri-drag-region className="flex items-center gap-2.5">
           <img
-            src={logoMark}
+            src={logoLockupLight}
             alt=""
             draggable={false}
-            className="h-6 w-auto select-none"
+            className="h-7 w-auto select-none dark:hidden"
+          />
+          <img
+            src={logoLockupDark}
+            alt=""
+            draggable={false}
+            className="hidden h-7 w-auto select-none dark:block"
           />
           <span className="text-[13px] font-medium tracking-wide">
             {t("轻松面试")}
