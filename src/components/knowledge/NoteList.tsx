@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { FileText, RotateCcw, Trash2, Undo2 } from "lucide-react";
 import { cn, excerpt, formatRelative } from "../../lib/utils";
 import { NOTE_DRAG_TYPE } from "../../lib/dnd";
@@ -19,7 +20,11 @@ interface NoteListProps {
   onPurge: (id: string) => void;
 }
 
-export default function NoteList({
+/**
+ * 笔记列表：`memo` 化以隔离知识库页的无关重渲染（保存状态、版本面板开关等），
+ * 避免每次自动保存都重建整张列表（NFR-17）。
+ */
+function NoteList({
   notes,
   selectedId,
   keyword,
@@ -151,3 +156,5 @@ export default function NoteList({
     </ul>
   );
 }
+
+export default memo(NoteList);

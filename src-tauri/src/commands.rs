@@ -28,15 +28,35 @@ use std::thread;
 use std::time::Duration;
 use tauri::State;
 
+/// 在 tokio 阻塞线程池中执行一段阻塞逻辑（NFR-17）。
+///
+/// 页面切换会并发触发多条含数据库查询 / 设备枚举 / 钥匙链访问的命令；若直接在异步
+/// 工作线程上跑阻塞体，会占满 tokio worker（默认 worker 数 = CPU 核数）并挤压 SSE
+/// 流式回答等异步任务，故已知的重阻塞命令统一经此辅助函数投递到阻塞线程池。
+async fn run_blocking<T, F>(task: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|err| format!("阻塞线程池任务失败：{err}"))?
+}
+
 /// 列出全部笔记（不含回收站），按更新时间倒序
-#[tauri::command]
-pub fn list_notes(state: State<'_, AppState>) -> Result<Vec<NoteDto>, String> {
-    let conn = state.lock()?;
-    NotesRepo::new(&conn).list(false).map_err(|e| e.to_string())
+#[tauri::command(async)]
+pub async fn list_notes(state: State<'_, AppState>) -> Result<Vec<NoteDto>, String> {
+    // 全量读取（含正文）属重阻塞命令，投递到阻塞线程池（NFR-17）
+    let conn = state.conn.clone();
+    run_blocking(move || {
+        let conn = conn.lock().map_err(|e| format!("数据库连接锁已中毒：{e}"))?;
+        NotesRepo::new(&conn).list(false).map_err(|e| e.to_string())
+    })
+    .await
 }
 
 /// 更新笔记标题与正文
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_note(
     state: State<'_, AppState>,
     id: String,
@@ -58,7 +78,7 @@ pub fn update_note(
 }
 
 /// 列出笔记的历史版本（新→旧）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_note_versions(
     state: State<'_, AppState>,
     id: String,
@@ -71,7 +91,7 @@ pub fn list_note_versions(
 }
 
 /// 回滚笔记到指定历史版本
-#[tauri::command]
+#[tauri::command(async)]
 pub fn restore_note_version(
     state: State<'_, AppState>,
     version_id: String,
@@ -89,7 +109,7 @@ pub fn restore_note_version(
 }
 
 /// 全文检索笔记（FTS5 + jieba 中文分词）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn search_notes(
     state: State<'_, AppState>,
     query: String,
@@ -101,7 +121,7 @@ pub fn search_notes(
 }
 
 /// 语义检索笔记（分块向量 + sqlite-vec 相似度）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn search_similar_notes(
     state: State<'_, AppState>,
     query: String,
@@ -118,7 +138,7 @@ pub fn search_similar_notes(
 }
 
 /// 混合检索：BM25 + 向量 RRF 融合
-#[tauri::command]
+#[tauri::command(async)]
 pub fn search_hybrid_notes(
     state: State<'_, AppState>,
     query: String,
@@ -137,7 +157,7 @@ fn index_note_quietly(conn: &rusqlite::Connection, state: &AppState, note: &Note
 }
 
 /// 新建空白笔记
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_note(
     state: State<'_, AppState>,
     group_id: Option<String>,
@@ -151,42 +171,46 @@ pub fn create_note(
 }
 
 /// 列出回收站中的笔记
-#[tauri::command]
-pub fn list_trash_notes(state: State<'_, AppState>) -> Result<Vec<NoteDto>, String> {
-    let conn = state.lock()?;
-    NotesRepo::new(&conn).list_trash().map_err(|e| e.to_string())
+#[tauri::command(async)]
+pub async fn list_trash_notes(state: State<'_, AppState>) -> Result<Vec<NoteDto>, String> {
+    let conn = state.conn.clone();
+    run_blocking(move || {
+        let conn = conn.lock().map_err(|e| format!("数据库连接锁已中毒：{e}"))?;
+        NotesRepo::new(&conn).list_trash().map_err(|e| e.to_string())
+    })
+    .await
 }
 
 /// 移入回收站
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_note(state: State<'_, AppState>, id: String) -> Result<bool, String> {
     let conn = state.lock()?;
     NotesRepo::new(&conn).trash(&id).map_err(|e| e.to_string())
 }
 
 /// 从回收站恢复
-#[tauri::command]
+#[tauri::command(async)]
 pub fn restore_note(state: State<'_, AppState>, id: String) -> Result<bool, String> {
     let conn = state.lock()?;
     NotesRepo::new(&conn).restore(&id).map_err(|e| e.to_string())
 }
 
 /// 彻底删除笔记
-#[tauri::command]
+#[tauri::command(async)]
 pub fn purge_note(state: State<'_, AppState>, id: String) -> Result<bool, String> {
     let conn = state.lock()?;
     NotesRepo::new(&conn).purge(&id).map_err(|e| e.to_string())
 }
 
 /// 清空回收站，返回删除条数
-#[tauri::command]
+#[tauri::command(async)]
 pub fn empty_trash(state: State<'_, AppState>) -> Result<usize, String> {
     let conn = state.lock()?;
     NotesRepo::new(&conn).empty_trash().map_err(|e| e.to_string())
 }
 
 /// 移动笔记到群组（group_id 为 null 表示移出群组）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn move_note(
     state: State<'_, AppState>,
     id: String,
@@ -199,7 +223,7 @@ pub fn move_note(
 }
 
 /// 导出全部笔记为 Markdown（按群组层级建目录）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn export_notes_markdown(
     state: State<'_, AppState>,
     dest: String,
@@ -210,7 +234,7 @@ pub fn export_notes_markdown(
 }
 
 /// 导出 JSON 逻辑备份
-#[tauri::command]
+#[tauri::command(async)]
 pub fn export_backup_json(
     state: State<'_, AppState>,
     dest: String,
@@ -221,7 +245,7 @@ pub fn export_backup_json(
 }
 
 /// 数据库文件级备份（一致副本）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn backup_database(
     state: State<'_, AppState>,
     dest: String,
@@ -232,7 +256,7 @@ pub fn backup_database(
 }
 
 /// 从 JSON 备份恢复，并重建检索索引
-#[tauri::command]
+#[tauri::command(async)]
 pub fn restore_backup(
     state: State<'_, AppState>,
     source: String,
@@ -259,7 +283,7 @@ pub fn restore_backup(
 }
 
 /// 读取界面配置
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_interface_config(
     state: State<'_, AppState>,
 ) -> Result<crate::config::interface::InterfaceConfig, String> {
@@ -343,14 +367,14 @@ pub fn apply_global_hotkeys(
 }
 
 /// 查询开机自启状态
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_autostart(app: tauri::AppHandle) -> Result<bool, String> {
     use tauri_plugin_autostart::ManagerExt;
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
 }
 
 /// 设置开机自启
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
     use tauri_plugin_autostart::ManagerExt;
     let manager = app.autolaunch();
@@ -371,16 +395,17 @@ pub struct StoragePaths {
 }
 
 /// 读取当前存储路径
-#[tauri::command]
-pub fn get_storage_paths(state: State<'_, AppState>) -> StoragePaths {
-    StoragePaths {
+#[tauri::command(async)]
+pub fn get_storage_paths(state: State<'_, AppState>) -> Result<StoragePaths, String> {
+    // 含生命周期入参的异步命令必须返回 `Result`（Tauri 编译期约束），成功路径取值不变
+    Ok(StoragePaths {
         db_path: state.db_path.display().to_string(),
         models_dir: state.models_dir.display().to_string(),
-    }
+    })
 }
 
 /// 读取知识库配置
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_knowledge_config(
     state: State<'_, AppState>,
 ) -> Result<crate::config::knowledge::KnowledgeConfig, String> {
@@ -389,7 +414,7 @@ pub fn get_knowledge_config(
 }
 
 /// 保存知识库配置（路径变更需重启生效）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_knowledge_config(
     state: State<'_, AppState>,
     config: crate::config::knowledge::KnowledgeConfig,
@@ -400,13 +425,17 @@ pub fn save_knowledge_config(
 }
 
 /// 列出模型清单与安装状态
-#[tauri::command]
-pub fn list_models(state: State<'_, AppState>) -> Result<Vec<crate::models::ModelStatus>, String> {
-    Ok(crate::models::list_status(&state.models_dir))
+#[tauri::command(async)]
+pub async fn list_models(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::models::ModelStatus>, String> {
+    // 需遍历模型目录并读取文件元数据，属阻塞 IO，投递到阻塞线程池（NFR-17）
+    let models_dir = state.models_dir.clone();
+    run_blocking(move || Ok(crate::models::list_status(&models_dir))).await
 }
 
 /// 下载模型（断点续传 + SHA256 校验），通过 `model://progress` 事件上报进度
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn download_model(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
@@ -444,7 +473,7 @@ pub async fn download_model(
 }
 
 /// 删除已安装模型
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_model(state: State<'_, AppState>, id: String) -> Result<bool, String> {
     let spec = crate::models::find_spec(&id)
         .ok_or_else(|| format!("未知模型：{id}"))?;
@@ -452,7 +481,7 @@ pub fn delete_model(state: State<'_, AppState>, id: String) -> Result<bool, Stri
 }
 
 /// 读取隐私配置
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_privacy_config(
     state: State<'_, AppState>,
 ) -> Result<crate::config::privacy::PrivacyConfig, String> {
@@ -461,7 +490,7 @@ pub fn get_privacy_config(
 }
 
 /// 保存隐私配置（上传开关需与 ASR 模式一致）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_privacy_config(
     state: State<'_, AppState>,
     config: crate::config::privacy::PrivacyConfig,
@@ -475,7 +504,7 @@ pub fn save_privacy_config(
 }
 
 /// 清除全部本地业务数据（保留设置与钥匙链凭证）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn clear_local_data(
     state: State<'_, AppState>,
 ) -> Result<crate::knowledge::ClearSummary, String> {
@@ -484,7 +513,7 @@ pub fn clear_local_data(
 }
 
 /// 对本地 WAV 文件执行 VAD 分析（自检/诊断用，音频不出本机）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn analyze_vad_wav(
     path: String,
     threshold: Option<f32>,
@@ -536,19 +565,20 @@ fn capture_status(state: &AppState) -> Result<CaptureStatus, String> {
 /// 列出可作为「系统音频（面试官）」来源的设备
 ///
 /// Windows：全部播放设备（IA-14 端点级回环）；其他平台：虚拟回环输入设备。
-#[tauri::command]
-pub fn list_loopback_devices() -> Vec<crate::audio::DeviceInfo> {
-    crate::audio::system_source_devices()
+#[tauri::command(async)]
+pub async fn list_loopback_devices() -> Result<Vec<crate::audio::DeviceInfo>, String> {
+    // WASAPI 枚举耗时不确定，走阻塞线程池 + 设备列表 TTL 缓存（NFR-17）
+    run_blocking(|| Ok(crate::audio::system_source_devices())).await
 }
 
 /// 查询当前采集状态
-#[tauri::command]
+#[tauri::command(async)]
 pub fn audio_capture_status(state: State<'_, AppState>) -> Result<CaptureStatus, String> {
     capture_status(&state)
 }
 
 /// 启动音频采集（source: mic / system），并推送音量电平事件 `audio://level`
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_audio_capture(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
@@ -605,7 +635,7 @@ pub fn start_audio_capture(
 }
 
 /// 停止音频采集
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stop_audio_capture(state: State<'_, AppState>) -> Result<CaptureStatus, String> {
     {
         let mut manager = state.capture_lock()?;
@@ -673,7 +703,7 @@ fn asr_status(state: &AppState) -> Result<AsrSessionStatus, String> {
 }
 
 /// 查询本地 ASR 会话状态
-#[tauri::command]
+#[tauri::command(async)]
 pub fn asr_session_status(state: State<'_, AppState>) -> Result<AsrSessionStatus, String> {
     asr_status(&state)
 }
@@ -689,8 +719,8 @@ pub struct AsrEngineInfo {
     pub detail: String,
 }
 
-#[tauri::command]
-pub fn list_asr_engines(state: State<'_, AppState>) -> Vec<AsrEngineInfo> {
+#[tauri::command(async)]
+pub fn list_asr_engines(state: State<'_, AppState>) -> Result<Vec<AsrEngineInfo>, String> {
     let language = state
         .lock()
         .ok()
@@ -719,12 +749,12 @@ pub fn list_asr_engines(state: State<'_, AppState>) -> Vec<AsrEngineInfo> {
         Err(err) => (false, err.to_string()),
     };
 
-    vec![AsrEngineInfo {
+    Ok(vec![AsrEngineInfo {
         id: crate::asr::LOCAL_ASR_MODEL_ID.to_string(),
         label: "本地 ASR（sherpa-onnx 中文 paraformer）".to_string(),
         ready,
         detail,
-    }]
+    }])
 }
 
 /// 广播转写事件并按需落库
@@ -840,7 +870,7 @@ fn build_transcript_channel(
 }
 
 /// 启动 ASR 会话（本地=段级流水线，云端=实时 WS；采样→识别→事件+落库）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_asr_session(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
@@ -1267,7 +1297,7 @@ fn spawn_dual_pump(
 }
 
 /// 启动双通道会话：麦克风与系统音频并行采集，分别转写为「我」与「面试官」
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_dual_asr_session(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
@@ -1372,7 +1402,7 @@ pub fn start_dual_asr_session(
 }
 
 /// 停止本地 ASR 会话
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stop_asr_session(state: State<'_, AppState>) -> Result<AsrSessionStatus, String> {
     let session_id = {
         let mut runtime = state.asr_lock()?;
@@ -1398,7 +1428,7 @@ pub fn stop_asr_session(state: State<'_, AppState>) -> Result<AsrSessionStatus, 
 }
 
 /// 暂停 / 继续采集（IA-12）：暂停期间丢弃音频帧，会话与转写记录保留
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_asr_paused(state: State<'_, AppState>, paused: bool) -> Result<AsrSessionStatus, String> {
     {
         let runtime = state.asr_lock()?;
@@ -1411,7 +1441,7 @@ pub fn set_asr_paused(state: State<'_, AppState>, paused: bool) -> Result<AsrSes
 }
 
 /// 读取某会话的转写段落（含 partial 记录，按时间正序）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_transcript_segments(
     state: State<'_, AppState>,
     session_id: String,
@@ -1424,7 +1454,7 @@ pub fn list_transcript_segments(
 }
 
 /// 读取某会话的最终转写文本
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_transcript_finals(
     state: State<'_, AppState>,
     session_id: String,
@@ -1503,7 +1533,7 @@ fn feed_questions(
 }
 
 /// 手动触发一次问题识别（供快捷键 / 界面按钮调用）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn trigger_question(state: State<'_, AppState>) -> Result<(), String> {
     let runtime = state.asr_lock()?;
     let session = runtime
@@ -1514,7 +1544,7 @@ pub fn trigger_question(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 /// 读取某会话已识别的问题（按时间正序）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_questions(
     state: State<'_, AppState>,
     session_id: String,
@@ -1655,7 +1685,7 @@ fn persist_answer(
 
 /// 启动一键全链路演示：脚本化输入驱动**真实**链路
 /// （转写 → 问题识别 → 知识库召回 → 回答生成 → 落库），无需设备/模型/Key。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_demo_session(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
@@ -2033,7 +2063,7 @@ fn clamp_window_to_monitor(window: &tauri::WebviewWindow) {
 }
 
 /// 读取单条问答记录（含已生成的回答与引用来源）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_question(state: State<'_, AppState>, id: String) -> Result<QaPairDto, String> {
     let conn = state.lock()?;
     QaRepo::new(&conn)
@@ -2043,7 +2073,7 @@ pub fn get_question(state: State<'_, AppState>, id: String) -> Result<QaPairDto,
 }
 
 /// 读取最近识别出的问题
-#[tauri::command]
+#[tauri::command(async)]
 pub fn latest_question(
     state: State<'_, AppState>,
     session_id: String,
@@ -2055,14 +2085,14 @@ pub fn latest_question(
 }
 
 /// 读取问题识别配置
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_question_config(state: State<'_, AppState>) -> Result<QuestionConfig, String> {
     let conn = state.lock()?;
     crate::config::interview::load_question_config(&conn).map_err(|e| e.to_string())
 }
 
 /// 保存问题识别配置
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_question_config(
     state: State<'_, AppState>,
     config: QuestionConfig,
@@ -2073,7 +2103,7 @@ pub fn save_question_config(
 }
 
 /// 对给定文本做一次问题判定（界面预览 / 调试用）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn analyze_question_text(text: String) -> QuestionScore {
     crate::interview::question::analyze(&text)
 }
@@ -2081,13 +2111,13 @@ pub fn analyze_question_text(text: String) -> QuestionScore {
 // ==================== 更新检查（P2） ====================
 
 /// 当前应用版本
-#[tauri::command]
+#[tauri::command(async)]
 pub fn app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
 /// 读取更新配置
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_update_config(
     state: State<'_, AppState>,
 ) -> Result<crate::config::update::UpdateConfig, String> {
@@ -2096,7 +2126,7 @@ pub fn get_update_config(
 }
 
 /// 保存更新配置
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_update_config(
     state: State<'_, AppState>,
     config: crate::config::update::UpdateConfig,
@@ -2107,7 +2137,7 @@ pub fn save_update_config(
 }
 
 /// 检查更新（网络请求不持有数据库锁）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn check_app_update(
     state: State<'_, AppState>,
     endpoint: Option<String>,
@@ -2125,14 +2155,14 @@ pub fn check_app_update(
 // ==================== 首次启动向导 ====================
 
 /// 查询是否已完成首次启动向导
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_onboarding_state(state: State<'_, AppState>) -> Result<bool, String> {
     let conn = state.lock()?;
     crate::config::load_onboarded(&conn).map_err(|e| e.to_string())
 }
 
 /// 标记首次启动向导完成（`completed = false` 可重置，便于重新体验向导）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn complete_onboarding(
     state: State<'_, AppState>,
     completed: Option<bool>,
@@ -2146,7 +2176,7 @@ pub fn complete_onboarding(
 // ==================== 会话记录（IA-10） ====================
 
 /// 列出历史会话（按开始时间倒序）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_sessions(
     state: State<'_, AppState>,
     limit: Option<usize>,
@@ -2156,26 +2186,31 @@ pub fn list_sessions(
 }
 
 /// 读取会话详情（转写时间线 + 问答记录）
-#[tauri::command]
-pub fn get_session_detail(
+#[tauri::command(async)]
+pub async fn get_session_detail(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<crate::interview::SessionDetailDto, String> {
-    let conn = state.lock()?;
-    crate::interview::session::session_detail(&conn, &session_id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("会话不存在：{session_id}"))
+    // 详情含全部转写与问答，属重阻塞查询，投递到阻塞线程池（NFR-17）
+    let conn = state.conn.clone();
+    run_blocking(move || {
+        let conn = conn.lock().map_err(|e| format!("数据库连接锁已中毒：{e}"))?;
+        crate::interview::session::session_detail(&conn, &session_id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("会话不存在：{session_id}"))
+    })
+    .await
 }
 
 /// 删除会话（转写与问答级联删除）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_session(state: State<'_, AppState>, session_id: String) -> Result<bool, String> {
     let conn = state.lock()?;
     crate::interview::session::delete_session(&conn, &session_id).map_err(|e| e.to_string())
 }
 
 /// 导出会话（format: markdown / json）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn export_session(
     state: State<'_, AppState>,
     session_id: String,
@@ -2199,7 +2234,7 @@ pub fn export_session(
 // ==================== 知识库召回（IA-07） ====================
 
 /// 按问题召回知识库片段，并把引用来源写回问答记录
-#[tauri::command]
+#[tauri::command(async)]
 pub fn recall_for_question(
     state: State<'_, AppState>,
     session_id: String,
@@ -2253,7 +2288,7 @@ pub struct AnswerAck {
 }
 
 /// 结合知识库召回结果流式生成回答（token 通过 `interview://answer` 推送）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn generate_answer(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
@@ -2426,13 +2461,16 @@ pub fn generate_answer(
 }
 
 /// 枚举音频设备（输入=麦克风，输出=系统音频来源）
-#[tauri::command]
-pub fn list_audio_devices() -> Vec<crate::audio::DeviceInfo> {
-    crate::audio::list_devices()
+///
+/// `force = true` 时旁路 TTL 缓存强制重新枚举（「刷新设备列表」入口使用）。
+#[tauri::command(async)]
+pub async fn list_audio_devices(force: Option<bool>) -> Result<Vec<crate::audio::DeviceInfo>, String> {
+    let force = force.unwrap_or(false);
+    run_blocking(move || Ok(crate::audio::devices::list_devices_cached(force))).await
 }
 
 /// 读取音频设备配置
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_audio_config(
     state: State<'_, AppState>,
 ) -> Result<crate::config::audio::AudioConfig, String> {
@@ -2441,7 +2479,7 @@ pub fn get_audio_config(
 }
 
 /// 保存音频设备配置
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_audio_config(
     state: State<'_, AppState>,
     config: crate::config::audio::AudioConfig,
@@ -2524,7 +2562,7 @@ fn unsupported_cloud_provider_error(provider: crate::config::asr::CloudAsrProvid
 }
 
 /// 列出全部云端 ASR 服务商预设
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_asr_providers() -> Vec<AsrProviderPreset> {
     crate::config::asr::cloud_providers_in_display_order()
         .into_iter()
@@ -2545,14 +2583,14 @@ pub fn list_asr_providers() -> Vec<AsrProviderPreset> {
 }
 
 /// 读取 ASR 配置
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_asr_config(state: State<'_, AppState>) -> Result<crate::config::asr::AsrConfig, String> {
     let conn = state.lock()?;
     crate::config::asr::load_asr_config(&conn).map_err(|e| e.to_string())
 }
 
 /// 保存 ASR 配置
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_asr_config(
     state: State<'_, AppState>,
     config: crate::config::asr::AsrConfig,
@@ -2564,7 +2602,7 @@ pub fn save_asr_config(
 
 /// 云端 ASR 连接测试（IA-16.8）：按给定配置（设置页当前表单值；缺省则用已保存配置）
 /// 建连并等到 `task-started`，返回结果与耗时；**不发送音频、不修改任何配置**。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn test_cloud_asr_connection(
     state: State<'_, AppState>,
     config: Option<crate::config::asr::AsrConfig>,
@@ -2632,7 +2670,7 @@ pub fn test_cloud_asr_connection(
 }
 
 /// 查询服务商凭证配置状态
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_asr_credential_status(
     state: State<'_, AppState>,
     provider: String,
@@ -2642,7 +2680,7 @@ pub fn get_asr_credential_status(
 }
 
 /// 保存单个凭证字段（空值表示删除该字段）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_asr_credential(
     state: State<'_, AppState>,
     provider: String,
@@ -2664,7 +2702,7 @@ pub fn save_asr_credential(
 }
 
 /// 清空服务商全部凭证
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_asr_credentials(
     state: State<'_, AppState>,
     provider: String,
@@ -2679,7 +2717,7 @@ pub fn delete_asr_credentials(
 }
 
 /// 一键测试 AI 服务连通性（读取已保存配置与钥匙链中的 API Key）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn test_ai_connection(
     state: State<'_, AppState>,
 ) -> Result<crate::providers::types::ConnectionTest, String> {
@@ -2697,20 +2735,20 @@ pub fn test_ai_connection(
 }
 
 /// 列出全部 AI 平台预设
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_platform_presets() -> Vec<crate::config::PlatformPreset> {
     crate::config::all_presets()
 }
 
 /// 读取当前 AI 配置
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_ai_config(state: State<'_, AppState>) -> Result<crate::config::AiConfig, String> {
     let conn = state.lock()?;
     crate::config::load_ai_config(&conn).map_err(|e| e.to_string())
 }
 
 /// 保存 AI 配置
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_ai_config(
     state: State<'_, AppState>,
     config: crate::config::AiConfig,
@@ -2741,7 +2779,7 @@ fn api_key_status(secrets: &dyn crate::security::SecretStore, platform: &str) ->
 }
 
 /// 保存 API Key 到系统钥匙链（传空串表示删除）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_api_key(
     state: State<'_, AppState>,
     platform: String,
@@ -2758,16 +2796,18 @@ pub fn save_api_key(
 }
 
 /// 查询 API Key 配置状态
-#[tauri::command]
-pub fn get_api_key_status(
+#[tauri::command(async)]
+pub async fn get_api_key_status(
     state: State<'_, AppState>,
     platform: String,
 ) -> Result<ApiKeyStatus, String> {
-    api_key_status(state.secrets.as_ref(), &platform)
+    // 系统钥匙链读取可能阻塞数十至上百毫秒（Windows 凭据管理器），投递到阻塞线程池（NFR-17）
+    let secrets = state.secrets.clone();
+    run_blocking(move || api_key_status(secrets.as_ref(), &platform)).await
 }
 
 /// 删除 API Key
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_api_key(
     state: State<'_, AppState>,
     platform: String,
@@ -2777,21 +2817,21 @@ pub fn delete_api_key(
 }
 
 /// 列出全部标签
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_tags(state: State<'_, AppState>) -> Result<Vec<TagDto>, String> {
     let conn = state.lock()?;
     TagsRepo::new(&conn).list().map_err(|e| e.to_string())
 }
 
 /// 创建标签（同名则复用）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_tag(state: State<'_, AppState>, name: String) -> Result<TagDto, String> {
     let conn = state.lock()?;
     TagsRepo::new(&conn).ensure(&name).map_err(|e| e.to_string())
 }
 
 /// 重命名标签
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rename_tag(
     state: State<'_, AppState>,
     id: String,
@@ -2804,7 +2844,7 @@ pub fn rename_tag(
 }
 
 /// 删除标签；受影响笔记的全文索引同步刷新
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_tag(state: State<'_, AppState>, id: String) -> Result<bool, String> {
     let conn = state.lock()?;
     let repo = TagsRepo::new(&conn);
@@ -2818,7 +2858,7 @@ pub fn delete_tag(state: State<'_, AppState>, id: String) -> Result<bool, String
 }
 
 /// 覆盖设置笔记标签，并刷新检索索引
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_note_tags(
     state: State<'_, AppState>,
     id: String,
@@ -2859,14 +2899,14 @@ fn resync_notes(conn: &rusqlite::Connection, note_ids: &[String]) {
 }
 
 /// 列出全部群组
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_groups(state: State<'_, AppState>) -> Result<Vec<GroupDto>, String> {
     let conn = state.lock()?;
     GroupsRepo::new(&conn).list().map_err(|e| e.to_string())
 }
 
 /// 新建群组（parent_id 为 null 表示根级）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_group(
     state: State<'_, AppState>,
     name: String,
@@ -2879,7 +2919,7 @@ pub fn create_group(
 }
 
 /// 重命名群组
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rename_group(
     state: State<'_, AppState>,
     id: String,
@@ -2892,14 +2932,14 @@ pub fn rename_group(
 }
 
 /// 删除群组（子群组级联删除，组内笔记转为未分组）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_group(state: State<'_, AppState>, id: String) -> Result<bool, String> {
     let conn = state.lock()?;
     GroupsRepo::new(&conn).delete(&id).map_err(|e| e.to_string())
 }
 
 /// 移动群组到新父级（拒绝环路）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn move_group(
     state: State<'_, AppState>,
     id: String,
@@ -2912,7 +2952,7 @@ pub fn move_group(
 }
 
 /// 按给定顺序重排同级群组
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reorder_groups(
     state: State<'_, AppState>,
     ordered_ids: Vec<String>,
@@ -2924,7 +2964,7 @@ pub fn reorder_groups(
 }
 
 /// 导入 Markdown 文件或目录（支持单文件、文件夹批量、拖拽路径）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn import_markdown(
     state: State<'_, AppState>,
     paths: Vec<String>,
@@ -2942,4 +2982,76 @@ pub fn import_markdown(
         index_note_quietly(&conn, &state, note);
     }
     Ok(outcome)
+}
+
+#[cfg(test)]
+mod command_thread_tests {
+    /// 允许继续在 Tauri 主线程同步执行的命令白名单（NFR-17）。
+    ///
+    /// 判据：涉及窗口几何 / 置顶 / 防录屏或全局快捷键注册等「主线程强相关」操作；
+    /// 且均不在页面切换热路径上，开销可忽略。
+    const MAIN_THREAD_ALLOWLIST: [&str; 5] = [
+        "save_interface_config",
+        "set_stealth_window",
+        "apply_global_hotkeys",
+        "enter_mini_mode",
+        "exit_mini_mode",
+    ];
+
+    /// `lib.rs` 中允许保持同步的命令：纯函数，无阻塞，且被单测直接同步调用
+    const LIB_MAIN_THREAD_ALLOWLIST: [&str; 1] = ["app_info"];
+
+    /// 从 `pub fn foo(` / `pub async fn foo(` / `fn foo(` 中取出函数名
+    fn function_name(line: &str) -> Option<&str> {
+        let start = line.find("fn ")? + 3;
+        let rest = &line[start..];
+        let end = rest
+            .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .unwrap_or(rest.len());
+        (end > 0).then(|| &rest[..end])
+    }
+
+    /// 收集「未标注 `(async)` 且不在白名单」的命令名。
+    ///
+    /// 背景（见《技术方案》6.15）：带 `(async)` 的 `tauri::command` 会把命令体投到
+    /// 异步工作线程；不带时命令体在 Tauri 主线程同步执行，页面切换时会造成界面卡顿。
+    fn main_thread_commands(source: &str, allowlist: &[&str]) -> Vec<String> {
+        let lines: Vec<&str> = source.lines().collect();
+        let mut found = Vec::new();
+        for (index, line) in lines.iter().enumerate() {
+            if line.trim() != "#[tauri::command]" {
+                continue;
+            }
+            // 属性后 6 行内应能取到函数名（允许夹带其他属性）
+            let name = lines
+                .iter()
+                .skip(index + 1)
+                .take(6)
+                .find_map(|candidate| function_name(candidate.trim()));
+            match name {
+                Some(name) if allowlist.contains(&name) => {}
+                Some(name) => found.push(name.to_string()),
+                None => found.push("<无法解析函数名>".to_string()),
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn commands_run_off_the_main_thread() {
+        let found = main_thread_commands(include_str!("commands.rs"), &MAIN_THREAD_ALLOWLIST);
+        assert!(
+            found.is_empty(),
+            "以下命令仍在界面主线程同步执行，切页会卡顿；请标注为异步命令或列入白名单：{found:?}"
+        );
+    }
+
+    #[test]
+    fn lib_commands_run_off_the_main_thread() {
+        let found = main_thread_commands(include_str!("lib.rs"), &LIB_MAIN_THREAD_ALLOWLIST);
+        assert!(
+            found.is_empty(),
+            "lib.rs 中以下命令仍在界面主线程同步执行：{found:?}"
+        );
+    }
 }

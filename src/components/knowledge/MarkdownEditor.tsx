@@ -1,3 +1,4 @@
+import { useDeferredValue } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import EditorToolbar from "./EditorToolbar";
@@ -52,6 +53,9 @@ export default function MarkdownEditor({
   const showPreview = viewMode !== "source";
   // 源码编辑器主题随全局主题切换（ST-13）
   const theme = useResolvedTheme();
+  // 预览是同步重活（Markdown 解析 + 语法高亮）：用 deferred 值延后到输入/自动保存的
+  // 空闲时段渲染，避免每次按键都被全量重解析打断（NFR-17）
+  const deferredContent = useDeferredValue(content);
 
   return (
     <div className="flex h-full flex-col">
@@ -106,7 +110,7 @@ export default function MarkdownEditor({
               viewMode === "split" ? "w-1/2" : "flex-1"
             )}
           >
-            <MarkdownView content={content} />
+            <MarkdownView content={deferredContent} />
           </div>
         )}
       </div>

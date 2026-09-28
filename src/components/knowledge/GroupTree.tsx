@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -32,7 +32,11 @@ interface GroupTreeProps {
   onDropNote: (noteId: string, groupId: string | null) => void;
 }
 
-export default function GroupTree({
+/**
+ * 群组树：`memo` 化以隔离知识库页的无关重渲染（列表选择、保存状态等），
+ * 树形结构本身只在 `groups` / 计数变化时才需要重建（NFR-17）。
+ */
+function GroupTree({
   groups,
   selectedGroupId,
   noteCounts,
@@ -286,3 +290,5 @@ export default function GroupTree({
     </div>
   );
 }
+
+export default memo(GroupTree);

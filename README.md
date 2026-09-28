@@ -178,11 +178,14 @@ npm run tauri build -- --bundles msi          # 只出 MSI 安装包
 ## 五、本地校验（提交前自检）
 
 ```powershell
-npm run verify            # 前端：tsc 构建 + vitest（339 项）
-cd src-tauri; cargo test  # 后端：442 项（含 PCM 回放端到端、AEC、双通道、演示链路）
+npm run verify            # 前端：tsc 构建 + vitest（344 项）
+cd src-tauri; cargo test  # 后端：445 项（含 PCM 回放端到端、AEC、双通道、演示链路、命令线程断言）
 ```
 
 `npm run verify` 等价于 `npm run build && npm test`。CI 会在 Windows / macOS 双平台跑同一套校验（`.github/workflows/`）。
+
+> **命令执行模型（NFR-17，2026-09-29）**：Tauri 中不带 `(async)` 的 `#[tauri::command]` 会在**界面主线程**同步执行，曾导致四个主页面互切时「点击后停顿再跳转」。现全部命令已异步化（仅 5 个窗口 / 全局快捷键相关命令保留同步，见 `ai-doc/技术方案.md` 6.15），并由 `commands::command_thread_tests` 静态断言防回退：**新增命令请一律使用 `#[tauri::command(async)]`**，重阻塞逻辑（数据库、文件、设备枚举、钥匙链）投递到 `tauri::async_runtime::spawn_blocking`。
+> 开发期切页耗时可看控制台 `[perf] 切页 A → B：xx.xms`（`src/lib/perf.ts`，生产构建不输出）。
 
 ---
 

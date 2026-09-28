@@ -387,7 +387,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
         .catch((err) => fail("加载音频设备配置", err)),
 
     refreshAudioDevices: () =>
-      ipc<AudioDevice[]>("list_audio_devices")
+      // force = true：旁路后端设备枚举的 TTL 缓存，保证「刷新」立即反映设备插拔
+      ipc<AudioDevice[]>("list_audio_devices", { force: true })
         .then((audioDevices) => {
           set({ audioDevices });
           feedback("audio", "success", "设备列表已刷新");

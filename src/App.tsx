@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useDeferredValue, useEffect } from "react";
 import {
   BookOpen,
   History,
@@ -16,6 +16,7 @@ import logoLockupDark from "./assets/logo-lockup-dark.png";
 import { useT } from "./hooks/useT";
 import { useThemeSync } from "./hooks/useThemeSync";
 import { useAppStore, type PageKey } from "./stores/appStore";
+import { markNavClick, markPageRendered } from "./lib/perf";
 import KnowledgePage from "./pages/KnowledgePage";
 import InterviewPage from "./pages/InterviewPage";
 import SessionsPage from "./pages/SessionsPage";
@@ -55,12 +56,29 @@ export default function App() {
   const enterMiniMode = useAppStore((s) => s.enterMiniMode);
   const t = useT();
 
+  // 页面内容用 deferred 值渲染：导航高亮（currentPage）保持紧急更新、点击立即反馈，
+  // 目标页的卸载/重挂载作为可中断的低优先级渲染进行，不再阻塞点击响应（NFR-17）
+  const renderedPage = useDeferredValue(currentPage);
+
   // 主题同步（ST-13）：必须在迷你模式 / 向导早退之前调用，Hooks 不可条件调用
   useThemeSync();
 
   useEffect(() => {
     loadOnboarding();
   }, [loadOnboarding]);
+
+  // 开发期打点：目标页提交并绘制后记录「点击 → 首帧」耗时（生产构建为空操作）
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => markPageRendered(renderedPage));
+    return () => window.cancelAnimationFrame(frame);
+  }, [renderedPage]);
+
+  /** 切换页面：先落点打点，再交由 store 更新（高亮与内容分别在两级优先级上生效） */
+  const navigate = (key: PageKey) => {
+    if (key === currentPage) return;
+    markNavClick(currentPage, key);
+    setCurrentPage(key);
+  };
 
   // 迷你模式（IA-13）：整个界面就地切换为「仅展示当前问题 + AI 回答」的迷你页
   if (miniMode) {
@@ -143,7 +161,7 @@ export default function App() {
           {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
-              onClick={() => setCurrentPage(key)}
+              onClick={() => navigate(key)}
               className={cn(
                 "focus-ring group flex w-[60px] cursor-pointer flex-col items-center gap-1 rounded-lg py-2.5 text-[11px] transition-all duration-200",
                 currentPage === key
@@ -159,10 +177,10 @@ export default function App() {
 
         {/* 内容区 */}
         <main className="min-w-0 flex-1 overflow-hidden">
-          {currentPage === "knowledge" && <KnowledgePage />}
-          {currentPage === "interview" && <InterviewPage />}
-          {currentPage === "sessions" && <SessionsPage />}
-          {currentPage === "settings" && <SettingsPage />}
+          {renderedPage === "knowledge" && <KnowledgePage />}
+          {renderedPage === "interview" && <InterviewPage />}
+          {renderedPage === "sessions" && <SessionsPage />}
+          {renderedPage === "settings" && <SettingsPage />}
         </main>
       </div>
     </div>
