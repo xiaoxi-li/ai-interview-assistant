@@ -68,5 +68,11 @@ temp/
 .codebuddy/
 .claude/
 
-# ===== 本地构建前置（IA-15）：libclang.dll 等本机工具，不入库 =====
-.libclang/
+# ===== 本地构建前置（IA-15）：libclang =====
+# bin/libclang.dll 入库（80MB），clone 后带 local-asr-native 构建可直接用，见 .libclang/README.md。
+# 其余是本机下载/解压的中间物，不入库。
+.libclang/*
+!.libclang/bin
+!.libclang/fetch.ps1
+!.libclang/README.md
+!.libclang/LICENSE-libclang.txt
