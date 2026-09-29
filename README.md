@@ -163,8 +163,6 @@ npm run dev        # 打开 http://localhost:1420
 7. 保存之后回面试辅助页，选「双通道」开始转写。系统音频那一路当面试官，麦克风那一路当自己。服务端返回的句级结果里，句子没说完的显示成斜体 partial，说完了的落库成 final。
 
 <details>
-<summary><b>真实凭证冒烟自检（默认 <code>#[ignore]</code>）</b></summary>
-
 ```powershell
 $env:DASHSCOPE_API_KEY="sk-xxx"; cargo test --lib -- --ignored real_aliyun --nocapture
 ```
