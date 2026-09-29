@@ -640,6 +640,10 @@ export async function mockInvoke<T>(
     case "list_notes":
       return MOCK_NOTES as T;
 
+    // 回收站：mock 下的笔记都是「未删除」状态，故回收站恒为空
+    case "list_trash_notes":
+      return [] as T;
+
     case "search_hybrid_notes":
     case "search_similar_notes":
     case "search_notes": {
