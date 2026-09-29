@@ -159,13 +159,14 @@ $env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"
 npm run tauri build
 ```
 
-产物位置（0.1.0 已实际编译产出）：
+产物位置（0.1.0 已实际编译产出，下表为**启用 `local-asr-native` 的完整包**体积，
+即随包携带 `sherpa-onnx-*` / `onnxruntime*` 原生库；不启用该特性时约 5.4 MB(NSIS) / 6.4 MB(MSI)）：
 
 | 平台 | 路径 | 大小 |
 |---|---|---|
-| Windows 免安装 exe | `src-tauri/target/release/easy-interview.exe` | 10.8 MB |
-| Windows 安装包（NSIS） | `src-tauri/target/release/bundle/nsis/轻松面试_0.1.0_x64-setup.exe` | 5.4 MB |
-| Windows 安装包（MSI） | `src-tauri/target/release/bundle/msi/轻松面试_0.1.0_x64_zh-CN.msi` | 6.4 MB |
+| Windows 免安装 exe | `src-tauri/target/release/easy-interview.exe` | 11.7 MB |
+| Windows 安装包（NSIS） | `src-tauri/target/release/bundle/nsis/轻松面试_0.1.0_x64-setup.exe` | 9.9 MB |
+| Windows 安装包（MSI） | `src-tauri/target/release/bundle/msi/轻松面试_0.1.0_x64_zh-CN.msi` | 13.5 MB |
 | macOS | `src-tauri/target/release/bundle/dmg/*.dmg`、`.../macos/*.app` | — |
 
 按需单独打包（更快）：
@@ -174,6 +175,8 @@ npm run tauri build
 npm run tauri build -- --no-bundle            # 只出免安装 exe
 npm run tauri build -- --bundles nsis         # 只出 NSIS 安装包
 npm run tauri build -- --bundles msi          # 只出 MSI 安装包
+# 完整安装包（NSIS + MSI，含本地 ASR 原生库；需先设 LIBCLANG_PATH，见 2.1）
+npm run tauri build -- --features local-asr-native --config src-tauri/tauri.local-asr.conf.json
 ```
 
 > 前端产物会内嵌进二进制，因此**单个 exe 即可直接运行**，分发时无需附带 `dist/`。
