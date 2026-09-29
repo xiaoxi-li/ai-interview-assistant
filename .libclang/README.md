@@ -27,7 +27,9 @@ npm run tauri dev -- --features local-asr-native
 SHA256  B13EC96D9A036D6C6C36DD09E00415EAD7ACC7FCFD40E721BF33EA86B3490F9D
 ```
 
-`bin/libclang.dll` 入库是为了 clone 完能直接编，代价是仓库多一个 80 MB 的文件（git 打包压缩后约 25 MB，克隆时拉的就是这个量）。如果你不打算开本地 ASR，这个体积可以忽略不计。
+`bin/libclang.dll` 入库是为了 clone 完能直接编，代价是仓库多一个 80.1 MB 的文件（实测 git 对象库里压缩后约 27.5 MB，克隆时拉的差不多就是这个量）。如果你不打算开本地 ASR，这个体积可以忽略不计。
+
+顺带说明，GitHub 对单个超过 50 MB 的文件会在推送时给一条警告（上限 100 MB，不会失败）。真嫌大的话可以把这份 DLL 换成 25.2 MB 的 wheel 加一条解压命令，代价是编译前多跑一步。
 
 ## 重新获取
 
