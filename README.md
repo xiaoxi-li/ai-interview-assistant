@@ -35,15 +35,18 @@
 
 ## 目录
 
+- [目录](#目录)
 - [界面预览](#界面预览)
 - [核心特性](#核心特性)
 - [工作原理](#工作原理)
 - [环境要求](#环境要求)
 - [快速开始](#快速开始)
-  - [云端 ASR（阿里云百炼，默认通路）](#云端-asr阿里云百炼默认通路)
+  - [云端 ASR（目前仅适配阿里云百炼，默认通路）](#云端-asr目前仅适配阿里云百炼默认通路)
   - [本地 ASR 原生推理（可选，当前仅 Windows）](#本地-asr-原生推理可选当前仅-windows)
   - [开箱默认配置](#开箱默认配置)
 - [一键演示](#一键演示)
+  - [验收清单](#验收清单)
+  - [演示模式的真实性边界](#演示模式的真实性边界)
 - [编译与打包](#编译与打包)
 - [测试与校验](#测试与校验)
 - [键盘快捷键](#键盘快捷键)
@@ -56,9 +59,6 @@
 ---
 
 ## 界面预览
-
-> 截图是浏览器里跑的 Web 版（`npm run dev`）出的，里面是内置 mock 数据，不是真实会话。
-
 <p align="center">
   <img alt="面试辅助" src="docs/images/interview.png" width="100%">
 </p>
@@ -116,7 +116,7 @@
 | Rust | ≥ 1.77（stable） | Tauri 后端 |
 | Windows | Windows 10/11 + **WebView2**（系统自带） | 构建 MSI/NSIS 安装包 |
 | macOS | 13+ + Xcode Command Line Tools | 构建 .app / .dmg |
-| libclang（仅启用本地识别时） | LLVM 18.x（`libclang.dll`） | 只有启用 `--features local-asr-native` 时才需要（bindgen 依赖） |
+| libclang（仅启用本地识别时） | LLVM 18.1.1，**已随仓库提供** | 只有启用 `--features local-asr-native` 时才需要（bindgen 依赖）。不用自己装 LLVM，仓库里带了 `.libclang/bin/libclang.dll` |
 
 > Windows 下请确保 `cargo` 在 PATH 中，否则执行：
 > ```powershell
@@ -150,9 +150,9 @@ npm run dev        # 打开 http://localhost:1420
 
 </details>
 
-### 云端 ASR（阿里云百炼，默认通路）
+### 云端 ASR（目前仅适配阿里云百炼，默认通路）
 
-云上这条路不用下模型，但得有一把 API Key，而且音频会上传到服务商（本地模式不上传）。默认值已经收敛成「只填一个 Key 就能跑」，下面是确认项：
+云上这条路不用下模型，但得有API Key，而且音频会上传到服务商（本地模式不上传）。默认值已经收敛成「只填一个 Key 就能跑」，下面是确认项：
 
 1. 「设置 → 隐私与安全」里的「允许上传音频至云端 ASR」默认勾着。取消勾选后再点「开始转写」会被拦下并给提示；真的一点都不想上传，就切到「本地（隐私优先）」。
 2. 「设置 → 语音识别」默认选中「云端（低延迟）」加「阿里云智能语音」。讯飞、腾讯、OpenAI 兼容这几项写着「待接入」，选中后开始转写会告诉你换哪儿。
@@ -160,7 +160,7 @@ npm run dev        # 打开 http://localhost:1420
 4. 服务端地址（Base URL）可选，默认 `wss://dashscope.aliyuncs.com/api-ws/v1/inference`。走代理或者用地域专属域名就自己填一个，每个服务商各存一份，点「恢复默认」能还原官方地址。
 5. 云端模型默认是 `qwen-audio-3.0-asr-flash-streaming`。同族的 `qwen-audio-3.1-asr-flash-streaming`、`fun-asr-realtime`、`paraformer-realtime-v2` 实测也能用。注意 `qwen-audio-3.0-asr-flash` 没有 `-streaming` 后缀，那是非实时的 HTTP 模型，填进去会被服务端以 `ModelNotFound` 顶回来。
 6. 点「连接测试」，通了会显示耗时，不通会告诉你卡在哪一步，比如没填 Key、地址不合法、鉴权失败、模型名不对、网络不通。测的是表单里当前的值，带着没保存的修改一起测，不用先保存。
-7. 保存之后回面试辅助页，选「双通道」开始转写。系统音频那一路当面试官，麦克风那一路当我。服务端返回的句级结果里，句子没说完的显示成斜体 partial，说完了的落库成 final。
+7. 保存之后回面试辅助页，选「双通道」开始转写。系统音频那一路当面试官，麦克风那一路当自己。服务端返回的句级结果里，句子没说完的显示成斜体 partial，说完了的落库成 final。
 
 <details>
 <summary><b>真实凭证冒烟自检（默认 <code>#[ignore]</code>）</b></summary>
@@ -175,12 +175,11 @@ $env:DASHSCOPE_API_KEY="sk-xxx"; cargo test --lib -- --ignored real_aliyun --noc
 
 ### 本地 ASR 原生推理（可选，当前仅 Windows）
 
-默认构建不带原生识别，不然每台构建机都得先装 libclang。要用就这么开：
+默认构建不带原生识别，不然每台构建机都得先装 libclang。仓库里已经带了一份（`.libclang/bin/libclang.dll`，80 MB，取自 PyPI 的 libclang 包），clone 下来就能用。要用就这么开：
 
 ```powershell
-# 1) 准备 libclang（sherpa-rs-sys 用 bindgen 生成 FFI 绑定）。
-#    最轻量做法：只取 PyPI libclang 包里的 libclang.dll，无需安装完整 LLVM。
-#    本仓库已在 .libclang/bin/libclang.dll 放好一份（LLVM 18.1.1，该目录已 gitignore）：
+# 1) 指向仓库自带的那份（sherpa-rs-sys 用 bindgen 生成 FFI 绑定，运行时需要这个 DLL）。
+#    文件丢了或者要换版本：pwsh -File .libclang/fetch.ps1
 $env:LIBCLANG_PATH="<仓库路径>\.libclang\bin"
 
 # 2) 开发运行
