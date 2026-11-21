@@ -195,6 +195,24 @@ npm run tauri build -- --features local-asr-native --config src-tauri/tauri.loca
 - 冒烟自检（得先下好模型）：`cargo test --features local-asr-native -- --ignored asr::sherpa`。
 - macOS 那条路还没接，见 [`ai-doc/需求分析.md`](ai-doc/需求分析.md) 的 TODO-01。
 
+### 本地嵌入推理（可选，语义检索用）
+
+默认构建用确定性 mock 嵌测算向量，语义召回能用但质量一般。要换成真的本地推理：
+
+```powershell
+# 1) 开发运行（构建时会取回 ONNX Runtime 并复制到 target 目录）
+npm run tauri dev -- --features local-embed-native
+
+# 2) 出安装包（随包携带 onnxruntime.dll）
+npm run tauri build -- --features local-embed-native --config src-tauri/tauri.local-embed.conf.json
+```
+
+- 模型是 `BAAI/bge-m3`（ONNX，1024 维，约 2.1GB），在「设置 → 模型管理」点下载，走魔搭源、断点续传 + SHA256 校验。
+- 模型没下完之前语义检索自动退回 mock 嵌入；「设置 → 知识库」里会显示当前实际用的是「本地推理」还是「Mock 嵌入」。
+- 首次检索前会先加载模型（几秒），启动时已经放在后台线程预热，不会卡住界面；加载期间检索自动降级为关键词。
+- 同时开本地 ASR 就两个特性一起带：`--features "local-asr-native local-embed-native"`，打包时两条 `--config` 一起传。
+- 真实模型冒烟：先下好模型，再 `cargo test --features local-embed-native -- --ignored embedding_real`。
+
 ### 开箱默认配置
 
 这几项只在没存过配置时生效，存过的不动。默认值只写在后端配置对象的 `Default` 里（`config/{mod,asr,privacy}.rs`），设置页不另存一份：
@@ -297,7 +315,7 @@ npm run verify            # 前端：类型检查 + 构建 + vitest
 cd src-tauri; cargo test  # 后端：单测 + 集成测试
 ```
 
-`npm run verify` 就是 `npm run build && npm test`。当前基线是前端 356 项（36 个文件）、后端 446 项全过，里面包含 PCM 回放端到端、AEC、双通道、演示链路和命令线程断言。CI 在 Windows 和 macOS 上跑同一批校验（[`.github/workflows/ci.yml`](.github/workflows/ci.yml)），打 `v*` tag 时由 [`release.yml`](.github/workflows/release.yml) 出包并建一个草稿 Release。
+`npm run verify` 就是 `npm run build && npm test`。当前基线是前端 372 项（36 个文件）、后端 491 项全过（带 `local-embed-native` 时 496 项），里面包含 PCM 回放端到端、AEC、双通道、演示链路、三家云端 ASR 的离线协议回放、进程回环和命令线程断言。CI 在 Windows 和 macOS 上跑同一批校验（[`.github/workflows/ci.yml`](.github/workflows/ci.yml)），打 `v*` tag 时由 [`release.yml`](.github/workflows/release.yml) 出包并建一个草稿 Release。
 
 > Tauri 里不带 `(async)` 的 `#[tauri::command]` 会在界面主线程上同步跑，这个坑踩过一次：四个主页面互切时点一下要愣几秒才跳。现在命令都异步了，只留 5 个窗口和全局快捷键相关的同步执行，`commands::command_thread_tests` 用源码断言盯着，防止改回去。加新命令请一律写成 `#[tauri::command(async)]`，数据库、文件、设备枚举、钥匙链这类会堵住的操作丢给 `tauri::async_runtime::spawn_blocking`。
 > 开发时想看切页耗时，看控制台里的 `[perf] 切页 A → B：xx.xms`（`src/lib/perf.ts`），生产构建不打印。
@@ -343,7 +361,7 @@ docs/images/            README 配图
 ## 已知限制
 
 1. 本地 ASR 只接了 Windows，而且默认关着，要自己带 `local-asr-native` 特性编，构建机还得有 libclang。没开的时候相关命令会返回一条明确的构建指引，不会假装成功，也不会编一段文本糊弄过去。macOS 那条路还没接（TODO-01）。
-2. 嵌入推理还是本地确定性 mock，语义召回能用但质量一般。向量那一路不可用的时候会自动退成纯关键词检索，不影响用。选型定了本地 `BAAI/bge-m3`（ONNX，1024 维，约 2.27 GB），从魔搭下（TODO-07）。
+2. 本地嵌入推理（bge-m3）同样要带 `local-embed-native` 特性编，没开或模型没下载时语义检索退回确定性 mock 嵌入，界面上会写明当前用的是哪一路，向量不可用还会自动退成纯关键词检索。模型约 2.1GB，从魔搭按需下载，带 SHA256 校验。
 3. 自动更新能检查、能提示、能下载，安装那一步得等发布流水线给产物签名之后才生效。
 4. 系统音频采集两个平台不一样。Windows 走 WASAPI 端点级回环，直接对着播放设备采，不用开立体声混音，也不用装虚拟声卡；macOS 还得自己装 BlackHole 之类的虚拟回环设备（TODO-06）。
 5. 回答模式选「思考」时，思考阶段暂时没有输出。问题识别碰到带疑问词的陈述句，偶尔还是会误判。

@@ -116,8 +116,10 @@ fn load_resources(model_dir: &Path) -> ProviderResult<Loaded> {
 
     let mut builder = ort::session::Session::builder(&environment)
         .map_err(|err| ProviderError::Other(format!("创建 ONNX 会话构建器失败：{err}")))?;
+    // 用 All（ORT_ENABLE_ALL）而不是 Level3：Level3 映射到已废弃的 ORT_ENABLE_LAYOUT，
+    // 新版 ONNX Runtime 会以 "graph_optimization_level is not valid" 拒绝。
     builder = builder
-        .with_optimization_level(ort::session::builder::GraphOptimizationLevel::Level3)
+        .with_optimization_level(ort::session::builder::GraphOptimizationLevel::All)
         .map_err(|err| ProviderError::Other(format!("设置图优化级别失败：{err}")))?;
     builder = builder
         .with_intra_threads(2)
@@ -233,6 +235,13 @@ fn embed_one(loaded: &mut Loaded, text: &str) -> ProviderResult<Vec<f32>> {
         return Ok(vec![0.0f32; EMBEDDING_DIM]);
     }
     let seq_len = ids.len();
+    if std::env::var("EASY_DEBUG_EMBED").is_ok() {
+        eprintln!(
+            "[embed] text={text:.20} seq_len={seq_len} ids={:?} mask_sum={}",
+            &ids[..10.min(seq_len)],
+            mask.iter().sum::<i64>()
+        );
+    }
 
     run_inference(loaded, ids, mask, seq_len)
 }
@@ -261,18 +270,27 @@ fn run_inference(
         feeds.push((name.clone(), tensor));
     }
 
-    let inputs: Vec<(
-        std::borrow::Cow<'_, str>,
-        ort::session::SessionInputValue<'_>,
-    )> = feeds
-        .iter()
-        .map(|(name, tensor)| (name.as_str().into(), tensor.into()))
-        .collect();
-
-    let outputs = loaded
-        .session
-        .run(ort::session::SessionInputs::from(inputs))
-        .map_err(|err| ProviderError::Other(format!("嵌入推理失败：{err}")))?;
+    let outputs = match feeds.len() {
+        1 => loaded
+            .session
+            .run(ort::inputs![feeds[0].0.as_str() => &feeds[0].1])
+            .map_err(|err| ProviderError::Other(format!("嵌入推理失败：{err}")))?,
+        2 => loaded
+            .session
+            .run(ort::inputs![
+                feeds[0].0.as_str() => &feeds[0].1,
+                feeds[1].0.as_str() => &feeds[1].1,
+            ])
+            .map_err(|err| ProviderError::Other(format!("嵌入推理失败：{err}")))?,
+        _ => loaded
+            .session
+            .run(ort::inputs![
+                feeds[0].0.as_str() => &feeds[0].1,
+                feeds[1].0.as_str() => &feeds[1].1,
+                feeds[2].0.as_str() => &feeds[2].1,
+            ])
+            .map_err(|err| ProviderError::Other(format!("嵌入推理失败：{err}")))?,
+    };
 
     extract_sentence_vector(&outputs, &names.output)
 }
@@ -300,6 +318,13 @@ fn extract_sentence_vector(
         .map_err(|err| ProviderError::Other(format!("读取嵌入输出失败：{err}")))?;
     let dims: &[i64] = shape.as_ref();
     let hidden = EMBEDDING_DIM;
+    if std::env::var("EASY_DEBUG_EMBED").is_ok() {
+        eprintln!(
+            "[embed] output={name} dims={dims:?} len={} head={:?}",
+            data.len(),
+            &data[..8.min(data.len())]
+        );
+    }
 
     let start = match dims.len() {
         // [batch, seq, hidden]：取 [CLS]（第 0 个 token）

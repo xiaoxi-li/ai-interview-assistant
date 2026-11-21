@@ -81,25 +81,26 @@ pub fn catalog() -> Vec<ModelSpec> {
                 ModelFile {
                     remote_path: "onnx/model.onnx".into(),
                     local_name: "model.onnx".into(),
-                    sha256: String::new(),
+                    sha256: "f84251230831afb359ab26d9fd37d5936d4d9bb5d1d5410e66442f630f24435b".into(),
                     size_bytes: 724_923,
                 },
                 ModelFile {
                     remote_path: "onnx/model.onnx_data".into(),
                     local_name: "model.onnx_data".into(),
-                    sha256: String::new(),
+                    // 与 ModelScope OSS 的 x-oss-hash-value 一致（SHA-256）
+                    sha256: "1eebfb28493f67bba03ce0ef64bfdc7fc5a3bd9d7493f818bb1d78cd798416b4".into(),
                     size_bytes: 2_266_820_608,
                 },
                 ModelFile {
                     remote_path: "onnx/tokenizer.json".into(),
                     local_name: "tokenizer.json".into(),
-                    sha256: String::new(),
+                    sha256: "6710678b12670bc442b99edc952c4d996ae309a7020c1fa0096dd245c2faf790".into(),
                     size_bytes: 17_082_821,
                 },
                 ModelFile {
                     remote_path: "onnx/config.json".into(),
                     local_name: "config.json".into(),
-                    sha256: String::new(),
+                    sha256: "f24afd5de914fba8c668426c43d208a1a54022500c63b2c160be20891686fce8".into(),
                     size_bytes: 698,
                 },
             ],
@@ -114,7 +115,7 @@ pub fn catalog() -> Vec<ModelSpec> {
             files: vec![ModelFile {
                 remote_path: "silero_vad.onnx".into(),
                 local_name: "silero_vad.onnx".into(),
-                sha256: String::new(),
+                sha256: "2623a2953f6ff3d2c1e61740c6cdb7168133479b267dfef114a4a3cc5bdd788f".into(),
                 size_bytes: 2_327_524,
             }],
             description: "语音活动检测模型，用于静音过滤与自动分段，约 2.3MB".into(),
@@ -141,7 +142,7 @@ pub fn catalog() -> Vec<ModelSpec> {
                 ModelFile {
                     remote_path: "configuration.json".into(),
                     local_name: "configuration.json".into(),
-                    sha256: String::new(),
+                    sha256: "c57f6a580d63f7465c6a22ba95847aee05a1ae1181f5abddffb943d9febda061".into(),
                     size_bytes: 56,
                 },
             ],
@@ -302,7 +303,26 @@ pub fn download_model(
     Ok(model_dir)
 }
 
+/// 解析 `Content-Range` 头：返回 `(起始偏移, 文件总长)`，格式 `bytes 0-1023/2048`
+fn parse_content_range(value: &str) -> Option<(u64, Option<u64>)> {
+    let rest = value.trim().strip_prefix("bytes")?.trim();
+    let (range, total) = rest.split_once('/')?;
+    let start = range.trim().split('-').next()?.trim().parse::<u64>().ok()?;
+    let total = if total.trim() == "*" {
+        None
+    } else {
+        total.trim().parse::<u64>().ok()
+    };
+    Some((start, total))
+}
+
 /// 下载单个文件，支持断点续传与 SHA256 校验（内部辅助）。
+///
+/// 关键约束：**不能只信 206 状态码**。CDN / 网关可能对 Range 请求返回 206，
+/// 但实际返回的是从 0 开始的完整内容（Content-Range 起点为 0），此时若继续
+/// append 会把文件写重（实测导致 bge-m3 的 model.onnx_data 从 2.11GB 膨胀到
+/// 3.24GB、权重错位、推理输出恒定）。因此续传判定以 `Content-Range` 起点为准，
+/// 并对齐校验最终长度。
 fn download_file(
     url: &str,
     target: &Path,
@@ -310,36 +330,60 @@ fn download_file(
     sha256: &str,
     on_progress: &mut dyn FnMut(u64, Option<u64>),
 ) -> Result<(), String> {
-    let mut offset = std::fs::metadata(part).map(|m| m.len()).unwrap_or(0);
-
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(600))
         .build();
+
+    let mut offset = std::fs::metadata(part).map(|m| m.len()).unwrap_or(0);
     let mut request = agent.get(url);
     if offset > 0 {
         request = request.set("Range", &format!("bytes={offset}-"));
     }
+    let mut response = request.call().map_err(|e| format!("下载失败：{e}"))?;
 
-    let response = request.call().map_err(|e| format!("下载失败：{e}"))?;
-    let status = response.status();
+    // 续传有效性的唯一判据：206 + Content-Range 起点等于本地已有长度
+    let content_range = response
+        .header("Content-Range")
+        .and_then(parse_content_range);
+    let resume_ok = offset > 0
+        && response.status() == 206
+        && content_range.map(|(start, _)| start == offset).unwrap_or(false);
 
-    // 服务端不支持续传（返回 200）时从头下载
-    if offset > 0 && status != 206 {
+    if offset > 0 && !resume_ok {
+        // 无法安全续传（服务端不认 Range / 返回的是完整内容 / 本地 .part 超长）
         let _ = std::fs::remove_file(part);
         offset = 0;
+        response = agent
+            .get(url)
+            .call()
+            .map_err(|e| format!("下载失败：{e}"))?;
     }
 
-    let total = response
-        .header("Content-Length")
-        .and_then(|v| v.parse::<u64>().ok())
-        .map(|len| len + offset);
+    // 远端总长：优先 Content-Range 的总数，否则用 Content-Length + 续传偏移
+    let content_range = response
+        .header("Content-Range")
+        .and_then(parse_content_range);
+    let total = content_range
+        .and_then(|(_, total)| total)
+        .or_else(|| {
+            response
+                .header("Content-Length")
+                .and_then(|v| v.parse::<u64>().ok())
+                .map(|len| len + offset)
+        });
 
     let mut reader = response.into_reader();
-    let file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(part)
-        .map_err(|e| format!("创建临时文件失败：{e}"))?;
+    // 续传时保留已有内容；从头下载时清空，避免旧数据残留造成文件膨胀
+    let file = if offset == 0 {
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(part)
+    } else {
+        OpenOptions::new().write(true).append(true).open(part)
+    }
+    .map_err(|e| format!("创建临时文件失败：{e}"))?;
     let mut writer = BufWriter::new(file);
 
     let mut downloaded = offset;
@@ -349,12 +393,34 @@ fn download_file(
         if read == 0 {
             break;
         }
+        // 防御：若服务端多给了数据（超过声明的总长），立即截断停止，避免污染 .part
+        if let Some(total) = total {
+            if downloaded + read as u64 > total {
+                writer.flush().map_err(|e| e.to_string())?;
+                let _ = std::fs::remove_file(part);
+                return Err(format!(
+                    "下载数据超出声明长度（已写入 {downloaded}，收到 {} 字节，总长 {total}），已丢弃 .part 重试",
+                    read
+                ));
+            }
+        }
         writer.write_all(&buffer[..read]).map_err(|e| e.to_string())?;
         downloaded += read as u64;
         on_progress(downloaded, total);
     }
     writer.flush().map_err(|e| e.to_string())?;
     drop(writer);
+
+    // 长度对齐校验：避免「下载未完成但读者以为成功」污染后续续传
+    if let Some(total) = total {
+        let actual = std::fs::metadata(part).map(|m| m.len()).unwrap_or(0);
+        if actual != total {
+            let _ = std::fs::remove_file(part);
+            return Err(format!(
+                "下载长度不符（期望 {total} 字节，实际 {actual} 字节），已丢弃 .part 重试"
+            ));
+        }
+    }
 
     // 校验
     if !sha256.trim().is_empty() {
@@ -468,6 +534,113 @@ mod tests {
             seen_requests
         });
         (format!("http://{addr}"), handle)
+    }
+
+    /// TODO-08：清单里每个文件都必须填 SHA256 与真实大小——
+    /// 留空等价于跳过完整性校验，模型被污染时会静默加载出错误结果。
+    #[test]
+    fn every_catalog_file_has_checksum_and_size() {
+        for spec in catalog() {
+            assert!(!spec.files.is_empty(), "{} 未声明文件", spec.id);
+            for file in &spec.files {
+                assert_eq!(
+                    file.sha256.len(),
+                    64,
+                    "{}/{} 的 SHA256 应为 64 位十六进制",
+                    spec.id,
+                    file.local_name
+                );
+                assert!(
+                    file.sha256.chars().all(|c| c.is_ascii_hexdigit()),
+                    "{}/{} 的 SHA256 含非十六进制字符",
+                    spec.id,
+                    file.local_name
+                );
+                assert!(
+                    file.size_bytes > 0,
+                    "{}/{} 未填写文件大小",
+                    spec.id,
+                    file.local_name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn content_range_header_is_parsed() {
+        assert_eq!(
+            parse_content_range("bytes 0-1023/2048"),
+            Some((0, Some(2048)))
+        );
+        assert_eq!(
+            parse_content_range("bytes 1024-2047/2048"),
+            Some((1024, Some(2048)))
+        );
+        assert_eq!(parse_content_range("bytes 0-99/*"), Some((0, None)));
+        assert_eq!(parse_content_range("no-header"), None);
+    }
+
+    /// 回归（实测灾难场景）：CDN 对 Range 请求返回 206，却从 0 开始给完整内容。
+    /// 旧实现会把完整内容 append 到脏 `.part` 后面，文件膨胀、权重错位
+    /// （bge-m3 的 model.onnx_data 曾从 2.11GB 被写成 3.24GB）。
+    #[test]
+    fn resume_is_rejected_when_server_ignores_range() {
+        let payload = vec![0x5Au8; 4096];
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let body = payload.clone();
+        let handle = thread::spawn(move || {
+            // 请求 1：带 Range → 返回 206 但内容从 0 开始（Content-Range 起点 0）
+            // 请求 2：无 Range → 返回 200 完整内容
+            for stream in listener.incoming().take(2) {
+                let Ok(mut stream) = stream else { continue };
+                let mut buffer = [0u8; 2048];
+                let read = stream.read(&mut buffer).unwrap_or(0);
+                let request = String::from_utf8_lossy(&buffer[..read]).to_string();
+                if request.to_ascii_lowercase().contains("range:") {
+                    let header = format!(
+                        "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes 0-{}/{}\r\nConnection: close\r\n\r\n",
+                        body.len(),
+                        body.len() - 1,
+                        body.len()
+                    );
+                    let _ = stream.write_all(header.as_bytes());
+                } else {
+                    let header = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = stream.write_all(header.as_bytes());
+                }
+                let _ = stream.write_all(&body);
+                let _ = stream.flush();
+            }
+        });
+
+        let dir = temp_dir("resume-ignore");
+        let target = dir.join("model.bin");
+        let part = dir.join("model.bin.part");
+        // 预置脏 .part（模拟上次续传写重后的残留）
+        std::fs::write(&part, vec![0xEEu8; 100]).expect("dirty part");
+
+        download_file(
+            &format!("http://{addr}/model.bin"),
+            &target,
+            &part,
+            &sha256_of(&payload),
+            &mut |_, _| {},
+        )
+        .expect("下载应成功");
+
+        let written = std::fs::read(&target).expect("read target");
+        assert_eq!(
+            written.len(),
+            payload.len(),
+            "续传被拒后应从头重下，文件长度必须与远端一致"
+        );
+        assert_eq!(written, payload, "内容必须与远端完全一致");
+        handle.join().ok();
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
