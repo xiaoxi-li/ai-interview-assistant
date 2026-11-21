@@ -116,4 +116,35 @@ describe("KnowledgeSettingsSection", () => {
       expect.objectContaining({ modelsDir: null })
     );
   });
+
+  // ===== TODO-07：本地嵌入引擎状态 =====
+
+  it("本地 ONNX 推理启用时展示成功状态", () => {
+    setup({
+      embeddingStatus: {
+        provider: "local-onnx",
+        modelReady: true,
+        detail: "本地嵌入已接入（BAAI/bge-m3，1024 维）。",
+      },
+    });
+    expect(screen.getByText(/语义检索：本地推理/)).toBeTruthy();
+    expect(screen.getByText(/BAAI\/bge-m3/)).toBeTruthy();
+  });
+
+  it("Mock 嵌入时展示降级提示与原因", () => {
+    setup({
+      embeddingStatus: {
+        provider: "mock",
+        modelReady: false,
+        detail: "本次构建未启用本地嵌入推理，当前使用确定性 Mock 嵌入。",
+      },
+    });
+    expect(screen.getByText(/语义检索：Mock 嵌入/)).toBeTruthy();
+    expect(screen.getByText(/未启用本地嵌入推理/)).toBeTruthy();
+  });
+
+  it("未读取到状态时不渲染状态条", () => {
+    setup();
+    expect(screen.queryByText(/语义检索：/)).toBeNull();
+  });
 });

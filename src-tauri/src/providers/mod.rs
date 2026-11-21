@@ -18,5 +18,14 @@ pub use ai::{AiProvider, ChatStream, MockAiProvider};
 pub use openai::OpenAiCompatProvider;
 pub use asr::{AsrProvider, MockAsrProvider};
 pub use embedding::{EmbeddingProvider, MockEmbeddingProvider};
+
+/// 本地嵌入模型在 `models::catalog()` 中的 id（始终可用，供状态查询引用）
+pub const LOCAL_EMBEDDING_MODEL_ID: &str = "bge-m3";
+
+/// TODO-07（KB-07）：本地 ONNX 嵌入推理（BAAI/bge-m3）
+#[cfg(feature = "local-embed-native")]
+pub mod onnx_embedding;
+#[cfg(feature = "local-embed-native")]
+pub use onnx_embedding::OnnxEmbeddingProvider;
 pub use types::*;
 pub use vector::{SqliteVecStore, VectorStore};

@@ -123,6 +123,16 @@ export interface AsrSessionStatus {
   aecErleDb: number | null;
 }
 
+/** 本地嵌入引擎信息（TODO-07 / KB-07） */
+export interface EmbeddingEngineInfo {
+  /** 实际装配的 Provider：local-onnx / mock */
+  provider: string;
+  /** 本地嵌入模型文件是否齐全 */
+  modelReady: boolean;
+  /** 可读说明（缺什么、怎么办） */
+  detail: string;
+}
+
 /** 本地 ASR 引擎信息 */
 export interface AsrEngineInfo {
   id: string;

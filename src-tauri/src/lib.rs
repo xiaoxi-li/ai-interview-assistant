@@ -75,23 +75,55 @@ pub fn run() {
             std::fs::create_dir_all(&models_dir)?;
             let db = storage::Db::open(&db_path)?;
             let did_rebuild_embedding = db.did_rebuild_embedding();
-            // P0 使用确定性 Mock 嵌入；真实本地 ONNX 模型在模型管理中台接入后替换
-            let embedding: Arc<dyn providers::EmbeddingProvider> =
-                Arc::new(providers::MockEmbeddingProvider::default());
+            // TODO-07（KB-07）：启用 local-embed-native 且模型已下载时装配本地 ONNX 嵌入
+            // （BAAI/bge-m3）；否则回退确定性 Mock 嵌入。Provider 内部懒加载 Session，
+            // 因此装配本身不耗时，真正的模型加载在后台预热线程里完成。
+            let embedding: Arc<dyn providers::EmbeddingProvider> = {
+                #[cfg(feature = "local-embed-native")]
+                {
+                    match providers::OnnxEmbeddingProvider::from_models_dir(&models_dir) {
+                        Ok(provider) => {
+                            tracing::info!("本地 ONNX 嵌入已就绪（BAAI/bge-m3）");
+                            Arc::new(provider)
+                        }
+                        Err(err) => {
+                            tracing::warn!("本地嵌入不可用，回退确定性 Mock 嵌入：{err}");
+                            Arc::new(providers::MockEmbeddingProvider::default())
+                        }
+                    }
+                }
+                #[cfg(not(feature = "local-embed-native"))]
+                {
+                    Arc::new(providers::MockEmbeddingProvider::default())
+                }
+            };
             let secrets: Arc<dyn security::SecretStore> =
                 Arc::new(security::KeyringStore::new(security::SERVICE_NAME));
             let conn = db.into_shared_conn();
 
-            // 嵌入维度迁移后触发全量向量重索引（尽力而为，失败仅告警不阻断启动）
+            // 后台预热：首次 embed() 会加载模型（数百 ms ~ 数秒）。放在后台线程，
+            // 避免用户首次检索时在持有 DB 全局锁的情况下同步加载；预热失败时检索
+            // 自动降级为关键词（既有降级通道），不影响笔记读写。
+            let warmup = embedding.clone();
+            std::thread::spawn(move || {
+                if let Err(err) = warmup.embed(&["warmup".to_string()]) {
+                    tracing::warn!("嵌入引擎预热失败（语义检索将降级为关键词检索）：{err}");
+                }
+            });
+
+            // 嵌入维度迁移后的全量重索引也放后台：真实模型下可能持续数十秒到数分钟，
+            // 不能再阻塞 setup()（NFR：界面首帧 < 100ms）。
             if did_rebuild_embedding {
-                match conn.lock() {
+                let provider = embedding.clone();
+                let conn_handle = conn.clone();
+                std::thread::spawn(move || match conn_handle.lock() {
                     Ok(guard) => {
-                        if let Err(err) = retrieval::index::reindex_all(&guard, embedding.as_ref()) {
+                        if let Err(err) = retrieval::index::reindex_all(&guard, provider.as_ref()) {
                             tracing::warn!("嵌入维度迁移后全量重索引失败：{err}");
                         }
                     }
                     Err(err) => tracing::warn!("嵌入维度迁移后获取连接失败：{err}"),
-                }
+                });
             }
 
             app.manage(state::AppState::new(
@@ -217,6 +249,7 @@ pub fn run() {
             commands::get_knowledge_config,
             commands::save_knowledge_config,
             commands::list_models,
+            commands::get_embedding_status,
             commands::download_model,
             commands::delete_model,
             commands::export_notes_markdown,

@@ -439,6 +439,64 @@ pub async fn list_models(
     run_blocking(move || Ok(crate::models::list_status(&models_dir))).await
 }
 
+/// 嵌入引擎状态（TODO-07 / KB-07）
+///
+/// 三态语义与本地 ASR 的 `AsrEngineInfo` 一致：模型未下载 / 模型就绪但本特性未启用 /
+/// 已启用可识别。前端据此在「设置 → 知识库」展示一行状态说明。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbeddingEngineInfo {
+    /// 实际装配的 Provider 名：`local-onnx` / `mock`
+    pub provider: String,
+    /// 本地嵌入模型文件是否齐全
+    pub model_ready: bool,
+    /// 可读说明（缺什么、怎么办）
+    pub detail: String,
+}
+
+#[tauri::command(async)]
+pub fn get_embedding_status(
+    state: State<'_, AppState>,
+) -> Result<EmbeddingEngineInfo, String> {
+    let provider = state.embedding.name().to_string();
+    let spec = crate::models::find_spec(crate::providers::LOCAL_EMBEDDING_MODEL_ID);
+    let model_ready = spec
+        .as_ref()
+        .map(|spec| {
+            crate::models::model_dir_path(&state.models_dir, spec)
+                .map(|dir| dir.join("model.onnx").exists() && dir.join("tokenizer.json").exists())
+                .unwrap_or(false)
+        })
+        .unwrap_or(false);
+
+    #[cfg(feature = "local-embed-native")]
+    let enabled = true;
+    #[cfg(not(feature = "local-embed-native"))]
+    let enabled = false;
+
+    let detail = if provider == "local-onnx" {
+        format!(
+            "本地嵌入已接入（BAAI/bge-m3，1024 维），语义检索使用真实推理；模型目录：{}",
+            spec.as_ref()
+                .and_then(|spec| crate::models::model_dir_path(&state.models_dir, spec).ok())
+                .map(|dir| dir.display().to_string())
+                .unwrap_or_else(|| state.models_dir.display().to_string())
+        )
+    } else if !enabled {
+        "本次构建未启用本地嵌入推理，当前语义检索使用确定性 Mock 嵌入（质量受限）。需以 --features local-embed-native 构建并下载「嵌入模型（BGE-M3）」后启用。".to_string()
+    } else if !model_ready {
+        "本地嵌入推理已编译，但模型尚未下载：请在「模型管理」下载「嵌入模型（BGE-M3）」（约 2.1GB）后重启应用。当前语义检索使用确定性 Mock 嵌入。".to_string()
+    } else {
+        "本地嵌入模型已就绪，将在重启应用后启用真实推理。当前会话仍使用 Mock 嵌入。".to_string()
+    };
+
+    Ok(EmbeddingEngineInfo {
+        provider,
+        model_ready,
+        detail,
+    })
+}
+
 /// 下载模型（断点续传 + SHA256 校验），通过 `model://progress` 事件上报进度
 #[tauri::command(async)]
 pub async fn download_model(

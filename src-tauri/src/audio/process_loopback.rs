@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::OnceLock;
 use windows::core::{implement, IUnknown, Interface, GUID};
-use windows::Win32::Foundation::{CloseHandle, E_FAIL, WAIT_FAILED, WAIT_TIMEOUT};
+use windows::Win32::Foundation::{CloseHandle, WAIT_FAILED, WAIT_TIMEOUT};
 use windows::Win32::Media::Audio::{
     ActivateAudioInterfaceAsync, IActivateAudioInterfaceAsyncOperation,
     IActivateAudioInterfaceCompletionHandler, IActivateAudioInterfaceCompletionHandler_Impl,

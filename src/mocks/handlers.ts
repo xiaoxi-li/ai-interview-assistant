@@ -529,6 +529,15 @@ export async function mockInvoke<T>(
         processLoopbackPid: null,
       } as T;
 
+    // TODO-07：本地嵌入引擎状态（浏览器 mock 视为已启用）
+    case "get_embedding_status":
+      return {
+        provider: "mock",
+        modelReady: true,
+        detail:
+          "浏览器开发模式使用确定性 Mock 嵌入；桌面构建启用 local-embed-native 后走本地 ONNX 推理。",
+      } as T;
+
     // TODO-05：有音频会话的进程（浏览器 mock 提供静态样例）
     case "list_audio_processes":
       return [

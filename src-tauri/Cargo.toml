@@ -19,6 +19,11 @@ default = []
 # 启用后构建机需安装 libclang（bindgen 依赖），见 README「本地 ASR 原生推理的构建前置」。
 # 启用方式：npm run tauri dev -- --features local-asr-native
 local-asr-native = ["dep:sherpa-rs"]
+# TODO-07（KB-07）：本地 ONNX 嵌入推理（BAAI/bge-m3）。
+# `ort` 用 load-dynamic 运行期加载 onnxruntime.dll（构建时由 download-binaries 取回并
+# 复制到 target 目录）；`tokenizers` 加载随模型下发的 tokenizer.json。纯 Rust，无 libclang 依赖。
+# 启用方式：npm run tauri dev -- --features local-embed-native
+local-embed-native = ["dep:ort", "dep:tokenizers"]
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
@@ -54,6 +59,20 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 hmac = "0.12"
 sha1 = "0.10"
 base64 = "0.22"
+
+# TODO-07（KB-07）：本地 ONNX 嵌入推理（BAAI/bge-m3，1024 维）。
+# 仅 `local-embed-native` 特性启用时编译；默认构建与 CI 不受影响。
+# load-dynamic：运行期 dlopen onnxruntime.dll（随包携带，见 tauri.local-embed.conf.json）；
+# download-binaries/copy-dylibs：构建期取回 ORT 并复制到 target，供开发运行与测试使用。
+ort = { version = "2.0.0-rc", optional = true, default-features = false, features = [
+    "load-dynamic",
+    "download-binaries",
+    "copy-dylibs",
+    "tls-native",
+] }
+tokenizers = { version = "0.20", optional = true, default-features = false, features = [
+    "onig",
+] }
 
 # IA-14：Windows 系统音频走 WASAPI 端点级回环（cpal 无此能力），仅 Windows 目标引入
 [target.'cfg(windows)'.dependencies]

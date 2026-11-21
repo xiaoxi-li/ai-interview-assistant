@@ -9,6 +9,7 @@ import type {
   AudioConfig,
   AudioDevice,
   ConnectionTest,
+  EmbeddingEngineInfo,
   InterfaceConfig,
   InterfaceTheme,
   KnowledgeConfig,
@@ -103,6 +104,9 @@ interface SettingsState {
   /** 本地 ASR 引擎就绪状态（IA-15）：区分模型未下载 / 模型就绪但未启用本特性 / 已启用可识别 */
   asrEngines: AsrEngineInfo[];
   loadAsrEngines: () => Promise<void>;
+  /** 本地嵌入引擎状态（TODO-07 / KB-07）：当前是否走真实 ONNX 推理 */
+  embeddingStatus: EmbeddingEngineInfo | null;
+  loadEmbeddingStatus: () => Promise<void>;
   /** 音频设备配置 */
   audioConfig: AudioConfig | null;
   /** 已枚举的设备列表 */
@@ -208,6 +212,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     testingAsr: false,
     asrTestResult: null,
     asrEngines: [],
+    embeddingStatus: null,
     audioConfig: null,
     audioDevices: [],
     interfaceConfig: null,
@@ -435,6 +440,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       ipc<AsrEngineInfo[]>("list_asr_engines")
         .then((asrEngines) => set({ asrEngines }))
         .catch((err) => fail("读取本地识别引擎状态", err)),
+
+    loadEmbeddingStatus: () =>
+      ipc<EmbeddingEngineInfo>("get_embedding_status")
+        .then((embeddingStatus) => set({ embeddingStatus }))
+        .catch((err) => fail("读取本地嵌入引擎状态", err)),
 
     saveAsrConfig: (config) =>
       ipc<ASRConfig>("save_asr_config", { config })

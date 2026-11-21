@@ -667,13 +667,16 @@ mod tests {
             Err(_) => return,
         };
         if behavior == "auth_failed" {
-            // 连接后立即下发签名错误 JSON
+            // 连接后立即下发签名错误 JSON。
+            // 发送后短暂停留再关闭：立即 close 会让客户端的 close 处理与文本消息竞速，
+            // 偶发只读到「连接已关闭」而丢掉服务端错误（并发测试下不稳定）。
             let _ = ws
                 .send(Message::text(
                     serde_json::json!({ "code": 4003, "message": "signature verification error" })
                         .to_string(),
                 ))
                 .await;
+            tokio::time::sleep(Duration::from_millis(200)).await;
             let _ = ws.close(None).await;
             return;
         }

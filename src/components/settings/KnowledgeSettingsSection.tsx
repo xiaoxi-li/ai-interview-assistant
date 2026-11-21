@@ -3,7 +3,12 @@ import { AlertCircle, Database, FolderOpen, RefreshCw, Save } from "lucide-react
 import { cn } from "../../lib/utils";
 import { SaveFeedback } from "./SaveFeedback";
 import { pickDirectory } from "../../lib/dialog";
-import type { KnowledgeConfig, ModelStatus, StoragePaths } from "../../types";
+import type {
+  EmbeddingEngineInfo,
+  KnowledgeConfig,
+  ModelStatus,
+  StoragePaths,
+} from "../../types";
 
 const FIELD =
   "focus-ring w-full rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-2 text-[12px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-primary/50";
@@ -13,6 +18,8 @@ interface KnowledgeSettingsSectionProps {
   config: KnowledgeConfig;
   storagePaths: StoragePaths | null;
   models: ModelStatus[];
+  /** 本地嵌入引擎状态（TODO-07 / KB-07）：null 表示尚未读取 */
+  embeddingStatus?: EmbeddingEngineInfo | null;
   onSave: (config: KnowledgeConfig) => void;
 }
 
@@ -20,6 +27,7 @@ export default function KnowledgeSettingsSection({
   config,
   storagePaths,
   models,
+  embeddingStatus,
   onSave,
 }: KnowledgeSettingsSectionProps) {
   const [draft, setDraft] = useState<KnowledgeConfig>(config);
@@ -160,6 +168,20 @@ export default function KnowledgeSettingsSection({
           <p className="mt-1 text-[10px] text-text-subtle">
             本地嵌入模型保证知识库离线可用与检索低延迟
           </p>
+          {embeddingStatus && (
+            <p
+              className={cn(
+                "mt-2 rounded-md border px-2.5 py-1.5 text-[10px] leading-relaxed",
+                embeddingStatus.provider === "local-onnx"
+                  ? "border-success/30 bg-success/10 text-success"
+                  : "border-warning/30 bg-warning/10 text-warning"
+              )}
+            >
+              {embeddingStatus.provider === "local-onnx" ? "语义检索：本地推理" : "语义检索：Mock 嵌入"}
+              {" · "}
+              {embeddingStatus.detail}
+            </p>
+          )}
         </div>
       </div>
 

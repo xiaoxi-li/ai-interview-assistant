@@ -45,6 +45,8 @@ export default function SettingsPage() {
   const testAsrConnection = useSettingsStore((s) => s.testAsrConnection);
   const asrEngines = useSettingsStore((s) => s.asrEngines);
   const loadAsrEngines = useSettingsStore((s) => s.loadAsrEngines);
+  const embeddingStatus = useSettingsStore((s) => s.embeddingStatus);
+  const loadEmbeddingStatus = useSettingsStore((s) => s.loadEmbeddingStatus);
   const audioConfig = useSettingsStore((s) => s.audioConfig);
   const audioDevices = useSettingsStore((s) => s.audioDevices);
   const loadAudioSettings = useSettingsStore((s) => s.loadAudioSettings);
@@ -82,6 +84,7 @@ export default function SettingsPage() {
     loadAiSettings();
     loadAsrSettings();
     loadAsrEngines();
+    loadEmbeddingStatus();
     loadAudioSettings();
     loadPrivacySettings();
     loadModels();
@@ -91,6 +94,7 @@ export default function SettingsPage() {
     loadAiSettings,
     loadAsrSettings,
     loadAsrEngines,
+    loadEmbeddingStatus,
     loadAudioSettings,
     loadPrivacySettings,
     loadModels,
@@ -178,6 +182,7 @@ export default function SettingsPage() {
               config={knowledgeConfig}
               storagePaths={storagePaths}
               models={models}
+              embeddingStatus={embeddingStatus}
               onSave={saveKnowledgeConfig}
             />
           )}
