@@ -180,13 +180,15 @@ pub struct AliyunRealtimeEngine {
 impl AliyunRealtimeEngine {
     /// 建立连接并完成 `task-started` 握手（阻塞；失败返回可操作错误）
     pub fn connect(spec: EngineSpec) -> ProviderResult<Self> {
-        let api_key = spec.api_key.trim().to_string();
-        if api_key.is_empty() {
-            return Err(ProviderError::Other(format!(
-                "{}：尚未配置 API Key，请到「设置 → 语音识别」填写服务商凭证后再开始转写。",
-                spec.provider.label()
-            )));
-        }
+        let api_key = spec
+            .credential("api_key")
+            .ok_or_else(|| {
+                ProviderError::Other(format!(
+                    "{}：尚未配置 API Key，请到「设置 → 语音识别」填写服务商凭证后再开始转写。",
+                    spec.provider.label()
+                ))
+            })?
+            .to_string();
 
         let url = spec.websocket_url();
         if !url.starts_with("ws://") && !url.starts_with("wss://") {
@@ -569,7 +571,7 @@ mod tests {
             // 用「出厂默认模型」，确保联调用例验证的就是用户默认拿到的模型
             model: CloudAsrProvider::Aliyun.default_model().to_string(),
             language: "zh-CN".to_string(),
-            api_key: api_key.to_string(),
+            credentials: [("api_key".to_string(), api_key.to_string())].into(),
             channel: "mic".to_string(),
         }
     }

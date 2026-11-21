@@ -91,8 +91,12 @@ impl CloudAsrProvider {
     }
 
     /// 协议适配是否已实现（未实现者由命令层给出**可操作错误**，不静默失败）
+    ///
+    /// TODO-10 / TODO-11 落地（2026-11）：四家服务商均已接入——
+    /// 阿里云（DashScope WS）、讯飞（v2/iat WS）、腾讯（asr/v2 WS）、
+    /// OpenAI 兼容（HTTP `/audio/transcriptions`）。
     pub fn implemented(self) -> bool {
-        matches!(self, CloudAsrProvider::Aliyun)
+        true
     }
 
     /// 该服务商需要的凭证字段
@@ -101,9 +105,22 @@ impl CloudAsrProvider {
             // 讯飞 WebSocket 鉴权需要三元组
             CloudAsrProvider::Xfyun => &["app_id", "api_key", "api_secret"],
             CloudAsrProvider::Aliyun => &["api_key"],
-            CloudAsrProvider::Tencent => &["secret_id", "secret_key"],
+            // 腾讯实时识别端点 `/asr/v2/{appid}` 需要账号 AppID + 双密钥
+            CloudAsrProvider::Tencent => &["app_id", "secret_id", "secret_key"],
             CloudAsrProvider::OpenaiCompat => &["api_key"],
         }
+    }
+}
+
+/// 凭证字段在错误文案中的显示名（与前端 `credentialFieldLabel` 一致）
+pub fn credential_field_label(field: &str) -> String {
+    match field {
+        "app_id" => "AppID".to_string(),
+        "api_key" => "API Key".to_string(),
+        "api_secret" => "API Secret".to_string(),
+        "secret_id" => "SecretId".to_string(),
+        "secret_key" => "SecretKey".to_string(),
+        _ => field.to_string(),
     }
 }
 
@@ -161,9 +178,11 @@ pub fn to_websocket_url(value: &str) -> String {
 }
 
 /// 协议尚未接入时的**可操作错误文案**（命令层与云端工厂共用）
+///
+/// TODO-10 / TODO-11 落地后四家服务商均已实现，本文案仅在未来新增服务商时生效。
 pub fn unsupported_provider_message(provider: CloudAsrProvider) -> String {
     format!(
-        "「{}」的云端 ASR 待接入，当前仅「阿里云智能语音」已接入。请到「设置 → 语音识别」切换服务商，或改用「本地（隐私优先）」后再开始转写。",
+        "「{}」的云端 ASR 待接入。请到「设置 → 语音识别」切换服务商，或改用「本地（隐私优先）」后再开始转写。",
         provider.label()
     )
 }
@@ -336,15 +355,10 @@ mod tests {
     }
 
     #[test]
-    fn only_aliyun_cloud_protocol_is_implemented() {
-        // P1：阿里云百炼已接入；其余服务商保持「待接入」并由命令层给出可操作错误
-        assert!(CloudAsrProvider::Aliyun.implemented());
-        for provider in [
-            CloudAsrProvider::Xfyun,
-            CloudAsrProvider::Tencent,
-            CloudAsrProvider::OpenaiCompat,
-        ] {
-            assert!(!provider.implemented(), "{} 尚未接入", provider.as_str());
+    fn all_cloud_protocols_are_implemented() {
+        // TODO-10 / TODO-11：四家服务商均已接入（2026-11 起全量放开）
+        for provider in all_cloud_providers() {
+            assert!(provider.implemented(), "{} 应已接入", provider.as_str());
         }
     }
 

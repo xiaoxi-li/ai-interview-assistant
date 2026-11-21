@@ -138,7 +138,7 @@ export function missingCredentials(
 export const ASR_PROVIDER_FIELDS: Record<string, string[]> = {
   xfyun: ["app_id", "api_key", "api_secret"],
   aliyun: ["api_key"],
-  tencent: ["secret_id", "secret_key"],
+  tencent: ["app_id", "secret_id", "secret_key"],
   openai_compatible: ["api_key"],
 };
 

@@ -827,22 +827,36 @@ fn ensure_cloud_ready(
     Ok(())
 }
 
-/// 读取当前服务商的 API Key（存于系统钥匙链）
-fn load_asr_api_key(
+/// 读取当前服务商的全部凭证（存于系统钥匙链；TODO-10/11 多字段凭证）
+///
+/// 返回以 [`crate::config::asr::CloudAsrProvider::credential_fields`] 为键的映射；
+/// 任一必需字段缺失或为空即返回可操作错误。
+fn load_asr_credentials(
     state: &AppState,
     provider: crate::config::asr::CloudAsrProvider,
-) -> Result<String, String> {
-    let reference = crate::security::asr_credential_ref(provider.as_str(), "api_key");
-    state
-        .secrets
-        .get(&reference)?
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| {
-            format!(
-                "{}：尚未配置 API Key，请到「设置 → 语音识别」填写服务商凭证后再开始转写。",
-                provider.label()
-            )
-        })
+) -> Result<std::collections::BTreeMap<String, String>, String> {
+    let mut credentials = std::collections::BTreeMap::new();
+    for field in provider.credential_fields() {
+        let reference = crate::security::asr_credential_ref(provider.as_str(), field);
+        let value = state
+            .secrets
+            .get(&reference)?
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        match value {
+            Some(value) => {
+                credentials.insert(field.to_string(), value);
+            }
+            None => {
+                return Err(format!(
+                    "{}：尚未配置凭证字段「{}」，请到「设置 → 语音识别」填写服务商凭证后再开始转写。",
+                    provider.label(),
+                    crate::asr::credential_field_label(field)
+                ));
+            }
+        }
+    }
+    Ok(credentials)
 }
 
 /// 构造单路转写通道（IA-16）：本地走「VAD 分段 + 段级识别」，云端走实时 WS 引擎
@@ -870,7 +884,7 @@ fn build_transcript_channel(
                 base_url: config.base_url_for(config.cloud_provider),
                 model: config.model.clone(),
                 language: config.language.clone(),
-                api_key: load_asr_api_key(state, config.cloud_provider)?,
+                credentials: load_asr_credentials(state, config.cloud_provider)?,
                 channel: channel.to_string(),
             };
             // 连接与握手在此同步完成：凭证/地址/模型错误在「开始转写」时立即返回
@@ -2650,8 +2664,8 @@ pub fn test_cloud_asr_connection(
     if !config.cloud_provider.implemented() {
         return Ok(fail(unsupported_cloud_provider_error(config.cloud_provider)));
     }
-    let api_key = match load_asr_api_key(&state, config.cloud_provider) {
-        Ok(api_key) => api_key,
+    let credentials = match load_asr_credentials(&state, config.cloud_provider) {
+        Ok(credentials) => credentials,
         Err(message) => return Ok(fail(message)),
     };
 
@@ -2660,14 +2674,16 @@ pub fn test_cloud_asr_connection(
         base_url: config.base_url_for(config.cloud_provider),
         model: config.model.clone(),
         language: config.language.clone(),
-        api_key,
+        credentials,
         channel: "test".to_string(),
     };
 
     let started = Instant::now();
     match crate::asr::connect_cloud_engine(spec) {
         Ok(mut engine) => {
-            // 立即结束任务并回收连接，不残留后台线程
+            // 立即结束任务并回收连接，不残留后台线程。
+            // OpenAI 兼容（HTTP 转写）：connect 阶段已发送受控的最小测试音频，
+            // 鉴权与端点可用性已在建连时验证，finish 只做资源回收。
             let _ = engine.finish();
             let latency = started.elapsed().as_millis() as u64;
             Ok(ConnectionTest {

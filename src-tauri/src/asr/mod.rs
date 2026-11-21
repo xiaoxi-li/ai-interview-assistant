@@ -1,7 +1,8 @@
 //! ASR 子系统。
 //!
 //! * **本地通路（P0，默认）**：本地引擎 + VAD 分段 + 段级识别，音频不出本机；
-//! * **云端通路（P1，IA-16）**：`cloud/` 下按服务商实现实时识别（阿里云百炼已接入），
+//! * **云端通路（P1，IA-16）**：`cloud/` 下按服务商实现实时识别——阿里云百炼、
+//!   讯飞、腾讯走 WebSocket，OpenAI 兼容走 HTTP 转写（TODO-10/11 起全量接入），
 //!   经 [`channel::AsrChannel`] 与本地共用同一套采集泵 / 事件 / 落库 / 问题识别链路。
 
 pub mod channel;
@@ -21,6 +22,8 @@ pub use dual::{DualChannelSession, REFERENCE_WINDOW_MS};
 pub use engine::{LocalAsrEngine, ReplayEngine, SherpaOnnxEngine, LOCAL_ASR_MODEL_ID};
 pub use pipeline::{AsrPipeline, DEFAULT_PARTIAL_INTERVAL_MS};
 pub use store::{SessionDto, TranscriptRepo, TranscriptSegmentDto};
+
+pub use crate::config::asr::credential_field_label;
 
 use crate::providers::types::Speaker;
 use std::sync::mpsc::Sender;

@@ -49,6 +49,11 @@ tokio-tungstenite = { version = "0.24", default-features = false, features = [
     "native-tls",
 ] }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+# IA-16.9（TODO-10/11）：讯飞（HMAC-SHA256 签名）/ 腾讯（HMAC-SHA1 签名）鉴权与
+# OpenAI 兼容 multipart 上传所需的通用算法库
+hmac = "0.12"
+sha1 = "0.10"
+base64 = "0.22"
 
 # IA-14：Windows 系统音频走 WASAPI 端点级回环（cpal 无此能力），仅 Windows 目标引入
 [target.'cfg(windows)'.dependencies]

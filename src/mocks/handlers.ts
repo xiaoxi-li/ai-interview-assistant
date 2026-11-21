@@ -545,16 +545,16 @@ export async function mockInvoke<T>(
           defaultModel: "iat",
           credentialFields: ["app_id", "api_key", "api_secret"],
           defaultBaseUrl: "wss://ws-api.xfyun.cn/v2/iat",
-          implemented: false,
+          implemented: true,
           usesWebsocket: true,
         },
         {
           provider: "tencent",
           label: "腾讯云语音识别",
           defaultModel: "16k_zh",
-          credentialFields: ["secret_id", "secret_key"],
+          credentialFields: ["app_id", "secret_id", "secret_key"],
           defaultBaseUrl: "wss://asr.cloud.tencent.com/asr/v2",
-          implemented: false,
+          implemented: true,
           usesWebsocket: true,
         },
         {
@@ -563,7 +563,7 @@ export async function mockInvoke<T>(
           defaultModel: "whisper-1",
           credentialFields: ["api_key"],
           defaultBaseUrl: "https://api.openai.com/v1",
-          implemented: false,
+          implemented: true,
           usesWebsocket: false,
         },
       ] as T;
@@ -587,7 +587,7 @@ export async function mockInvoke<T>(
       return {
         ok: true,
         latencyMs: 128,
-        message: "阿里云智能语音 连接成功（128ms）",
+        message: "连接成功（128ms）",
       } as T;
 
     case "get_asr_credential_status":
@@ -599,7 +599,7 @@ export async function mockInvoke<T>(
         provider === "xfyun"
           ? ["app_id", "api_key", "api_secret"]
           : provider === "tencent"
-            ? ["secret_id", "secret_key"]
+            ? ["app_id", "secret_id", "secret_key"]
             : ["api_key"];
       return {
         provider,

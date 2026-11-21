@@ -24,16 +24,16 @@ const providers: AsrProviderPreset[] = [
     defaultModel: "iat",
     credentialFields: ["app_id", "api_key", "api_secret"],
     defaultBaseUrl: "wss://ws-api.xfyun.cn/v2/iat",
-    implemented: false,
+    implemented: true,
     usesWebsocket: true,
   },
   {
     provider: "tencent",
     label: "腾讯云语音识别",
     defaultModel: "16k_zh",
-    credentialFields: ["secret_id", "secret_key"],
+    credentialFields: ["app_id", "secret_id", "secret_key"],
     defaultBaseUrl: "wss://asr.cloud.tencent.com/asr/v2",
-    implemented: false,
+    implemented: true,
     usesWebsocket: true,
   },
 ];
@@ -235,15 +235,17 @@ describe("AsrSettingsSection", () => {
     expect(screen.getByText(/该路径属于 HTTP 接口/)).toBeTruthy();
   });
 
-  it("标注服务商接入状态：已接入 / 待接入", () => {
+  it("标注服务商接入状态：TODO-10/11 落地后四家全部已接入", () => {
     setup();
-    expect(screen.getByText("已接入")).toBeTruthy();
-    expect(screen.getAllByText("待接入").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("已接入").length).toBeGreaterThanOrEqual(3);
+    // 不应再有「待接入」标注
+    expect(screen.queryByText("待接入")).toBeNull();
   });
 
-  it("选中未接入服务商时给出待接入提示", () => {
+  it("全部服务商可保存配置且不再出现待接入提示", () => {
     setup();
-    expect(screen.getByText(/「讯飞开放平台」协议待接入/)).toBeTruthy();
+    expect(screen.queryByText(/协议待接入/)).toBeNull();
+    fireEvent.click(screen.getByText("保存配置"));
   });
 
   it("保存配置回传含各服务商 Base URL 的草稿", () => {
