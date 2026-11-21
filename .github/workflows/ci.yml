@@ -74,3 +74,10 @@ jobs:
 
       - name: 编译检查（含二进制目标）
         run: cargo build --manifest-path src-tauri/Cargo.toml
+
+      # TODO-07：本地 ONNX 嵌入（local-embed-native）默认关闭，单独校验防特性腐烂。
+      # 构建期由 ort 的 download-binaries 取回 ONNX Runtime（约 11MB），无需 libclang。
+      # 仅在 Windows 跑一次，避免重复占用 macOS 机器时间。
+      - name: 本地嵌入特性 · 编译与单测（Windows）
+        if: runner.os == 'Windows'
+        run: cargo test --manifest-path src-tauri/Cargo.toml --features local-embed-native --lib
