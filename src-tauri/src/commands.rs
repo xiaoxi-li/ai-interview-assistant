@@ -313,6 +313,11 @@ pub fn save_interface_config(
 }
 
 /// 应用隐身模式到主窗口（置顶 / 防录屏）
+///
+/// 防捕获走 [`crate::window_privacy::set_hide_from_capture`]：
+/// Windows 上优先 `WDA_EXCLUDEFROMCAPTURE`（屏幕共享 / 录屏 / 截屏中**完全不可见**，
+/// 含腾讯会议 / 钉钉共享整个屏幕场景），旧系统回退 `WDA_MONITOR`（黑块）；macOS 沿用
+/// Tauri `set_content_protected`（`NSWindow.sharingType = .none`）。
 fn apply_stealth_window(app: &tauri::AppHandle, config: &crate::config::interface::InterfaceConfig) {
     use tauri::Manager;
 
@@ -322,7 +327,7 @@ fn apply_stealth_window(app: &tauri::AppHandle, config: &crate::config::interfac
     if let Err(err) = window.set_always_on_top(config.always_on_top) {
         tracing::warn!("设置窗口置顶失败：{err}");
     }
-    if let Err(err) = window.set_content_protected(config.hide_from_capture) {
+    if let Err(err) = crate::window_privacy::set_hide_from_capture(&window, config.hide_from_capture) {
         tracing::warn!("设置防录屏失败（当前平台可能不支持）：{err}");
     }
 }
@@ -565,10 +570,12 @@ fn capture_status(state: &AppState) -> Result<CaptureStatus, String> {
 /// 列出可作为「系统音频（面试官）」来源的设备
 ///
 /// Windows：全部播放设备（IA-14 端点级回环）；其他平台：虚拟回环输入设备。
+/// TODO-03：`force = true` 时旁路 1.5s 设备枚举缓存（「重新检测」/ 窗口聚焦刷新）。
 #[tauri::command(async)]
-pub async fn list_loopback_devices() -> Result<Vec<crate::audio::DeviceInfo>, String> {
+pub async fn list_loopback_devices(force: Option<bool>) -> Result<Vec<crate::audio::DeviceInfo>, String> {
     // WASAPI 枚举耗时不确定，走阻塞线程池 + 设备列表 TTL 缓存（NFR-17）
-    run_blocking(|| Ok(crate::audio::system_source_devices())).await
+    let force = force.unwrap_or(false);
+    run_blocking(move || Ok(crate::audio::system_source_devices_cached(force))).await
 }
 
 /// 查询当前采集状态
@@ -600,7 +607,11 @@ pub fn start_audio_capture(
             .ok_or_else(|| format!("未知的采集来源：{source}"))?;
         let _ = crate::audio::AudioCapture::stop(capture);
 
-        let device = device_id.unwrap_or_default();
+        // TODO-04：未指定设备时回退系统默认（麦克风 → 默认输入；系统音频 → 默认播放），
+        // 与双通道转写的设备解析保持一致，避免「未指定音频设备」硬报错。
+        let prefer_loopback = source == "system";
+        let requested = device_id.unwrap_or_default();
+        let device = resolve_capture_device(&requested, prefer_loopback)?;
         capture.start(&device)?;
         let events = capture.take_events()?;
         (events, source)
@@ -909,7 +920,11 @@ pub fn start_asr_session(
         let capture = manager
             .capture_mut(&source)
             .ok_or_else(|| format!("未知的采集来源：{source}"))?;
-        capture.start(device_id.as_deref().unwrap_or(""))?;
+        // TODO-04：未指定设备时回退系统默认（与双通道的设备解析一致）
+        let prefer_loopback = source == "system";
+        let requested = device_id.unwrap_or_default();
+        let device = resolve_capture_device(&requested, prefer_loopback)?;
+        capture.start(&device)?;
         let audio_rx = capture.take_events()?;
         audio_rx
     };

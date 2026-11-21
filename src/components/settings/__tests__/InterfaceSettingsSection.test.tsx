@@ -190,4 +190,39 @@ describe("InterfaceSettingsSection", () => {
     expect(await screen.findByText("开机自启已开启")).toBeTruthy();
     expect(useSettingsStore.getState().saveFeedback.interface?.kind).toBe("success");
   });
+
+  // ===== TODO-09：隐身模式开关进入设置表单（IA-11） =====
+
+  it("展示隐身模式两个开关且默认关闭", () => {
+    setup();
+    const onTop = screen.getByLabelText("窗口置顶") as HTMLInputElement;
+    const hide = screen.getByLabelText(/屏幕共享/) as HTMLInputElement;
+    expect(onTop.checked).toBe(false);
+    expect(hide.checked).toBe(false);
+  });
+
+  it("外部隐身配置变化反映到开关", () => {
+    setup({
+      config: { ...config, alwaysOnTop: true, hideFromCapture: true },
+    });
+    expect((screen.getByLabelText("窗口置顶") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(/屏幕共享/) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("勾选防捕获开关后保存回传（触发 set_content_protected 链路）", () => {
+    const h = setup();
+    fireEvent.click(screen.getByLabelText(/屏幕共享/));
+    fireEvent.click(screen.getByLabelText("窗口置顶"));
+    fireEvent.click(screen.getByText("保存配置"));
+
+    expect(h.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ hideFromCapture: true, alwaysOnTop: true })
+    );
+  });
+
+  it("防捕获开关说明覆盖共享 / 录屏场景", () => {
+    setup();
+    expect(screen.getByText(/腾讯会议、钉钉等共享画面/)).toBeTruthy();
+    expect(screen.getByText(/与面试页快捷条的隐身按钮共用配置/)).toBeTruthy();
+  });
 });

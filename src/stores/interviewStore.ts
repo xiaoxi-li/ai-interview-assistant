@@ -73,7 +73,7 @@ interface InterviewState {
   /** 最近一次召回使用的查询（便于排查召回质量） */
   recallQueries: string[];
 
-  loadCaptureStatus: () => Promise<void>;
+  loadCaptureStatus: (force?: boolean) => Promise<void>;
   startCapture: (source: CaptureSource, deviceId?: string | null) => Promise<void>;
   stopCapture: () => Promise<void>;
   applyLevel: (level: number) => void;
@@ -166,20 +166,19 @@ export const useInterviewStore = create<InterviewState>((set, get) => {
     demoOfflineAnswer: false,
     demoRunning: false,
 
-    loadCaptureStatus: () =>
-      Promise.all([
-        ipc<CaptureStatus>("audio_capture_status"),
-        ipc<AudioDevice[]>("list_audio_devices"),
-        ipc<AudioDevice[]>("list_loopback_devices"),
-      ])
-        .then(([status, devices, systemSources]) =>
-          set({
-            status,
-            inputDevices: devices.filter((d) => d.kind === "input"),
-            systemDevices: systemSources,
-          })
-        )
-        .catch((err) => fail("读取采集状态", err)),
+    /** 读取采集状态与设备列表；`force = true` 强制旁路 1.5s 枚举缓存（TODO-03 重新检测） */
+    loadCaptureStatus: (force = false) =>
+      (async () => {
+        const status = await ipc<CaptureStatus>("audio_capture_status");
+        // 顺序调用：force 时两次枚举先后完成，避免并发读到「半新半旧」缓存
+        const devices = await ipc<AudioDevice[]>("list_audio_devices", { force });
+        const systemSources = await ipc<AudioDevice[]>("list_loopback_devices", { force });
+        set({
+          status,
+          inputDevices: devices.filter((d) => d.kind === "input"),
+          systemDevices: systemSources,
+        });
+      })().catch((err) => fail("读取采集状态", err)),
 
     startCapture: (source, deviceId) => {
       set({ starting: true, error: null });

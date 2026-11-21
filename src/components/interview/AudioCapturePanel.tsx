@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Mic, Play, Square, Volume2, Waves } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Mic, Play, RefreshCw, Square, Volume2, Waves } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useAudioLevel } from "../../hooks/useAudioLevel";
 import { useInterviewStore, type CaptureSource } from "../../stores/interviewStore";
@@ -21,6 +21,7 @@ export default function AudioCapturePanel() {
 
   const [source, setSource] = useState<CaptureSource>("system");
   const [deviceId, setDeviceId] = useState<string>("");
+  const [refreshing, setRefreshing] = useState(false);
 
   // 实时电平
   useAudioLevel(applyLevel);
@@ -33,6 +34,39 @@ export default function AudioCapturePanel() {
   const activeBars = Math.round(level * LEVEL_BARS);
   // 系统音频的来源是「播放设备」（Windows 端点级回环）或虚拟回环设备，与麦克风列表不同
   const devices = source === "system" ? systemDevices : inputDevices;
+
+  /** TODO-03：重新检测设备（强制旁路枚举缓存），并丢弃已失效的设备选择 */
+  const refreshDevices = useCallback(
+    (force = true) => {
+      setRefreshing(true);
+      return loadCaptureStatus(force).finally(() => setRefreshing(false));
+    },
+    [loadCaptureStatus]
+  );
+
+  // 窗口重新聚焦时自动刷新：插拔设备/启用设备后回到应用即可看到新列表（TODO-03）
+  useEffect(() => {
+    const onFocus = () => {
+      if (!document.hidden) refreshDevices();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refreshDevices]);
+
+  // 浏览器调试模式下的设备热插拔事件（Tauri WebView 中未必触发，聚焦刷新兜底）
+  useEffect(() => {
+    if (!navigator.mediaDevices?.addEventListener) return;
+    const onChange = () => refreshDevices();
+    navigator.mediaDevices.addEventListener("devicechange", onChange);
+    return () => navigator.mediaDevices?.removeEventListener("devicechange", onChange);
+  }, [refreshDevices]);
+
+  // 设备列表变化后，已选设备若不在列表中（被拔出/禁用）则回退「系统默认」
+  useEffect(() => {
+    if (!deviceId) return;
+    const stillPresent = devices.some((device) => device.id === deviceId);
+    if (!stillPresent) setDeviceId("");
+  }, [devices, deviceId]);
 
   const handleToggle = () => {
     if (running) {
@@ -92,21 +126,33 @@ export default function AudioCapturePanel() {
 
       {/* 设备选择 */}
       <div className="mb-3">
-        <select
-          aria-label="采集设备"
-          value={deviceId}
-          disabled={running}
-          onChange={(e) => setDeviceId(e.target.value)}
-          className="focus-ring w-full cursor-pointer rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-2 text-[12px] text-text outline-none focus:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <option value="">使用系统默认设备</option>
-          {devices.map((device) => (
-            <option key={device.id} value={device.id}>
-              {device.name}
-              {device.isDefault ? "（系统默认）" : ""}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-1.5">
+          <select
+            aria-label="采集设备"
+            value={deviceId}
+            disabled={running}
+            onChange={(e) => setDeviceId(e.target.value)}
+            className="focus-ring min-w-0 flex-1 cursor-pointer rounded-lg border border-ghost/10 bg-background-3/60 px-3 py-2 text-[12px] text-text outline-none focus:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <option value="">使用系统默认设备</option>
+            {devices.map((device) => (
+              <option key={device.id} value={device.id}>
+                {device.name}
+                {device.isDefault ? "（系统默认）" : ""}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            aria-label="重新检测设备"
+            title="重新检测设备（接入新设备后点击，或切回本窗口自动刷新）"
+            onClick={() => refreshDevices(true)}
+            disabled={refreshing}
+            className="focus-ring flex h-[34px] shrink-0 cursor-pointer items-center justify-center rounded-lg border border-ghost/10 bg-background-3/60 px-2.5 text-text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+          </button>
+        </div>
       </div>
 
       {/* 电平表 */}

@@ -8,7 +8,7 @@
 //! 因此采集流必须由**专用线程持有**，对外只暴露可跨线程传递的句柄 [`CpalCapture`]。
 
 use super::capture::{self, FRAME_MS};
-use super::devices::{list_devices, DeviceInfo, DeviceKind};
+use super::devices::{list_devices_cached, DeviceInfo, DeviceKind};
 use super::worker::CaptureWorker;
 use super::AudioCapture;
 use crate::knowledge::store::now_ms;
@@ -43,12 +43,17 @@ pub fn find_loopback_device(devices: &[DeviceInfo]) -> Option<&DeviceInfo> {
         .find(|device| is_loopback_device_name(&device.name))
 }
 
-/// 可用的回环设备列表
-pub fn loopback_candidates() -> Vec<DeviceInfo> {
-    list_devices()
+/// 可用的回环设备列表（带缓存控制，force = true 强制重新枚举）
+pub fn loopback_candidates_cached(force: bool) -> Vec<DeviceInfo> {
+    list_devices_cached(force)
         .into_iter()
         .filter(|device| device.kind == DeviceKind::Input && is_loopback_device_name(&device.name))
         .collect()
+}
+
+/// 可用的回环设备列表
+pub fn loopback_candidates() -> Vec<DeviceInfo> {
+    loopback_candidates_cached(false)
 }
 
 /// 将新到的交错样本追加进缓冲区，攒满一帧就转换并投递。

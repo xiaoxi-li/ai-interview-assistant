@@ -91,6 +91,8 @@ export async function mockInvoke<T>(
         ],
         autoStart: false,
         trayBehavior: "minimize",
+        alwaysOnTop: false,
+        hideFromCapture: false,
       } as T;
 
     case "save_interface_config":

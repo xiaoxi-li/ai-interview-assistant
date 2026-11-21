@@ -20,6 +20,7 @@ pub mod security;
 pub mod storage;
 pub mod tray;
 pub mod update;
+pub mod window_privacy;
 
 /// 应用基础信息（用于验证前后端 IPC 通路）
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -112,8 +113,14 @@ pub fn run() {
                 loaded.unwrap_or_default()
             };
             if let Some(window) = app.get_webview_window("main") {
+                // 防捕获统一走平台原生模块（Windows：SetWindowDisplayAffinity，
+                // 优先 WDA_EXCLUDEFROMCAPTURE，屏幕共享/录屏中完全不可见）
                 let _ = window.set_always_on_top(interface_config.always_on_top);
-                let _ = window.set_content_protected(interface_config.hide_from_capture);
+                if let Err(err) =
+                    window_privacy::set_hide_from_capture(&window, interface_config.hide_from_capture)
+                {
+                    tracing::warn!("启动时恢复防录屏开关失败：{err}");
+                }
             }
 
             // IA-11：注册全局快捷键（失败仅告警，不阻断启动）

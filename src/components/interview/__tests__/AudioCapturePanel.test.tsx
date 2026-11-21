@@ -156,4 +156,55 @@ describe("AudioCapturePanel", () => {
     render(<AudioCapturePanel />);
     expect(screen.getByText("未找到输入设备：abc")).toBeTruthy();
   });
+
+  // ===== TODO-03：重新检测 / 聚焦刷新 / 失效设备 =====
+
+  it("点击重新检测按钮会强制刷新设备列表", () => {
+    const loadCaptureStatus = vi.fn().mockResolvedValue(undefined);
+    resetStore({ loadCaptureStatus });
+    render(<AudioCapturePanel />);
+
+    fireEvent.click(screen.getByLabelText("重新检测设备"));
+    expect(loadCaptureStatus).toHaveBeenCalledWith(true);
+  });
+
+  it("窗口聚焦时自动刷新设备列表", () => {
+    const loadCaptureStatus = vi.fn().mockResolvedValue(undefined);
+    resetStore({ loadCaptureStatus });
+    render(<AudioCapturePanel />);
+
+    // 挂载时读一次（非强制），聚焦时再刷新
+    fireEvent.focus(window);
+    expect(loadCaptureStatus).toHaveBeenCalledWith(true);
+  });
+
+  it("设备列表更新后已选设备失效时回退系统默认", () => {
+    const { rerender } = render(<AudioCapturePanel />);
+    fireEvent.click(screen.getByText("麦克风（我）"));
+    fireEvent.change(screen.getByLabelText("采集设备"), {
+      target: { value: "mic-usb" },
+    });
+
+    // 设备被拔出：列表中不再包含 mic-usb
+    useInterviewStore.setState({
+      inputDevices: [
+        { id: "mix-realtek", name: "立体声混音 (Realtek)", kind: "input", isDefault: true },
+      ],
+    });
+    rerender(<AudioCapturePanel />);
+
+    const select = screen.getByLabelText("采集设备") as HTMLSelectElement;
+    expect(select.value).toBe("");
+  });
+
+  it("设备刷新中重新检测按钮禁用并显示旋转图标", () => {
+    const pending = new Promise<void>(() => {});
+    const loadCaptureStatus = vi.fn().mockReturnValue(pending);
+    resetStore({ loadCaptureStatus });
+    render(<AudioCapturePanel />);
+
+    fireEvent.click(screen.getByLabelText("重新检测设备"));
+    const button = screen.getByLabelText("重新检测设备") as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+  });
 });

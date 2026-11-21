@@ -68,6 +68,9 @@ temp/
 .codebuddy/
 .claude/
 
+# ===== 个人宣发草稿（不入库） =====
+ai-doc/B站视频脚本*.md
+
 # ===== 本地构建前置（IA-15）：libclang =====
 # bin/libclang.dll 入库（80MB），clone 后带 local-asr-native 构建可直接用，见 .libclang/README.md。
 # 其余是本机下载/解压的中间物，不入库。

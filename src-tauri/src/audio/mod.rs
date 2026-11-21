@@ -18,7 +18,7 @@ pub use capture::{
     error_chunk, frame_samples, normalize_to_16k_mono, to_audio_chunk, FRAME_SAMPLES,
     TARGET_SAMPLE_RATE,
 };
-pub use devices::{list_by_kind, list_devices, DeviceInfo, DeviceKind};
+pub use devices::{list_by_kind, list_devices, list_devices_cached, DeviceInfo, DeviceKind};
 #[cfg(windows)]
 pub use loopback::WasapiLoopbackCapture;
 pub use mic::{find_loopback_device, is_loopback_device_name, loopback_candidates, CpalCapture};
@@ -50,9 +50,9 @@ pub type SystemCapture = loopback::WasapiLoopbackCapture;
 #[cfg(not(windows))]
 pub type SystemCapture = mic::CpalCapture;
 
-/// 全部播放（渲染）设备，系统默认设备排在最前
-pub fn render_devices() -> Vec<DeviceInfo> {
-    let mut outputs: Vec<DeviceInfo> = list_devices()
+/// 全部播放（渲染）设备，系统默认设备排在最前（带缓存控制，force = true 强制重新枚举）
+pub fn render_devices_cached(force: bool) -> Vec<DeviceInfo> {
+    let mut outputs: Vec<DeviceInfo> = list_devices_cached(force)
         .into_iter()
         .filter(|device| device.kind == DeviceKind::Output)
         .collect();
@@ -60,9 +60,31 @@ pub fn render_devices() -> Vec<DeviceInfo> {
     outputs
 }
 
+/// 全部播放（渲染）设备，系统默认设备排在最前
+pub fn render_devices() -> Vec<DeviceInfo> {
+    render_devices_cached(false)
+}
+
 /// 系统默认播放（渲染）设备名称；无输出设备时返回 `None`
 pub fn default_render_device_name() -> Option<String> {
     render_devices().first().map(|device| device.name.clone())
+}
+
+/// 可作为「系统音频（面试官）」来源的设备（带缓存控制，force = true 强制重新枚举）
+///
+/// * Windows：全部**播放设备**（端点级回环，选中任意一个即可采集其输出）；
+/// * 其他平台：名称匹配到的虚拟回环输入设备（BlackHole 等）。
+///
+/// TODO-03：「重新检测」等需要即时性的入口传 `force = true` 旁路 1.5s 缓存。
+#[cfg(windows)]
+pub fn system_source_devices_cached(force: bool) -> Vec<DeviceInfo> {
+    render_devices_cached(force)
+}
+
+/// 可作为「系统音频（面试官）」来源的设备（非 Windows 走虚拟回环设备，带缓存控制）
+#[cfg(not(windows))]
+pub fn system_source_devices_cached(force: bool) -> Vec<DeviceInfo> {
+    crate::audio::mic::loopback_candidates_cached(force)
 }
 
 /// 可作为「系统音频（面试官）」来源的设备

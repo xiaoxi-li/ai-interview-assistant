@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Monitor, Moon, Power, Save, Sun } from "lucide-react";
+import { AlertCircle, EyeOff, Monitor, Moon, Pin, Power, Save, Sun } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { SaveFeedback } from "./SaveFeedback";
 import { HOTKEY_ACTIONS, updateBinding, validateHotkeys } from "../../lib/hotkeys";
@@ -116,6 +116,54 @@ export default function InterfaceSettingsSection({
         </div>
         <p className="mt-1.5 text-[10px] text-text-subtle">
           点击输入框后按下组合键即可录制，Backspace 清空，Esc 取消
+        </p>
+      </div>
+
+      {/* 隐身模式（IA-11 / TODO-09）：与面试页快捷条共用同一份配置，保存即生效 */}
+      <div className="mb-4">
+        <span className={LABEL}>隐身模式</span>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <label className="flex cursor-pointer items-start gap-3 rounded-md border border-ghost/[0.06] bg-background-3/40 p-3">
+            <Pin className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[12px] font-medium text-text">窗口置顶</span>
+              <span className="mt-0.5 block text-[11px] text-text-muted">
+                主窗口始终保持在其他应用之上，面试中随时可见
+              </span>
+            </span>
+            <input
+              id="interface-always-on-top"
+              aria-label="窗口置顶"
+              type="checkbox"
+              checked={draft.alwaysOnTop}
+              onChange={(e) => setDraft({ ...draft, alwaysOnTop: e.target.checked })}
+              className="focus-ring mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded accent-primary"
+            />
+          </label>
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-md border border-ghost/[0.06] bg-background-3/40 p-3">
+            <EyeOff className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[12px] font-medium text-text">
+                屏幕共享 / 录屏时隐藏
+              </span>
+              <span className="mt-0.5 block text-[11px] text-text-muted">
+                开启后本窗口不出现在腾讯会议、钉钉等共享画面与录屏、截屏中（Windows
+                10 2004+ 完全隐藏；旧系统显示为黑色）
+              </span>
+            </span>
+            <input
+              id="interface-hide-from-capture"
+              aria-label="屏幕共享 / 录屏时隐藏"
+              type="checkbox"
+              checked={draft.hideFromCapture}
+              onChange={(e) => setDraft({ ...draft, hideFromCapture: e.target.checked })}
+              className="focus-ring mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded accent-primary"
+            />
+          </label>
+        </div>
+        <p className="mt-1.5 text-[10px] text-text-subtle">
+          两个开关与面试页快捷条的隐身按钮共用配置；此处勾选后需点「保存配置」生效
         </p>
       </div>
 
