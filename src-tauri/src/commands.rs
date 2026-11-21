@@ -578,6 +578,41 @@ pub async fn list_loopback_devices(force: Option<bool>) -> Result<Vec<crate::aud
     run_blocking(move || Ok(crate::audio::system_source_devices_cached(force))).await
 }
 
+/// 列出有音频会话的进程（TODO-05 进程级回环的目标选择）
+///
+/// Windows：默认播放设备上的活跃音频会话对应进程（去重、活跃优先）；
+/// 其他平台返回空列表（进程回环仅支持 Windows 10 2004+）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioProcess {
+    pub pid: u32,
+    pub name: String,
+    pub active: bool,
+}
+
+#[tauri::command(async)]
+pub async fn list_audio_processes() -> Result<Vec<AudioProcess>, String> {
+    #[cfg(windows)]
+    {
+        run_blocking(|| {
+            let processes = crate::audio::process_loopback::enumerate_audio_processes()?;
+            Ok(processes
+                .into_iter()
+                .map(|process| AudioProcess {
+                    pid: process.pid,
+                    name: process.name,
+                    active: process.active,
+                })
+                .collect())
+        })
+        .await
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(Vec::new())
+    }
+}
+
 /// 查询当前采集状态
 #[tauri::command(async)]
 pub fn audio_capture_status(state: State<'_, AppState>) -> Result<CaptureStatus, String> {
@@ -585,6 +620,8 @@ pub fn audio_capture_status(state: State<'_, AppState>) -> Result<CaptureStatus,
 }
 
 /// 启动音频采集（source: mic / system），并推送音量电平事件 `audio://level`
+///
+/// 系统音频来源在配置了进程回环目标时自动切换到「只采集该进程树」（TODO-05）。
 #[tauri::command(async)]
 pub fn start_audio_capture(
     app: tauri::AppHandle,
@@ -598,6 +635,9 @@ pub fn start_audio_capture(
     if state.asr_lock()?.is_running() {
         return Err("本地 ASR 会话进行中，采集事件流已被转写占用；请先停止转写再单独试听电平。".into());
     }
+
+    // 系统音频（面试官）来源：配置了进程回环目标时改走进程通道（TODO-05）
+    let (source, device_id) = resolve_system_capture(&state, source, device_id);
 
     let (events, source_label) = {
         let mut manager = state.capture_lock()?;
@@ -918,6 +958,9 @@ pub fn start_asr_session(
         crate::config::interview::load_question_config(&conn).map_err(|e| e.to_string())?
     };
 
+    // 系统音频来源：配置了进程回环目标时改走「只采集该进程树」（TODO-05）
+    let (source, device_id) = resolve_system_capture(&state, source, device_id);
+
     // 2) 构造转写通道；本地模型缺失 / 云端连接失败都会在此返回可操作错误
     let channel = build_transcript_channel(&state, &config, speaker, &source)?;
     let engine_name = channel.name().to_string();
@@ -1087,6 +1130,40 @@ pub fn start_asr_session(
 }
 
 // ==================== 双通道会话（IA-05 说话人区分） ====================
+
+/// 系统音频（面试官）来源的实际通道与设备参数（TODO-05 进程级回环）
+///
+/// 配置了 `process_loopback_pid` 时，把 `system` 来源改写为 `process` 通道 +
+/// `pid:<n>` 目标；未配置时保持端点级回环（`system` + 原设备解析）。
+/// 麦克风来源原样透传。
+fn resolve_system_capture(
+    state: &AppState,
+    source: String,
+    device_id: Option<String>,
+) -> (String, Option<String>) {
+    if source != "system" {
+        return (source, device_id);
+    }
+    let process_target = {
+        let Ok(conn) = state.lock() else {
+            return (source, device_id);
+        };
+        crate::config::audio::load_audio_config(&conn)
+            .ok()
+            .and_then(|config| config.process_loopback_pid)
+    };
+    #[cfg(windows)]
+    if let Some(pid) = process_target {
+        return ("process".to_string(), Some(format!("pid:{pid}")));
+    }
+    #[cfg(not(windows))]
+    {
+        if process_target.is_some() {
+            tracing::warn!("已配置进程回环目标，但当前平台不支持（仅 Windows 10 2004+），回退端点级回环");
+        }
+    }
+    (source, device_id)
+}
 
 /// 解析实际使用的采集设备名：未指定时自动挑选
 ///
@@ -1350,15 +1427,30 @@ pub fn start_dual_asr_session(
     let system_channel =
         build_transcript_channel(&state, &asr_config, Speaker::Interviewer, "system")?;
 
-    // 3) 解析设备
+    // 3) 解析设备（系统音频来源在配置进程回环目标时改走 process 通道，TODO-05）
     let mic_requested = mic_device_id
         .or_else(|| audio_config.mic_device_id.clone())
         .unwrap_or_default();
-    let system_requested = system_device_id
-        .or_else(|| audio_config.system_device_id.clone())
-        .unwrap_or_default();
+    let (system_source, system_target) = {
+        let (source, device) = resolve_system_capture(
+            &state,
+            "system".to_string(),
+            system_device_id
+                .or_else(|| audio_config.system_device_id.clone()),
+        );
+        let device = device.unwrap_or_default();
+        match source.as_str() {
+            #[cfg(windows)]
+            "process" => (source, device),
+            _ => ("system".to_string(), device),
+        }
+    };
     let mic_device = resolve_capture_device(&mic_requested, false)?;
-    let system_device = resolve_capture_device(&system_requested, true)?;
+    let system_device = if system_source == "system" {
+        resolve_capture_device(&system_target, true)?
+    } else {
+        system_target
+    };
 
     // 4) 停止既有会话与采集，启动双路
     {
@@ -1372,8 +1464,11 @@ pub fn start_dual_asr_session(
         manager.stop_all();
         manager.mic.start(&mic_device)?;
         let mic_rx = manager.mic.take_events()?;
-        manager.system.start(&system_device)?;
-        let system_rx = manager.system.take_events()?;
+        let system_capture = manager
+            .capture_mut(&system_source)
+            .ok_or_else(|| format!("未知的采集来源：{system_source}"))?;
+        system_capture.start(&system_device)?;
+        let system_rx = system_capture.take_events()?;
         (mic_rx, system_rx)
     };
 

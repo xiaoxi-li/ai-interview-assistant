@@ -437,6 +437,10 @@ export interface AsrCredentialStatus {
 export interface AudioConfig {
   micDeviceId: string | null;
   systemDeviceId: string | null;
+  /** 是否启用回声消除（可选：后端默认开启） */
+  aecEnabled?: boolean;
+  /** 进程级回环目标进程 PID（TODO-05）：null = 端点级回环（采集全部应用混音） */
+  processLoopbackPid?: number | null;
 }
 
 export type HotkeyAction =
@@ -484,6 +488,15 @@ export interface AudioDevice {
   /** input = 麦克风；output = 系统音频来源 */
   kind: "input" | "output";
   isDefault: boolean;
+}
+
+/** 有音频会话的进程（TODO-05 进程级回环的目标选择，仅 Windows） */
+export interface AudioProcess {
+  pid: number;
+  /** 进程可执行文件名（如 wemeetapp.exe） */
+  name: string;
+  /** 会话是否活跃（正在发声） */
+  active: boolean;
 }
 
 export interface ConnectionTestResult {

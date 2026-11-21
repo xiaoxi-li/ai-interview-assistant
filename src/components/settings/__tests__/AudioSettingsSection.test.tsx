@@ -61,6 +61,7 @@ describe("AudioSettingsSection", () => {
     expect(h.onSave).toHaveBeenCalledWith({
       micDeviceId: "mic-realtek",
       systemDeviceId: "spk-bt",
+      processLoopbackPid: null,
     });
   });
 
@@ -88,5 +89,56 @@ describe("AudioSettingsSection", () => {
   it("无设备时给出提示", () => {
     setup({ devices: [] });
     expect(screen.getByText(/未检测到音频设备/)).toBeTruthy();
+  });
+
+  // ===== TODO-05：进程级回环（系统音频采集范围） =====
+
+  it("默认系统音频采集范围为全部应用", () => {
+    setup();
+    const allApps = screen.getByText("全部应用（混音采集）").closest("button") as HTMLButtonElement;
+    expect(allApps.getAttribute("aria-pressed")).toBe("true");
+    // 未进入进程模式时不显示目标应用下拉
+    expect(screen.queryByLabelText("目标应用")).toBeNull();
+  });
+
+  it("配置了进程目标时进入进程模式并加载应用列表", async () => {
+    setup({
+      config: { micDeviceId: null, systemDeviceId: null, processLoopbackPid: 4212 },
+    });
+    const target = await screen.findByLabelText("目标应用") as HTMLSelectElement;
+    // mock 返回的进程列表（wemeetapp.exe 选中）
+    expect(target.value).toBe("4212");
+    expect(screen.getByText(/wemeetapp\.exe/)).toBeTruthy();
+  });
+
+  it("切换到只采集指定应用后进入待选状态，未选目标保存归一为 null", () => {
+    const h = setup();
+    fireEvent.click(screen.getByText("只采集指定应用"));
+
+    // 进入进程模式（待选状态）：下拉出现
+    expect(screen.getByLabelText("目标应用")).toBeTruthy();
+    // 未选目标时保存：processLoopbackPid 归一为 null（回退端点模式）
+    fireEvent.click(screen.getByText("保存配置"));
+    expect(h.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ processLoopbackPid: null })
+    );
+  });
+
+  it("切回全部应用清除进程目标", () => {
+    setup({
+      config: { micDeviceId: null, systemDeviceId: null, processLoopbackPid: 4212 },
+    });
+    fireEvent.click(screen.getByText("全部应用（混音采集）"));
+    fireEvent.click(screen.getByText("保存配置"));
+    // onSave 收到 null（端点级回环）
+    expect(
+      screen.getByText("全部应用（混音采集）").closest("button")!.getAttribute("aria-pressed")
+    ).toBe("true");
+  });
+
+  it("进程级回环说明覆盖 Windows 版本要求", () => {
+    setup();
+    expect(screen.getByText(/Windows 10 2004/)).toBeTruthy();
+    expect(screen.getByText(/背景音乐不会被混入/)).toBeTruthy();
   });
 });

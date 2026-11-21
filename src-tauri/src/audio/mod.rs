@@ -9,6 +9,8 @@ pub mod devices;
 #[cfg(windows)]
 pub mod loopback;
 pub mod mic;
+#[cfg(windows)]
+pub mod process_loopback;
 pub mod vad;
 pub mod wav;
 pub mod worker;

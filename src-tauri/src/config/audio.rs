@@ -18,6 +18,11 @@ pub struct AudioConfig {
     /// 是否启用回声消除（IA-02/IA-05）：以系统音频流为参考消除麦克风中的面试官回声
     #[serde(default = "default_true")]
     pub aec_enabled: bool,
+    /// 进程级回环目标进程 PID（TODO-05 / IA-14）：`Some(pid)` 时「面试官」通道只采集
+    /// 该进程树（如会议软件）的音频，避免背景音乐等一并混入；
+    /// `None` 时为端点级回环（采集整个播放设备的混音）。仅 Windows 10 2004+ 生效。
+    #[serde(default)]
+    pub process_loopback_pid: Option<u32>,
 }
 
 /// 新增字段默认值（兼容旧配置文件）
@@ -31,6 +36,7 @@ impl Default for AudioConfig {
             mic_device_id: None,
             system_device_id: None,
             aec_enabled: true,
+            process_loopback_pid: None,
         }
     }
 }
@@ -53,7 +59,9 @@ impl AudioConfig {
 
     /// 是否使用系统默认设备
     pub fn uses_defaults(&self) -> bool {
-        self.mic_device_id.is_none() && self.system_device_id.is_none()
+        self.mic_device_id.is_none()
+            && self.system_device_id.is_none()
+            && self.process_loopback_pid.is_none()
     }
 }
 
@@ -102,6 +110,7 @@ mod tests {
                 mic_device_id: Some("麦克风 (USB)".into()),
                 system_device_id: Some("扬声器 (Realtek)".into()),
                 aec_enabled: false,
+                process_loopback_pid: Some(12_345),
             };
             save_audio_config(conn, &config).expect("save");
             assert_eq!(load_audio_config(conn).expect("load"), config);
@@ -109,7 +118,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_config_without_aec_defaults_to_enabled() {
+    fn legacy_config_without_new_fields_parses() {
         with_db(|conn| {
             save_setting(
                 conn,
@@ -117,7 +126,24 @@ mod tests {
                 r#"{"micDeviceId":null,"systemDeviceId":null}"#,
             )
             .expect("save legacy");
-            assert!(load_audio_config(conn).expect("load").aec_enabled);
+            let loaded = load_audio_config(conn).expect("load");
+            assert!(loaded.aec_enabled, "旧配置 AEC 默认开启");
+            assert_eq!(
+                loaded.process_loopback_pid, None,
+                "旧配置进程回环目标默认为空（端点级回环）"
+            );
+        });
+    }
+
+    #[test]
+    fn process_loopback_config_round_trip() {
+        with_db(|conn| {
+            let config = AudioConfig {
+                process_loopback_pid: Some(9_999),
+                ..AudioConfig::default()
+            };
+            save_audio_config(conn, &config).expect("save");
+            assert_eq!(load_audio_config(conn).expect("load"), config);
         });
     }
 
@@ -163,6 +189,7 @@ mod tests {
                 mic_device_id: Some(" ".into()),
                 system_device_id: None,
                 aec_enabled: true,
+                process_loopback_pid: None,
             };
             assert!(save_audio_config(conn, &config).is_err());
         });

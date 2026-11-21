@@ -179,6 +179,7 @@ pub fn run() {
             commands::delete_asr_credentials,
             commands::analyze_vad_wav,
             commands::list_loopback_devices,
+            commands::list_audio_processes,
             commands::audio_capture_status,
             commands::start_audio_capture,
             commands::stop_audio_capture,

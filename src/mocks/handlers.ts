@@ -522,7 +522,20 @@ export async function mockInvoke<T>(
       ] as T;
 
     case "get_audio_config":
-      return { micDeviceId: null, systemDeviceId: null } as T;
+      return {
+        micDeviceId: null,
+        systemDeviceId: null,
+        aecEnabled: true,
+        processLoopbackPid: null,
+      } as T;
+
+    // TODO-05：有音频会话的进程（浏览器 mock 提供静态样例）
+    case "list_audio_processes":
+      return [
+        { pid: 4212, name: "wemeetapp.exe", active: true },
+        { pid: 8836, name: "chrome.exe", active: false },
+        { pid: 1024, name: "DingTalk.exe", active: false },
+      ] as T;
 
     case "save_audio_config":
       return (args?.config ?? null) as T;

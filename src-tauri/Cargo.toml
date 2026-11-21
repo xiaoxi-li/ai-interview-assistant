@@ -58,6 +58,18 @@ base64 = "0.22"
 # IA-14：Windows 系统音频走 WASAPI 端点级回环（cpal 无此能力），仅 Windows 目标引入
 [target.'cfg(windows)'.dependencies]
 wasapi = "0.24"
+# TODO-05（IA-14 进程级回环）：直接使用 windows COM 绑定实现 ApplicationLoopback
+# （ActivateAudioInterfaceAsync + AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK）；
+# 版本与 wasapi 的传递依赖对齐，避免多版本共存。`implement` 宏生成的代码引用
+# `windows_core` crate 路径，故需同时直接依赖 windows-core。
+windows = { version = "0.62", features = [
+    "Win32_Media_Audio",
+    "Win32_System_Com",
+    "Win32_System_Variant",
+    "Win32_Foundation",
+    "Win32_System_Threading",
+] }
+windows-core = "0.62"
 # IA-15：Windows 本地 ASR 推理（sherpa-onnx 中文 paraformer），由特性 `local-asr-native` 控制启用。
 # 原生库（sherpa-onnx-c-api + onnxruntime）由 sherpa-rs-sys 按 target triple 下载预编译包；
 # 关闭默认的 tts 特性以减小体积。macOS 接入见 ai-doc/需求分析.md 的 IA-15 待办。

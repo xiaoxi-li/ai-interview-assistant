@@ -11,10 +11,16 @@ use std::sync::{Arc, Mutex, MutexGuard};
 ///
 /// 系统音频通道的实现随平台而定（IA-14：Windows 为 WASAPI 端点级回环，
 /// 其他平台为名称匹配到的虚拟回环设备），故统一以 [`AudioCapture`] trait 对象暴露。
+///
+/// TODO-05（IA-14 进程级回环）：Windows 额外持有第三路「进程回环」通道，
+/// 按 `pid:<n>` 目标只采集指定进程树的输出；由命令层在配置了目标进程时启用。
 #[derive(Default)]
 pub struct CaptureManager {
     pub mic: CpalCapture,
     pub system: SystemCapture,
+    /// 进程级回环通道（仅 Windows）：只采集指定进程树的音频
+    #[cfg(windows)]
+    pub process: crate::audio::process_loopback::WasapiProcessLoopbackCapture,
 }
 
 impl CaptureManager {
@@ -22,6 +28,10 @@ impl CaptureManager {
     pub fn stop_all(&mut self) {
         let _ = crate::audio::AudioCapture::stop(&mut self.mic);
         let _ = crate::audio::AudioCapture::stop(&mut self.system);
+        #[cfg(windows)]
+        {
+            let _ = crate::audio::AudioCapture::stop(&mut self.process);
+        }
     }
 
     /// 指定来源是否正在采集
@@ -29,11 +39,13 @@ impl CaptureManager {
         match source {
             "mic" => self.mic.is_running(),
             "system" => self.system.is_running(),
+            #[cfg(windows)]
+            "process" => self.process.is_running(),
             _ => false,
         }
     }
 
-    /// 当前正在采集的来源列表（mic / system）
+    /// 当前正在采集的来源列表（mic / system / process）
     pub fn running_sources(&self) -> Vec<String> {
         let mut sources = Vec::new();
         if self.mic.is_running() {
@@ -42,20 +54,43 @@ impl CaptureManager {
         if self.system.is_running() {
             sources.push("system".to_string());
         }
+        #[cfg(windows)]
+        if self.process.is_running() {
+            sources.push("process".to_string());
+        }
         sources
     }
 
     /// 是否有任一来源在采集
     pub fn any_running(&self) -> bool {
-        self.mic.is_running() || self.system.is_running()
+        #[cfg(windows)]
+        {
+            self.mic.is_running() || self.system.is_running() || self.process.is_running()
+        }
+        #[cfg(not(windows))]
+        {
+            self.mic.is_running() || self.system.is_running()
+        }
     }
 
-    /// 按来源取采集句柄的可变引用（两路实现类型不同，故返回 trait 对象）
+    /// 按来源取采集句柄的可变引用（各路实现类型不同，故返回 trait 对象）
     pub fn capture_mut(&mut self, source: &str) -> Option<&mut dyn AudioCapture> {
         match source {
             "mic" => Some(&mut self.mic),
             "system" => Some(&mut self.system),
+            #[cfg(windows)]
+            "process" => Some(&mut self.process),
             _ => None,
+        }
+    }
+
+    /// 系统音频（面试官）通道的实际采集来源：
+    /// 配置了进程回环目标时走 `process` 通道（TODO-05），否则走端点级回环 `system`。
+    #[cfg(windows)]
+    pub fn system_capture_source(&self, process_target: Option<u32>) -> &'static str {
+        match process_target {
+            Some(_) => "process",
+            None => "system",
         }
     }
 }
