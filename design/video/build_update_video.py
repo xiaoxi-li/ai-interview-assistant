@@ -7,8 +7,9 @@
     python build_update_video.py --render                     # 渲染整片
     python build_update_video.py --audio-only                 # 只合成旁白与音乐
 
-旁白通过 Windows 自带中文语音（System.Speech，Microsoft Yaoyao，甜美女声）离线合成，
-逐句生成后按时间轴铺轨；字幕直接使用同一份文案。音乐为 numpy 实时合成的
+旁白优先使用 edge-tts 在线神经女声（zh-CN-XiaoyiNeural，甜美年轻女声），
+不可用时回落到 Windows System.Speech；逐句生成后按时间轴铺轨，字幕直接使用同一份文案。
+音乐为 numpy 实时合成的
 132 BPM 电子风格配乐，人声出现时自动做闪避（ducking）。
 
 内容取自仓库 git 提交（2026-11-21 / 11-22 两批）：
@@ -20,6 +21,7 @@
 """
 
 import argparse
+import asyncio
 import hashlib
 import math
 import os
@@ -27,6 +29,10 @@ import subprocess
 import wave
 
 import numpy as np
+try:
+    import edge_tts
+except ImportError:
+    edge_tts = None
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 # ---------------------------------------------------------------- 基础参数
@@ -59,8 +65,8 @@ WHITE = (255, 255, 255)
 # ---------------------------------------------------------------- 旁白 / 字幕
 # (最早开始时间, 文案)。实际起点会按上一句实际时长顺延，避免重叠。
 NARRATION = [
-    (0.65, "这次更新，简单面试只做一件大事：让面试窗口，彻底隐身。"),
-    (7.15, "先看重点：会议中防录屏。"),
+    (0.65, "这次更新，简单面试只做一件大事：在面试中，窗口彻底隐身。"),
+    (7.15, "先看重点：防录屏，防共享屏幕。"),
     (10.15, "开启隐身模式，你的桌面照常用。"),
     (13.75, "但共享出去的画面里，这个窗口已经完全消失。"),
     (18.95, "截图、录屏，对方都看不到。"),
@@ -77,9 +83,10 @@ NARRATION = [
 ]
 SUBTITLES = []  # [(start, end, text)]，由 prepare_narration 填充
 
-VOICE = "Microsoft Yaoyao"  # 甜美女声
-TTS_RATE = 3
-PITCH_UP = 1.10  # 略微提亮音调
+VOICE = "zh-CN-XiaoyiNeural"  # 神经甜美女声；不可用时回落到 Microsoft Yaoyao
+TTS_RATE = "+8%"
+TTS_PITCH = "+2Hz"
+PITCH_UP = 1.10  # SAPI 回落时的提调量
 
 
 # ---------------------------------------------------------------- 工具函数
@@ -598,7 +605,7 @@ def scene_intro(t):
         x += text_w(ch, 25, "r") + 8
 
     a3 = ease_out(seg(t, 0.5, 0.75))
-    text_alpha(img, (176, 348 - 24 * (1 - a3)), "会议里，让窗口", 88, NAVY, "b", a3)
+    text_alpha(img, (176, 348 - 24 * (1 - a3)), "在面试中，窗口", 88, NAVY, "b", a3)
 
     a4 = ease_out(seg(t, 0.8, 0.85))
     gt = gradient_text("彻底隐身", 110, (26, 86, 240), (52, 198, 232), "b")
@@ -611,9 +618,9 @@ def scene_intro(t):
                fill=(58, 200, 232), width=9, joint="curve")
 
     a6 = ease_out(seg(t, 1.55, 0.7))
-    text_alpha(img, (182, 664), "1 个重点功能，5 处体验改进", 31, GRAY, "r", a6)
+    text_alpha(img, (182, 664), "重点：防录屏 · 防共享屏幕　|　另有 5 处体验改进", 31, GRAY, "r", a6)
 
-    labels = ["防录屏", "进程级回环", "云端 ASR 四家", "本地语义检索"]
+    labels = ["防录屏", "防共享屏幕", "进程级回环", "云端 ASR 四家"]
     cx = 180
     for i, s in enumerate(labels):
         ai = ease_out(seg(t, 1.95 + i * 0.15, 0.5))
@@ -642,7 +649,7 @@ def scene_intro(t):
     return img
 
 
-# ---------------------------------------------------------------- 场景 2：会议中防录屏
+# ---------------------------------------------------------------- 场景 2：防录屏 / 防共享屏幕
 def scene_hero(t):
     img = BG.copy()
     draw_bg_motion(img, t)
@@ -653,10 +660,10 @@ def scene_hero(t):
     paste(img, tag, 160, 96 + 12 * (1 - a0), a0)
 
     a1 = ease_out(seg(t, 0.12, 0.7))
-    text_alpha(img, (158, 146 - 22 * (1 - a1)), "会议中防录屏", 76, NAVY, "b", a1)
+    text_alpha(img, (158, 146 - 22 * (1 - a1)), "防录屏 · 防共享屏幕", 76, NAVY, "b", a1)
 
     a2 = ease_out(seg(t, 0.32, 0.7))
-    text_alpha(img, (164, 250), "系统级防捕获：共享画面、录屏、截图里都没有这个窗口", 29, GRAY, "r", a2)
+    text_alpha(img, (164, 250), "系统级防护：录屏里没有，共享屏幕里也没有", 29, GRAY, "r", a2)
 
     pw, ph = 770, 452
     ly = 320
@@ -705,7 +712,7 @@ def scene_hero(t):
         ), ss=2)
         paste(img, tip, 1220, 800 + 16 * (1 - a4) + 4 * math.sin(t * 1.5), a4)
 
-    chips = ("屏幕共享不可见", "截图 / 录屏留白", "设置里一键开关")
+    chips = ("防录屏：截图 / 录屏留白", "防共享屏幕：对方画面里没有", "设置里一键开关")
     cx = 160
     for i, s in enumerate(chips):
         ai = ease_out(seg(t, 2.5 + i * 0.26, 0.55))
@@ -989,15 +996,31 @@ def resample(a, src, dst):
     return np.interp(np.linspace(0, max(0, len(a) - 1), n), x0, a).astype(np.float32)
 
 
-def sapi_synth(text, path):
-    """系统女声合成，再用 ffmpeg 提亮音调、修出甜美感。"""
+def tts_synth(text, path):
+    """优先在线神经女声；不可用时回落系统语音并做提亮处理。"""
+    if edge_tts is not None:
+        mp3 = path + ".mp3"
+        if os.name == "nt" and hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+        async def run():
+            comm = edge_tts.Communicate(text, VOICE, rate=TTS_RATE, pitch=TTS_PITCH)
+            await comm.save(mp3)
+
+        asyncio.run(run())
+        subprocess.run([FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
+                        "-i", mp3, "-af", "highpass=f=85,equalizer=f=3200:t=q:w=0.9:g=1.5",
+                        "-ar", "44100", "-ac", "1", path], check=True)
+        os.remove(mp3)
+        return
+
     raw = path + ".raw.wav"
     quoted = text.replace("'", "''")
     ps = (
         "Add-Type -AssemblyName System.Speech\n"
         "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer\n"
-        f"$s.SelectVoice('{VOICE}')\n"
-        f"$s.Rate = {TTS_RATE}\n"
+        "$s.SelectVoice('Microsoft Yaoyao')\n"
+        "$s.Rate = 3\n"
         "$s.Volume = 100\n"
         f"$s.SetOutputToWaveFile('{raw}')\n"
         f"$s.Speak('{quoted}')\n"
@@ -1028,10 +1051,11 @@ def prepare_narration(sr=44100):
     subs = []
     prev_end = 0.0
     for i, (want, text) in enumerate(NARRATION):
-        tag = hashlib.md5(f"{VOICE}|{TTS_RATE}|{PITCH_UP}|{text}".encode("utf-8")).hexdigest()[:10]
+        key = f"{'edge' if edge_tts else 'sapi'}|{VOICE}|{TTS_RATE}|{TTS_PITCH}|{text}"
+        tag = hashlib.md5(key.encode("utf-8")).hexdigest()[:10]
         path = os.path.join(TTS_DIR, f"{i:02d}_{tag}.wav")
         if not os.path.exists(path) or os.path.getsize(path) < 1000:
-            sapi_synth(text, path)
+            tts_synth(text, path)
         a, src_sr = read_mono_wav(path)
         a = resample(a, src_sr, sr)
         nz = np.where(np.abs(a) > 0.012)[0]
