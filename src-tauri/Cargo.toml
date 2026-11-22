@@ -1,6 +1,6 @@
 [package]
 name = "easy-interview"
-version = "0.1.0"
+version = "0.1.1"
 description = "轻松面试桌面客户端"
 authors = ["Easy Interview"]
 edition = "2021"
