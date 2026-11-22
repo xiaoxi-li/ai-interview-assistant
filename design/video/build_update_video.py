@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""生成「Easy AI 面试助手 · 本次更新」介绍视频（1920x1080 / 30fps / 含原创背景音乐）。
+"""生成「Easy AI 面试助手 · 本次更新」介绍视频（1920x1080 / 30fps / 人声旁白 + 字幕 + 原创音乐）。
 
 用法：
     python build_update_video.py --preview 3,12,20,34,45,60   # 只导出关键帧 PNG
     python build_update_video.py --render                     # 渲染整片
+    python build_update_video.py --audio-only                 # 只合成旁白与音乐
+
+旁白通过 Windows 自带中文语音（System.Speech，Microsoft Huihui）离线合成，
+逐句生成后按时间轴铺轨；字幕直接使用同一份文案。音乐为 numpy 实时合成的
+132 BPM 电子风格配乐，人声出现时自动做闪避（ducking）。
 
 内容取自仓库 git 提交（2026-11-21 / 11-22 两批）：
     IA-11 隐身模式 + 窗口防捕获（重点）
@@ -32,7 +37,8 @@ XF = 0.52  # 场景转场（品牌色光带扫过）时长
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 OUT_MP4 = os.path.join(HERE, "Easy更新介绍.mp4")
-OUT_WAV = os.path.join(HERE, "_music.wav")
+MIX_WAV = os.path.join(HERE, "_mix.wav")
+TTS_DIR = os.path.join(HERE, "_tts")
 PREVIEW_DIR = os.path.join(HERE, "_preview")
 LOGO_PATH = os.path.join(ROOT, "design", "icon", "final", "user", "lockup-light.png")
 FFMPEG = os.path.join(ROOT, "node_modules", "ffmpeg-static", "ffmpeg.exe")
@@ -48,6 +54,30 @@ CYAN = (44, 197, 232)
 GRAY = (102, 120, 148)
 GRAY_L = (154, 170, 194)
 WHITE = (255, 255, 255)
+
+# ---------------------------------------------------------------- 旁白 / 字幕
+# (最早开始时间, 文案)。实际起点会按上一句实际时长顺延，避免重叠。
+NARRATION = [
+    (0.65, "这次更新，我们只做一件大事：让面试窗口，彻底隐身。"),
+    (7.15, "先看重点：会议中防录屏。"),
+    (10.15, "开启隐身模式，你的桌面照常用。"),
+    (13.75, "但共享出去的画面里，这个窗口已经完全消失。"),
+    (18.95, "截图、录屏，对方都看不到。"),
+    (22.15, "系统级防护，微软和苹果系统都支持。"),
+    (30.45, "隐身之后，还有三个顺手的变化。"),
+    (34.15, "迷你页贴边，托盘常驻，提问暂停都有快捷键。"),
+    (40.15, "其他几处，也一起办了。"),
+    (43.05, "音频只采指定应用。"),
+    (45.75, "云端识别四家齐了。"),
+    (48.45, "知识库本地语义检索。"),
+    (51.15, "本地组件合并打包。"),
+    (53.85, "设备重新检测，不用重启。"),
+    (58.05, "更新已经就绪，打开应用更新到最新版，下一次面试，安心开完这一场。"),
+]
+SUBTITLES = []  # [(start, end, text)]，由 prepare_narration 填充
+
+VOICE = "Microsoft Huihui"
+TTS_RATE = 4
 
 
 # ---------------------------------------------------------------- 工具函数
@@ -564,8 +594,8 @@ def scene_intro(t):
 
     a9 = ease_out(seg(t, 2.8, 0.7))
     if a9 > 0:
-        d.line([(182, 866), (182 + 120, 866)], fill=(198, 216, 240), width=2)
-        text_alpha(img, (318, 852), "更新日期 2026.11.22", 20, (168, 186, 210), "r", a9)
+        d.line([(182, 826), (182 + 120, 826)], fill=(198, 216, 240), width=2)
+        text_alpha(img, (318, 812), "更新日期 2026.11.22", 20, (168, 186, 210), "r", a9)
 
     a7 = ease_out(seg(t, 0.85, 0.9))
     cw, ch = 600, 448
@@ -600,7 +630,7 @@ def scene_hero(t):
     text_alpha(img, (164, 250), "系统级防捕获：共享画面、录屏、截图里都没有这个窗口", 29, GRAY, "r", a2)
 
     pw, ph = 770, 452
-    ly = 340
+    ly = 320
     for i, (x, hide, label, accent) in enumerate((
             (160, False, "你的桌面", (120, 138, 164)),
             (990, True, "对方看到的共享画面", BLUE))):
@@ -620,7 +650,7 @@ def scene_hero(t):
     if a_scan > 0:
         cyc = (t * 0.42) % 1.0
         band = scan_band(pw - 60)
-        by = 340 + 40 + cyc * (ph - 140)
+        by = 320 + 40 + cyc * (ph - 140)
         paste(img, band, 990 + 30, by, a_scan * 0.85)
 
     a3 = ease_out(seg(t, 1.3, 0.6))
@@ -644,18 +674,18 @@ def scene_hero(t):
             p.rect([0, 0, 310, 58], 29, fill=(31, 92, 240)),
             p.text((155, 29), "已排除出录制画面", 24, WHITE, "b", "mm"),
         ), ss=2)
-        paste(img, tip, 1220, 848 + 16 * (1 - a4) + 4 * math.sin(t * 1.5), a4)
+        paste(img, tip, 1220, 800 + 16 * (1 - a4) + 4 * math.sin(t * 1.5), a4)
 
     chips = ("屏幕共享不可见", "截图 / 录屏留白", "设置里一键开关")
     cx = 160
     for i, s in enumerate(chips):
         ai = ease_out(seg(t, 2.5 + i * 0.26, 0.55))
         sp = chip(s, 24, "check", CYAN)
-        paste(img, sp, cx + 18 * (1 - ai), 872, ai)
+        paste(img, sp, cx + 18 * (1 - ai), 818, ai)
         cx += sp.width + 22
 
     a5 = ease_out(seg(t, 3.5, 0.7))
-    text_alpha(img, (162, 972),
+    text_alpha(img, (162, 886),
                "Windows 10 2004+ · WDA_EXCLUDEFROMCAPTURE　|　macOS · set_content_protected",
                20, GRAY_L, "r", a5)
 
@@ -738,7 +768,7 @@ def scene_others(t):
         ("refresh", "设备「重新检测」",
          "换耳机、插麦克风不用重启应用；设备拔出后自动回退到系统默认", "音频设备"),
     ]
-    top, row_h = 258, 148
+    top, row_h = 250, 136
     pen = Pen(img, d, 1.0)
     for i, (ic, title, desc, tagtxt) in enumerate(rows):
         ai = ease_out(seg(t, 0.3 + i * 0.4, 0.6))
@@ -797,15 +827,13 @@ SCENES = [
 
 def draw_global(img, t):
     d = ImageDraw.Draw(img)
-    x0, x1, y = 160, 1760, 1052
+    x0, x1, y = 160, 1760, 1054
     d.line([(x0, y), (x1, y)], fill=(210, 226, 246), width=2)
     p = clamp(t / TOTAL)
     d.line([(x0, y), (x0 + (x1 - x0) * p, y)], fill=(124, 174, 255), width=2)
     for s, _, _ in SCENES[1:]:
         xc = x0 + (x1 - x0) * (s / TOTAL)
         d.ellipse([xc - 3, y - 3, xc + 3, y + 3], fill=(210, 226, 246))
-    d.text((160, 1020), "让面试，更轻松", font=font(18, "r"), fill=(184, 199, 220))
-    d.text((1760, 1020), "Easy · 更新介绍", font=font(18, "r"), fill=(184, 199, 220), anchor="ra")
 
 
 def scene_at(t):
@@ -868,100 +896,299 @@ def render_frame(t):
         img = wipe(prev, img, ease_in_out((t - start) / XF))
 
     draw_global(img, t)
+    draw_subtitle(img, t)
     return img
+
+
+# ---------------------------------------------------------------- 字幕
+def subtitle_sprite(text):
+    key = ("subtitle", text)
+    if key in _SPRITE_CACHE:
+        return _SPRITE_CACHE[key]
+    size = 37
+    max_w = 1520
+    lines, cur = [], ""
+    for ch in text:
+        if cur and text_w(cur + ch, size, "b") > max_w:
+            lines.append(cur)
+            cur = ch
+        else:
+            cur += ch
+    if cur:
+        lines.append(cur)
+    lh = 52
+    w = int(max(text_w(s, size, "b") for s in lines) + 84)
+    h = int(lh * len(lines) + 36)
+
+    def build(p):
+        p.rect([0, 0, w, h], 20, fill=(14, 30, 58, 214))
+        p.rect([0, 0, w, h], 20, outline=(122, 164, 226, 130), width=2)
+        for j, line in enumerate(lines):
+            p.text((w / 2, 18 + lh * j + lh / 2), line, size, WHITE, "b", "mm")
+
+    _SPRITE_CACHE[key] = hi_res(w, h, build, ss=2)
+    return _SPRITE_CACHE[key]
+
+
+def draw_subtitle(img, t):
+    for i, (s, e, text) in enumerate(SUBTITLES):
+        if s - 0.1 <= t <= e:
+            a = min(ease_out(clamp((t - s + 0.1) / 0.2)), ease_out(clamp((e - t) / 0.22)))
+            if a <= 0:
+                return
+            sp = subtitle_sprite(text)
+            paste(img, sp, (W - sp.width) / 2, 908, a)
+            return
+
+
+# ---------------------------------------------------------------- 中文旁白（系统 SAPI）
+def read_mono_wav(path):
+    with wave.open(path, "rb") as f:
+        raw = f.readframes(f.getnframes())
+        sr, ch, sw = f.getframerate(), f.getnchannels(), f.getsampwidth()
+    a = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+    if ch == 2:
+        a = a.reshape(-1, 2).mean(axis=1)
+    return a, sr
+
+
+def resample(a, src, dst):
+    if src == dst:
+        return a
+    n = max(1, int(round(len(a) * dst / src)))
+    x0 = np.arange(len(a))
+    return np.interp(np.linspace(0, max(0, len(a) - 1), n), x0, a).astype(np.float32)
+
+
+def sapi_synth(text, path):
+    quoted = text.replace("'", "''")
+    ps = (
+        "Add-Type -AssemblyName System.Speech\n"
+        "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer\n"
+        f"$s.SelectVoice('{VOICE}')\n"
+        f"$s.Rate = {TTS_RATE}\n"
+        "$s.Volume = 100\n"
+        f"$s.SetOutputToWaveFile('{path}')\n"
+        f"$s.Speak('{quoted}')\n"
+        "$s.Dispose()\n"
+    )
+    r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"旁白合成失败：{r.stderr.strip()}")
+
+
+def prepare_narration(sr=44100):
+    """逐句合成中文旁白，返回 (单声道音轨, 字幕时间轴)。"""
+    global SUBTITLES
+    os.makedirs(TTS_DIR, exist_ok=True)
+    n = int(TOTAL * sr)
+    track = np.zeros(n, np.float32)
+    subs = []
+    prev_end = 0.0
+    for i, (want, text) in enumerate(NARRATION):
+        path = os.path.join(TTS_DIR, f"{i:02d}.wav")
+        if not os.path.exists(path) or os.path.getsize(path) < 1000:
+            sapi_synth(text, path)
+        a, src_sr = read_mono_wav(path)
+        a = resample(a, src_sr, sr)
+        nz = np.where(np.abs(a) > 0.012)[0]
+        if len(nz) > sr // 4:
+            a = a[max(0, nz[0] - 60): min(len(a), nz[-1] + 120)]
+        dur = len(a) / sr
+        start = max(want, prev_end + 0.16)
+        start = min(start, TOTAL - 0.25 - dur)
+        i0 = int(start * sr)
+        seg = a[:n - i0]
+        fade = min(int(0.035 * sr), max(1, len(seg) // 6))
+        seg[:fade] *= np.linspace(0, 1, fade, dtype=np.float32)
+        seg[-fade:] *= np.linspace(1, 0, fade, dtype=np.float32)
+        track[i0:i0 + len(seg)] += seg * 1.12
+        end = start + dur
+        subs.append((start, min(TOTAL - 0.05, end + 0.12), text))
+        prev_end = end
+        print(f"  narration {i + 1:02d}/{len(NARRATION)}: {start:5.2f}s - {end:5.2f}s  {text}")
+    SUBTITLES = subs
+    return track, subs
 
 
 # ---------------------------------------------------------------- 音乐
 def build_music(dur, sr=44100):
+    """132 BPM 电子风格配乐：四拍底鼓 + 军鼓 + 踩镲 + 八分贝斯 + 十六分琶音。"""
     rng = np.random.default_rng(20261122)
     n = int(dur * sr)
-    L = np.zeros(n)
-    R = np.zeros(n)
-    beat = 60.0 / 84.0
+    L = np.zeros(n, np.float32)
+    R = np.zeros(n, np.float32)
+    beat = 60.0 / 132.0
+    bar = beat * 4
 
-    def note_hz(midi):
+    def hz(midi):
         return 440.0 * 2 ** ((midi - 69) / 12.0)
 
     def add(t0, sig, gain=1.0, pan=0.0):
         i0 = int(t0 * sr)
         if i0 >= n:
             return
-        s = sig[: n - i0]
+        s = sig[:n - i0]
         ga = math.cos((pan + 1) * math.pi / 4)
         gb = math.sin((pan + 1) * math.pi / 4)
         L[i0:i0 + len(s)] += s * gain * ga
         R[i0:i0 + len(s)] += s * gain * gb
 
-    def pad(freqs, dur_s, gain):
-        m = int(dur_s * sr)
+    def kick():
+        m = int(0.26 * sr)
         tt = np.arange(m) / sr
-        env = np.minimum(1.0, tt / 0.9) * np.minimum(1.0, np.maximum(0.0, (dur_s - tt) / 1.6))
+        f = 158 * np.exp(-tt * 31) + 47
+        sig = np.sin(2 * np.pi * np.cumsum(f) / sr) * np.exp(-tt * 13)
+        sig += rng.normal(0, 1, m) * np.exp(-tt * 280) * 0.22
+        return sig.astype(np.float32)
+
+    def snare():
+        m = int(0.18 * sr)
+        tt = np.arange(m) / sr
+        noise = rng.normal(0, 1, m)
+        noise = noise - np.concatenate(([0], noise[:-1]))
+        sig = noise * np.exp(-tt * 24) + np.sin(2 * np.pi * 185 * tt) * np.exp(-tt * 18) * 0.35
+        return sig.astype(np.float32)
+
+    def hat(open_hat=False):
+        m = int((0.11 if open_hat else 0.042) * sr)
+        tt = np.arange(m) / sr
+        noise = rng.normal(0, 1, m)
+        noise = noise - np.concatenate(([0], noise[:-1]))
+        return (noise * np.exp(-tt * (28 if open_hat else 86))).astype(np.float32)
+
+    def bass(freq, d):
+        m = int(d * sr)
+        tt = np.arange(m) / sr
+        sig = np.sin(2 * np.pi * freq * tt) + 0.35 * np.sin(2 * np.pi * freq * 2 * tt)
+        return (sig * np.minimum(1, tt / 0.008) * np.exp(-tt * 3.0)).astype(np.float32)
+
+    def pluck(freq, d):
+        m = int(d * sr)
+        tt = np.arange(m) / sr
+        sig = (np.sin(2 * np.pi * freq * tt)
+               + 0.4 * np.sin(2 * np.pi * freq * 2.01 * tt)
+               + 0.18 * np.sin(2 * np.pi * freq * 3.02 * tt))
+        return (sig * np.exp(-tt * 9) * np.minimum(1, tt / 0.004)).astype(np.float32)
+
+    def stab(freqs, d):
+        m = int(d * sr)
+        tt = np.arange(m) / sr
         sig = np.zeros(m)
         for f in freqs:
-            for h, amp in ((1, 1.0), (2, 0.22), (3, 0.1)):
-                det = 1.0 + rng.normal(0, 0.0006)
-                sig += amp * np.sin(2 * np.pi * f * h * det * tt + rng.uniform(0, 6.28))
-        return sig * env * gain / (len(freqs) * 1.5)
+            sig += (np.sin(2 * np.pi * f * tt)
+                    + 0.45 * np.sin(2 * np.pi * f * 2.003 * tt)
+                    + 0.2 * np.sin(2 * np.pi * f * 3.01 * tt))
+        return (sig * np.exp(-tt * 7) * np.minimum(1, tt / 0.006) / len(freqs)).astype(np.float32)
 
-    def pluck(freq, dur_s, gain):
-        m = int(dur_s * sr)
+    def sweep():
+        m = int(0.42 * sr)
         tt = np.arange(m) / sr
-        env = np.exp(-tt * 5.2) * np.minimum(1.0, tt / 0.006)
-        sig = (np.sin(2 * np.pi * freq * tt) * 0.7
-               + np.sin(2 * np.pi * freq * 2 * tt) * 0.16
-               + np.sin(2 * np.pi * freq * 3.01 * tt) * 0.07)
-        return sig * env * gain
+        noise = np.convolve(rng.normal(0, 1, m), np.ones(64) / 64, mode="same")
+        return (noise * np.sin(np.pi * tt / tt[-1]) * 0.5).astype(np.float32)
 
-    def bass(freq, dur_s, gain):
-        m = int(dur_s * sr)
-        tt = np.arange(m) / sr
-        env = np.minimum(1.0, tt / 0.05) * np.minimum(1.0, np.maximum(0.0, (dur_s - tt) / 0.5))
-        return np.sin(2 * np.pi * freq * tt) * env * gain
-
-    prog = [([48, 55, 64, 67], 36), ([43, 50, 59, 62], 35),
-            ([45, 52, 60, 64], 33), ([41, 48, 57, 60], 36)]
-    bar = beat * 4
+    prog = [([57, 60, 64], 33), ([53, 57, 60], 29),
+            ([60, 64, 67], 36), ([55, 59, 62], 31)]  # Am - F - C - G
+    ks, ss = kick(), snare()
+    hs, ho = hat(), hat(True)
     tpos, ci = 0.0, 0
     while tpos < dur:
         chord, root = prog[ci % 4]
-        ps = pad([note_hz(m) for m in chord], bar * 1.35, 0.16)
-        add(tpos, ps, 1.0, -0.15)
-        add(tpos, ps * 0.85, 1.0, 0.15)
-        add(tpos, bass(note_hz(root - 12), bar * 0.95, 0.12), 1.0, 0.0)
-        pattern = [chord[1], chord[2], chord[3], chord[2],
-                   chord[3] + 12, chord[2], chord[1], chord[0] + 12]
-        for k, m in enumerate(pattern):
-            ts = tpos + k * beat * 0.5
-            if ts < dur:
-                add(ts, pluck(note_hz(m + 12), 0.75, 0.045), 1.0, -0.32 if k % 2 else 0.32)
+        m = int(min(bar, dur - tpos) * sr)
+        tt = np.arange(m) / sr
+        pad = np.zeros(m)
+        for mm in chord:
+            for h, amp in ((1, 1.0), (2, 0.3), (3, 0.12)):
+                pad += amp * np.sin(2 * np.pi * hz(mm) * h * tt + rng.uniform(0, 6.28))
+        pad *= np.minimum(1, tt / 0.25) * np.minimum(1, np.maximum(0, (bar - tt) / 0.3))
+        pad = (pad / len(chord) * 0.055).astype(np.float32)
+        add(tpos, pad, 1.0, -0.22)
+        add(tpos, pad, 1.0, 0.22)
+
+        for b in (1.5, 3.5):
+            st = stab([hz(x) for x in chord], 0.42)
+            add(tpos + b * beat, st, 0.5, -0.3 if b < 2 else 0.3)
+
+        for k in range(8):
+            f = hz(root - 12 + (7 if k in (3, 7) else 0))
+            add(tpos + k * beat * 0.5, bass(f, beat * 0.45), 0.28 if k % 2 == 0 else 0.2)
+
+        arp = [chord[0] + 12, chord[1] + 12, chord[2] + 12, chord[1] + 12,
+               chord[2] + 12, chord[0] + 24, chord[1] + 12, chord[2] + 12]
+        for k in range(16):
+            mm = arp[k % 8] + (12 if k >= 8 else 0)
+            add(tpos + k * beat * 0.25, pluck(hz(mm), 0.32), 0.055, -0.35 if k % 2 else 0.35)
+
+        for b in range(4):
+            add(tpos + b * beat, ks, 0.52)
+            if b in (1, 3):
+                add(tpos + b * beat, ss, 0.3)
+            add(tpos + b * beat + beat * 0.5, hs, 0.075, 0.25)
+            add(tpos + b * beat + beat * 0.75, hs, 0.05, -0.25)
+        add(tpos + bar - beat * 0.5, ho, 0.09, 0.1)
         tpos += bar
         ci += 1
 
-    air = rng.normal(0, 1, n) * 0.005
-    L += air
-    R += air[::-1]
+    for st in (7.0, 30.0, 39.5, 57.0):
+        add(st - 0.38, sweep(), 0.55)
 
-    ir_n = int(0.85 * sr)
+    # 底鼓侧链泵感
+    phase = (np.arange(n) / sr) % beat
+    pump = (1.0 - 0.32 * np.exp(-(phase / 0.13) ** 2)).astype(np.float32)
+    L *= pump
+    R *= pump
+
+    ir_n = int(0.6 * sr)
+    ir = rng.normal(0, 1, ir_n) * np.exp(-np.arange(ir_n) / (0.18 * sr))
+    ir /= np.sqrt(np.sum(ir ** 2)) + 1e-9
     for buf in (L, R):
-        ir = rng.normal(0, 1, ir_n) * np.exp(-np.arange(ir_n) / (0.22 * sr))
-        ir /= np.sqrt(np.sum(ir ** 2)) + 1e-9
-        buf += np.convolve(buf, ir, mode="full")[:n] * 0.2
+        buf += np.convolve(buf, ir, mode="full")[:n] * 0.14
 
     tt = np.arange(n) / sr
-    fade = np.minimum(1.0, tt / 2.0) * np.minimum(1.0, np.maximum(0.0, (dur - tt) / 3.0))
+    fade = np.minimum(1, tt / 1.2) * np.minimum(1, np.maximum(0, (dur - tt) / 2.2))
     L *= fade
     R *= fade
     peak = max(np.abs(L).max(), np.abs(R).max()) + 1e-9
-    L = np.tanh(L / peak * 1.1) * 0.52
-    R = np.tanh(R / peak * 1.1) * 0.52
+    L = np.tanh(L / peak * 1.25) * 0.52
+    R = np.tanh(R / peak * 1.25) * 0.52
+    return L, R
+
+
+def build_audio(sr=44100):
+    """合成旁白 + 激情配乐，旁白出现时压低音乐，输出混音 WAV。"""
+    narr, subs = prepare_narration(sr)
+    L, R = build_music(TOTAL, sr)
+    n = len(L)
+
+    mask = np.zeros(n, np.float32)
+    for s, e, _ in subs:
+        i0 = int(max(0, s - 0.16) * sr)
+        i1 = int(min(TOTAL, e + 0.22) * sr)
+        mask[i0:i1] = 1.0
+    k = int(0.12 * sr)
+    k += k % 2 == 0
+    smooth = np.convolve(mask, np.ones(k) / k, mode="same")
+    g = (1.0 - 0.62 * smooth).astype(np.float32)
+    L *= g
+    R *= g
+
+    voice = np.tanh(narr[:n] * 2.5) * 0.88
+    L += voice
+    R += voice * 0.98
+    peak = max(np.abs(L).max(), np.abs(R).max()) + 1e-9
+    if peak > 0.94:
+        L = L / peak * 0.94
+        R = R / peak * 0.94
 
     pcm = np.clip(np.stack([L, R], axis=1) * 32767, -32768, 32767).astype(np.int16)
-    with wave.open(OUT_WAV, "wb") as f:
+    with wave.open(MIX_WAV, "wb") as f:
         f.setnchannels(2)
         f.setsampwidth(2)
         f.setframerate(sr)
         f.writeframes(pcm.tobytes())
-    return OUT_WAV
+    print("audio ->", MIX_WAV)
+    return MIX_WAV
 
 
 # ---------------------------------------------------------------- 主流程
@@ -970,12 +1197,20 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--preview", type=str, default="")
     ap.add_argument("--render", action="store_true")
-    ap.add_argument("--no-music", action="store_true")
+    ap.add_argument("--audio-only", action="store_true")
+    ap.add_argument("--no-audio", action="store_true")
     args = ap.parse_args()
 
     BG = build_background()
     BLOB_A = float_blob(760, (188, 216, 255), 120)
     BLOB_B = float_blob(680, (196, 238, 250), 110)
+
+    if not args.no_audio:
+        print("合成旁白与配乐…")
+        build_audio()
+
+    if args.audio_only:
+        return
 
     if args.preview:
         os.makedirs(PREVIEW_DIR, exist_ok=True)
@@ -988,13 +1223,13 @@ def main():
         return
 
     if not args.render:
-        print("用法：--preview 3,12 或 --render")
+        print("用法：--preview 3,12 | --render | --audio-only")
         return
 
     if not os.path.exists(FFMPEG):
         raise SystemExit("找不到 ffmpeg-static，请先 npm install --no-save ffmpeg-static")
 
-    wav = None if args.no_music else build_music(TOTAL)
+    wav = None if args.no_audio else MIX_WAV
     frames = int(TOTAL * FPS)
     cmd = [FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-"]
