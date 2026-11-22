@@ -7,7 +7,7 @@
     python build_update_video.py --render                     # 渲染整片
     python build_update_video.py --audio-only                 # 只合成旁白与音乐
 
-旁白通过 Windows 自带中文语音（System.Speech，Microsoft Huihui）离线合成，
+旁白通过 Windows 自带中文语音（System.Speech，Microsoft Yaoyao，甜美女声）离线合成，
 逐句生成后按时间轴铺轨；字幕直接使用同一份文案。音乐为 numpy 实时合成的
 132 BPM 电子风格配乐，人声出现时自动做闪避（ducking）。
 
@@ -20,6 +20,7 @@
 """
 
 import argparse
+import hashlib
 import math
 import os
 import subprocess
@@ -58,7 +59,7 @@ WHITE = (255, 255, 255)
 # ---------------------------------------------------------------- 旁白 / 字幕
 # (最早开始时间, 文案)。实际起点会按上一句实际时长顺延，避免重叠。
 NARRATION = [
-    (0.65, "这次更新，我们只做一件大事：让面试窗口，彻底隐身。"),
+    (0.65, "这次更新，简单面试只做一件大事：让面试窗口，彻底隐身。"),
     (7.15, "先看重点：会议中防录屏。"),
     (10.15, "开启隐身模式，你的桌面照常用。"),
     (13.75, "但共享出去的画面里，这个窗口已经完全消失。"),
@@ -72,12 +73,13 @@ NARRATION = [
     (48.45, "知识库本地语义检索。"),
     (51.15, "本地组件合并打包。"),
     (53.85, "设备重新检测，不用重启。"),
-    (58.05, "更新已经就绪，打开应用更新到最新版，下一次面试，安心开完这一场。"),
+    (58.05, "更新已经就绪，打开简单面试更新到最新版，下一次面试，安心开完这一场。"),
 ]
 SUBTITLES = []  # [(start, end, text)]，由 prepare_narration 填充
 
-VOICE = "Microsoft Huihui"
-TTS_RATE = 4
+VOICE = "Microsoft Yaoyao"  # 甜美女声
+TTS_RATE = 3
+PITCH_UP = 1.10  # 略微提亮音调
 
 
 # ---------------------------------------------------------------- 工具函数
@@ -324,6 +326,33 @@ def brand_mark(height):
     return out
 
 
+def product_lockup(mark_h=112, name_size=76):
+    """首屏主标识：品牌图形 + 产品名「简单面试」。"""
+    key = ("product", mark_h, name_size)
+    if key in _SPRITE_CACHE:
+        return _SPRITE_CACHE[key]
+    name = "简单面试"
+    sub = "Easy · AI 面试助手"
+    sub_size = 21
+    mark = brand_mark(mark_h)
+    tw = text_w(name, name_size, "b")
+    w = int(mark.width + 30 + max(tw, text_w(sub, sub_size, "r")))
+    h = int(mark_h + 16)
+    ss = 2
+    big = Image.new("RGBA", (w * ss, h * ss), (0, 0, 0, 0))
+    big.paste(mark.resize((mark.width * ss, mark.height * ss), Image.LANCZOS),
+              (0, ((h - mark.height) // 2) * ss))
+    d = ImageDraw.Draw(big)
+    tx = (mark.width + 30) * ss
+    d.text((tx, (h * 0.08) * ss), name, font=font(name_size * ss, "b"),
+           fill=NAVY + (255,), anchor="la")
+    d.text((tx + 2 * ss, (h * 0.76) * ss), sub, font=font(sub_size * ss, "r"),
+           fill=GRAY + (255,), anchor="la")
+    out = big.resize((w, h), Image.LANCZOS)
+    _SPRITE_CACHE[key] = out
+    return out
+
+
 # ---------------------------------------------------------------- 图标
 def draw_icon(p, name, cx, cy, s, color):
     h = s / 2.0
@@ -559,8 +588,8 @@ def scene_intro(t):
     d = ImageDraw.Draw(img)
 
     a = ease_out(seg(t, 0.0, 0.7))
-    lg = logo_sprite(102)
-    paste(img, lg, 176, 148 - 16 * (1 - a), a)
+    lg = product_lockup(112, 76)
+    paste(img, lg, 176, 126 - 16 * (1 - a), a)
 
     a2 = ease_out(seg(t, 0.3, 0.6))
     x = 182
@@ -796,15 +825,15 @@ def scene_outro(t):
     d = ImageDraw.Draw(img)
 
     a0 = ease_out(seg(t, 0.0, 0.8))
-    lg = logo_sprite(118)
-    paste(img, lg, (W - lg.width) / 2, 250 + 20 * (1 - a0), a0)
+    lg = product_lockup(118, 78)
+    paste(img, lg, (W - lg.width) / 2, 236 + 20 * (1 - a0), a0)
 
     a1 = ease_out(seg(t, 0.35, 0.75))
     w1 = text_w("更新已就绪", 84, "b")
     text_alpha(img, ((W - w1) / 2, 468 + 22 * (1 - a1)), "更新已就绪", 84, NAVY, "b", a1)
 
     a2 = ease_out(seg(t, 0.75, 0.7))
-    sub = "打开 Easy 更新到最新版，下一次面试就能用上"
+    sub = "打开简单面试，更新到最新版，下一次面试就能用上"
     text_alpha(img, ((W - text_w(sub, 33, "r")) / 2, 594), sub, 33, GRAY, "r", a2)
 
     a3 = ease_out(seg(t, 1.25, 0.75))
@@ -961,6 +990,8 @@ def resample(a, src, dst):
 
 
 def sapi_synth(text, path):
+    """系统女声合成，再用 ffmpeg 提亮音调、修出甜美感。"""
+    raw = path + ".raw.wav"
     quoted = text.replace("'", "''")
     ps = (
         "Add-Type -AssemblyName System.Speech\n"
@@ -968,7 +999,7 @@ def sapi_synth(text, path):
         f"$s.SelectVoice('{VOICE}')\n"
         f"$s.Rate = {TTS_RATE}\n"
         "$s.Volume = 100\n"
-        f"$s.SetOutputToWaveFile('{path}')\n"
+        f"$s.SetOutputToWaveFile('{raw}')\n"
         f"$s.Speak('{quoted}')\n"
         "$s.Dispose()\n"
     )
@@ -976,6 +1007,16 @@ def sapi_synth(text, path):
                        capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError(f"旁白合成失败：{r.stderr.strip()}")
+
+    if os.path.exists(FFMPEG):
+        _, src_sr = read_mono_wav(raw)
+        af = (f"highpass=f=85,asetrate={src_sr}*{PITCH_UP},aresample=44100,"
+              f"atempo={1.0 / PITCH_UP:.4f},equalizer=f=3200:t=q:w=0.9:g=2.5")
+        subprocess.run([FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
+                        "-i", raw, "-af", af, path], check=True)
+        os.remove(raw)
+    else:
+        os.replace(raw, path)
 
 
 def prepare_narration(sr=44100):
@@ -987,7 +1028,8 @@ def prepare_narration(sr=44100):
     subs = []
     prev_end = 0.0
     for i, (want, text) in enumerate(NARRATION):
-        path = os.path.join(TTS_DIR, f"{i:02d}.wav")
+        tag = hashlib.md5(f"{VOICE}|{TTS_RATE}|{PITCH_UP}|{text}".encode("utf-8")).hexdigest()[:10]
+        path = os.path.join(TTS_DIR, f"{i:02d}_{tag}.wav")
         if not os.path.exists(path) or os.path.getsize(path) < 1000:
             sapi_synth(text, path)
         a, src_sr = read_mono_wav(path)
