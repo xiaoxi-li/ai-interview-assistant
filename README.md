@@ -210,8 +210,18 @@ npm run tauri build -- --features local-embed-native --config src-tauri/tauri.lo
 - 模型是 `BAAI/bge-m3`（ONNX，1024 维，约 2.1GB），在「设置 → 模型管理」点下载，走魔搭源、断点续传 + SHA256 校验。
 - 模型没下完之前语义检索自动退回 mock 嵌入；「设置 → 知识库」里会显示当前实际用的是「本地推理」还是「Mock 嵌入」。
 - 首次检索前会先加载模型（几秒），启动时已经放在后台线程预热，不会卡住界面；加载期间检索自动降级为关键词。
-- 同时开本地 ASR 就两个特性一起带：`--features "local-asr-native local-embed-native"`，打包时两条 `--config` 一起传。
 - 真实模型冒烟：先下好模型，再 `cargo test --features local-embed-native -- --ignored embedding_real`。
+
+### 本地 ASR + 本地嵌入一起打包
+
+两个 `--config` 不能同时传（`bundle.resources` 会互相覆盖，导致其中一个 DLL 丢失）。同时启用两个特性时用合并配置：
+
+```powershell
+$env:LIBCLANG_PATH="<仓库路径>\.libclang\bin"
+npm run tauri build -- --features "local-asr-native local-embed-native" --config src-tauri/tauri.local-native.conf.json
+```
+
+产出的安装包会带上整套原生库（`cargs.dll`、`onnxruntime.dll`、`onnxruntime_providers_shared.dll`、`sherpa-onnx-c-api.dll`、`sherpa-onnx-cxx-api.dll`）。
 
 ### 开箱默认配置
 
