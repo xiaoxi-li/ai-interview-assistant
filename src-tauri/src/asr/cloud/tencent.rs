@@ -752,12 +752,15 @@ mod tests {
         format!("ws://127.0.0.1:{port}")
     }
 
+    fn sine_frame(i: usize) -> Vec<f32> {
+        (0..SEND_BATCH_SAMPLES)
+            .map(|n| ((n + i * 13) % 20) as f32 / 10.0 - 1.0)
+            .collect()
+    }
+
     fn feed_sine(engine: &mut TencentRealtimeEngine, frames: usize) {
         for i in 0..frames {
-            let frame: Vec<f32> = (0..SEND_BATCH_SAMPLES)
-                .map(|n| ((n + i * 13) % 20) as f32 / 10.0 - 1.0)
-                .collect();
-            engine.feed(&frame).expect("feed");
+            engine.feed(&sine_frame(i)).expect("feed");
         }
     }
 
@@ -796,7 +799,9 @@ mod tests {
     fn auth_failure_returns_actionable_error() {
         let url = start_mock("auth_failed");
         let mut engine = TencentRealtimeEngine::connect(spec(&url)).expect("connect");
-        feed_sine(&mut engine, 1);
+        // 服务端可能在首帧前就断开并把连接错误写进结果通道，此时 feed 返回 Err
+        // 属预期（真正的鉴权错误由 drain 报出）。这里不 expect，避免平台时序差异导致 flake。
+        let _ = engine.feed(&sine_frame(0));
         // 轮询等待错误上报（并发测试下时序余量）
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         let error = loop {

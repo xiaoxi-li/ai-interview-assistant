@@ -892,6 +892,18 @@ mod tests {
         }
     }
 
+    /// 容错版：连接可能已被服务端关闭，feed 失败属预期（错误由 drain 上报）
+    fn try_feed_sine(engine: &mut XfyunRealtimeEngine, frames: usize) {
+        for i in 0..frames {
+            let frame: Vec<f32> = (0..SEND_BATCH_SAMPLES)
+                .map(|n| ((n + i * 13) % 20) as f32 / 10.0 - 1.0)
+                .collect();
+            if engine.feed(&frame).is_err() {
+                break;
+            }
+        }
+    }
+
     #[test]
     fn end_to_end_round_trip_produces_partial_then_final() {
         let url = start_mock("normal");
@@ -929,7 +941,8 @@ mod tests {
         let result = XfyunRealtimeEngine::connect(spec(&url));
         // 连接本身成功（讯飞鉴权错误在首个 JSON 响应中），错误在 drain 时上报
         let mut engine = result.expect("connect");
-        feed_sine(&mut engine, 2);
+        // 服务端可能已因鉴权失败关闭连接，feed 报错属预期；真正的错误由 drain 报出
+        try_feed_sine(&mut engine, 2);
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         let error = loop {
             match engine.drain() {

@@ -123,12 +123,22 @@ mod tests {
         assert!(config.validate().is_ok());
     }
 
+    /// 平台无关的绝对路径（`D:/...` 只Windows 认，macOS 上 `is_absolute` 为假）
+    fn absolute_paths() -> (String, String) {
+        let base = std::env::temp_dir();
+        (
+            base.join("easy-interview.db").to_string_lossy().into_owned(),
+            base.join("models").to_string_lossy().into_owned(),
+        )
+    }
+
     #[test]
     fn knowledge_config_round_trip() {
         with_db(|conn| {
+            let (db_path, models_dir) = absolute_paths();
             let config = KnowledgeConfig {
-                db_path: Some("D:/data/easy-interview.db".into()),
-                models_dir: Some("D:/data/models".into()),
+                db_path: Some(db_path),
+                models_dir: Some(models_dir),
                 embedding_model: DEFAULT_EMBEDDING_MODEL.into(),
             };
             save_knowledge_config(conn, &config).expect("save");
@@ -154,6 +164,7 @@ mod tests {
     #[test]
     fn validate_rejects_relative_or_blank_paths() {
         let mut config = KnowledgeConfig::default();
+        let (db_path, _) = absolute_paths();
 
         config.db_path = Some("relative/path.db".into());
         assert!(config.validate().is_err(), "相对路径应被拒绝");
@@ -161,9 +172,9 @@ mod tests {
         config.db_path = Some("   ".into());
         assert!(config.validate().is_err());
 
-        config.db_path = Some("D:/data/ai.db".into());
+        config.db_path = Some(db_path);
         config.models_dir = Some("models".into());
-        assert!(config.validate().is_err());
+        assert!(config.validate().is_err(), "模型目录为相对路径应被拒绝");
 
         config.models_dir = None;
         assert!(config.validate().is_ok());
